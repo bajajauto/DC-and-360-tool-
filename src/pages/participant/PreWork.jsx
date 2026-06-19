@@ -29,14 +29,14 @@ export default function PreWork() {
   }
 
   return (
-    <div className="p-8 max-w-3xl mx-auto">
-      <div className="flex items-center gap-2 text-xs text-gray-400 mb-6">
+    <div className="p-6">
+      <div className="flex items-center gap-2 text-xs text-gray-400 mb-5">
         <Link to="/participant/dashboard" className="hover:text-gray-600">Dashboard</Link>
         <span>/</span>
         <span className="text-[#1a1f2e]">Pre-Work</span>
       </div>
 
-      <div className="flex items-start justify-between mb-6">
+      <div className="flex items-start justify-between mb-4">
         <div>
           <h1 className="text-xl font-bold text-[#1a1f2e]">Pre-Work Questionnaire</h1>
           <p className="text-sm text-gray-500 mt-0.5">10 self-reflection questions · Due 20 Jun 2025</p>
@@ -47,7 +47,7 @@ export default function PreWork() {
         </div>
       </div>
 
-      <div className="mb-8">
+      <div className="mb-5">
         <div className="w-full bg-gray-100 rounded-full h-1.5">
           <div className="bg-[#1e4d8c] rounded-full h-1.5 transition-all duration-300" style={{ width: `${(answeredCount / questions.length) * 100}%` }} />
         </div>
@@ -57,7 +57,7 @@ export default function PreWork() {
       </div>
 
       {submitted ? (
-        <div className="bg-green-50 border border-green-200 rounded-xl p-8 text-center">
+        <div className="bg-green-50 border border-green-200 rounded-xl p-8 text-center max-w-xl">
           <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
             <svg className="w-6 h-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
@@ -68,45 +68,106 @@ export default function PreWork() {
           <Link to="/participant/dashboard" className="mt-4 inline-block text-xs text-[#1e4d8c] font-medium hover:underline">← Back to Dashboard</Link>
         </div>
       ) : (
-        <div className="space-y-5">
-          {questions.map((q) => {
-            const answered = (answers[q.id] ?? '').trim().length > 0
-            return (
-              <div key={q.id} className={`bg-white rounded-xl border p-6 transition-colors ${answered ? 'border-[#1e4d8c]/20' : 'border-[#e2e8f0]'}`}>
-                <div className="flex items-start gap-3 mb-3">
-                  <span className={`shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mt-0.5 ${answered ? 'bg-[#1e4d8c] text-white' : 'bg-gray-100 text-gray-500'}`}>
-                    {answered ? '✓' : q.id}
-                  </span>
-                  <p className="text-sm font-medium text-[#1a1f2e] leading-snug">{q.question}</p>
-                </div>
-                <button onClick={() => setActiveHint(activeHint === q.id ? null : q.id)} className="text-xs text-[#1e4d8c] ml-9 mb-3 hover:underline flex items-center gap-1">
-                  ⓘ {activeHint === q.id ? 'Hide hint' : 'Show hint'}
-                </button>
-                {activeHint === q.id && (
-                  <div className="ml-9 mb-3 bg-[#f1f4f9] rounded-lg px-4 py-2.5">
-                    <p className="text-xs text-gray-500 italic">{q.hint}</p>
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_240px] gap-6">
+          {/* Questions */}
+          <div className="space-y-4">
+            {questions.map((q) => {
+              const answered = (answers[q.id] ?? '').trim().length > 0
+              return (
+                <div key={q.id} className={`bg-white rounded-xl border p-5 transition-colors ${answered ? 'border-[#1e4d8c]/20' : 'border-[#e2e8f0]'}`}>
+                  <div className="flex items-start gap-3 mb-3">
+                    <span className={`shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mt-0.5 ${answered ? 'bg-[#1e4d8c] text-white' : 'bg-gray-100 text-gray-500'}`}>
+                      {answered ? '✓' : q.id}
+                    </span>
+                    <p className="text-sm font-medium text-[#1a1f2e] leading-snug">{q.question}</p>
                   </div>
-                )}
-                <textarea
-                  rows={4}
-                  value={answers[q.id] ?? ''}
-                  onChange={(e) => setAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))}
-                  placeholder="Write your response here..."
-                  style={{ marginLeft: '2.25rem', width: 'calc(100% - 2.25rem)' }}
-                  className="px-4 py-3 rounded-lg border border-[#e2e8f0] text-sm text-[#1a1f2e] placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-[#1e4d8c] focus:border-transparent resize-none"
-                />
-              </div>
-            )
-          })}
+                  <button onClick={() => setActiveHint(activeHint === q.id ? null : q.id)} className="text-xs text-[#1e4d8c] ml-9 mb-3 hover:underline flex items-center gap-1">
+                    ⓘ {activeHint === q.id ? 'Hide hint' : 'Show hint'}
+                  </button>
+                  {activeHint === q.id && (
+                    <div className="ml-9 mb-3 bg-[#f1f4f9] rounded-lg px-4 py-2.5">
+                      <p className="text-xs text-gray-500 italic">{q.hint}</p>
+                    </div>
+                  )}
+                  <textarea
+                    rows={4}
+                    value={answers[q.id] ?? ''}
+                    onChange={(e) => setAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))}
+                    placeholder="Write your response here..."
+                    style={{ marginLeft: '2.25rem', width: 'calc(100% - 2.25rem)' }}
+                    className="px-4 py-3 rounded-lg border border-[#e2e8f0] text-sm text-[#1a1f2e] placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-[#1e4d8c] focus:border-transparent resize-none"
+                  />
+                </div>
+              )
+            })}
 
-          <div className="flex items-center justify-between py-4 border-t border-[#e2e8f0]">
-            <div className="flex items-center gap-2">
-              {saved && <p className="text-xs text-green-600 font-medium">✓ Draft saved</p>}
-              <p className="text-xs text-gray-400">Auto-saved every 60 seconds</p>
+            <div className="flex items-center justify-between py-4 border-t border-[#e2e8f0]">
+              <div className="flex items-center gap-2">
+                {saved && <p className="text-xs text-green-600 font-medium">✓ Draft saved</p>}
+                <p className="text-xs text-gray-400">Auto-saved every 60 seconds</p>
+              </div>
+              <div className="flex gap-3">
+                <button onClick={handleSave} className="px-4 py-2 rounded-lg border border-[#e2e8f0] text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">Save Draft</button>
+                <button disabled={!canSubmit} onClick={() => setSubmitted(true)} className="px-5 py-2 rounded-lg bg-[#1e4d8c] text-white text-sm font-medium hover:bg-[#183f73] transition-colors disabled:opacity-40 disabled:cursor-not-allowed">Submit & Lock</button>
+              </div>
             </div>
-            <div className="flex gap-3">
-              <button onClick={handleSave} className="px-4 py-2 rounded-lg border border-[#e2e8f0] text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">Save Draft</button>
-              <button disabled={!canSubmit} onClick={() => setSubmitted(true)} className="px-5 py-2 rounded-lg bg-[#1e4d8c] text-white text-sm font-medium hover:bg-[#183f73] transition-colors disabled:opacity-40 disabled:cursor-not-allowed">Submit & Lock</button>
+          </div>
+
+          {/* Right sidebar */}
+          <div className="space-y-4">
+            {/* Progress tracker */}
+            <div className="bg-white rounded-xl border border-[#e2e8f0] p-4 sticky top-6">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Progress</p>
+              <div className="space-y-1.5">
+                {questions.map((q) => {
+                  const answered = (answers[q.id] ?? '').trim().length > 0
+                  return (
+                    <div key={q.id} className="flex items-center gap-2">
+                      <div className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ${answered ? 'bg-[#1e4d8c]' : 'bg-gray-100'}`}>
+                        {answered
+                          ? <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                          : <span className="text-[9px] text-gray-400 font-medium">{q.id}</span>
+                        }
+                      </div>
+                      <p className={`text-xs truncate ${answered ? 'text-[#1a1f2e]' : 'text-gray-400'}`}>Q{q.id}</p>
+                    </div>
+                  )
+                })}
+              </div>
+              <div className="mt-4 pt-3 border-t border-[#e2e8f0]">
+                <div className="flex justify-between text-xs mb-1.5">
+                  <span className="text-gray-400">Completion</span>
+                  <span className="font-semibold text-[#1e4d8c]">{answeredCount}/{questions.length}</span>
+                </div>
+                <div className="w-full bg-gray-100 rounded-full h-1.5">
+                  <div className="bg-[#1e4d8c] rounded-full h-1.5 transition-all" style={{ width: `${(answeredCount / questions.length) * 100}%` }} />
+                </div>
+              </div>
+            </div>
+
+            {/* Tips */}
+            <div className="bg-[#f1f4f9] rounded-xl border border-[#e2e8f0] p-4">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Answering Tips</p>
+              <div className="space-y-2.5">
+                {[
+                  'Be honest — assessors value self-awareness',
+                  'Aim for 100–200 words per answer',
+                  'Use real examples, not hypotheticals',
+                  'Responses stay confidential with assessors',
+                ].map((tip) => (
+                  <div key={tip} className="flex items-start gap-2">
+                    <div className="w-1 h-1 rounded-full bg-[#1e4d8c] mt-1.5 shrink-0" />
+                    <p className="text-xs text-gray-600 leading-relaxed">{tip}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Deadline */}
+            <div className="bg-white rounded-xl border border-[#e2e8f0] p-4">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Deadline</p>
+              <p className="text-sm font-semibold text-[#1a1f2e]">20 Jun 2025</p>
+              <p className="text-xs text-gray-400 mt-0.5">Submit before end of day</p>
             </div>
           </div>
         </div>

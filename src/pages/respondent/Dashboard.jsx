@@ -108,15 +108,15 @@ export default function RespondentDashboard() {
   }
 
   return (
-    <div className="p-8 max-w-3xl mx-auto">
+    <div className="p-6">
       {/* Header */}
-      <div className="mb-8">
-        <p className="text-sm text-gray-500 mb-1">360 Feedback · Respondent Portal</p>
+      <div className="mb-5">
+        <p className="text-sm text-gray-500 mb-0.5">360 Feedback · Respondent Portal</p>
         <h1 className="text-2xl font-bold text-[#1a1f2e]">Your Feedback Tasks</h1>
       </div>
 
       {/* Summary banner */}
-      <div className={`rounded-xl p-5 mb-8 ${incomplete > 0 ? 'bg-[#1e4d8c]' : 'bg-green-600'} text-white`}>
+      <div className={`rounded-xl p-5 mb-6 ${incomplete > 0 ? 'bg-[#1e4d8c]' : 'bg-green-600'} text-white`}>
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm opacity-80 mb-0.5">
@@ -139,53 +139,91 @@ export default function RespondentDashboard() {
         </p>
       </div>
 
-      {/* Sections */}
-      <div className="space-y-8">
-        {inProgress.length > 0 && (
-          <section>
-            <h2 className="text-xs font-semibold text-[#1a1f2e] uppercase tracking-wide mb-3 flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />
-              In Progress ({inProgress.length})
-            </h2>
-            <div className="space-y-3">
-              {inProgress.map((t) => <TaskCard key={t.id} task={t} onOpen={handleOpen} />)}
-            </div>
-          </section>
-        )}
+      {/* Main grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_240px] gap-6">
+        {/* Task sections */}
+        <div className="space-y-6">
+          {inProgress.length > 0 && (
+            <section>
+              <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3 flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />
+                In Progress ({inProgress.length})
+              </h2>
+              <div className="space-y-3">
+                {inProgress.map((t) => <TaskCard key={t.id} task={t} onOpen={handleOpen} />)}
+              </div>
+            </section>
+          )}
 
-        {pending.length > 0 && (
-          <section>
-            <h2 className="text-xs font-semibold text-[#1a1f2e] uppercase tracking-wide mb-3 flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-gray-400 inline-block" />
-              Not Started ({pending.length})
-            </h2>
-            <div className="space-y-3">
-              {pending.map((t) => <TaskCard key={t.id} task={t} onOpen={handleOpen} />)}
-            </div>
-          </section>
-        )}
+          {pending.length > 0 && (
+            <section>
+              <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3 flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-gray-400 inline-block" />
+                Not Started ({pending.length})
+              </h2>
+              <div className="space-y-3">
+                {pending.map((t) => <TaskCard key={t.id} task={t} onOpen={handleOpen} />)}
+              </div>
+            </section>
+          )}
 
-        {submitted.length > 0 && (
-          <section>
-            <h2 className="text-xs font-semibold text-[#1a1f2e] uppercase tracking-wide mb-3 flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />
-              Submitted ({submitted.length})
-            </h2>
-            <div className="space-y-3">
-              {submitted.map((t) => <TaskCard key={t.id} task={t} onOpen={handleOpen} />)}
-            </div>
-          </section>
-        )}
-      </div>
+          {submitted.length > 0 && (
+            <section>
+              <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3 flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />
+                Submitted ({submitted.length})
+              </h2>
+              <div className="space-y-3">
+                {submitted.map((t) => <TaskCard key={t.id} task={t} onOpen={handleOpen} />)}
+              </div>
+            </section>
+          )}
+        </div>
 
-      {/* Confidentiality note */}
-      <div className="mt-10 flex items-start gap-3 p-4 bg-gray-50 rounded-xl border border-[#e2e8f0]">
-        <svg className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-        </svg>
-        <p className="text-xs text-gray-500 leading-relaxed">
-          <span className="font-medium text-gray-600">Confidentiality notice:</span> Your individual responses are never shared. Scores and comments are aggregated across respondent groups before appearing in the participant's 360 report. Groups with fewer than 2 respondents are not shown separately.
-        </p>
+        {/* Right sidebar */}
+        <div className="space-y-4">
+          {/* Progress overview */}
+          <div className="bg-white rounded-xl border border-[#e2e8f0] p-4">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Overview</p>
+            <div className="space-y-2.5">
+              {[
+                { label: 'In Progress', count: inProgress.length, color: 'bg-amber-400' },
+                { label: 'Not Started', count: pending.length, color: 'bg-gray-300' },
+                { label: 'Submitted', count: submitted.length, color: 'bg-green-500' },
+              ].map((item) => (
+                <div key={item.label} className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-2 h-2 rounded-full ${item.color}`} />
+                    <p className="text-xs text-gray-600">{item.label}</p>
+                  </div>
+                  <p className="text-xs font-semibold text-[#1a1f2e]">{item.count}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Cutoff */}
+          <div className="bg-white rounded-xl border border-[#e2e8f0] p-4">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Cutoff Date</p>
+            <p className="text-sm font-semibold text-[#1a1f2e]">{cutoff}</p>
+            <p className="text-xs text-gray-400 mt-0.5">You cannot submit after this date</p>
+          </div>
+
+          {/* Confidentiality */}
+          <div className="bg-[#f1f4f9] rounded-xl border border-[#e2e8f0] p-4">
+            <div className="flex items-start gap-2">
+              <svg className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+              <div>
+                <p className="text-xs font-semibold text-gray-600 mb-1">Confidentiality</p>
+                <p className="text-xs text-gray-500 leading-relaxed">
+                  Your individual responses are never shared. Scores are aggregated across respondent groups before appearing in the 360 report.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   )
