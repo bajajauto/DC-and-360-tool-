@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { Link, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useUser } from '../context/UserContext'
 
 const navItems = [
@@ -17,8 +17,12 @@ function TasksIcon() {
 export default function RespondentLayout() {
   const { pathname } = useLocation()
   const navigate = useNavigate()
-  const { user, switchRole, pendingParticipantCount } = useUser()
+  const { user, logout, switchRole, pendingParticipantCount } = useUser()
   const [dropdownOpen, setDropdownOpen] = useState(false)
+
+  if (!user) {
+    return <Navigate to="/" replace />
+  }
 
   const isParticipantToo = user.roles.includes('participant')
 
@@ -31,7 +35,7 @@ export default function RespondentLayout() {
   return (
     <div className="min-h-screen flex bg-[#f8f9fc]">
       {/* Sidebar */}
-      <aside className="w-60 shrink-0 bg-white border-r border-[#e2e8f0] flex flex-col">
+      <aside className="sticky top-0 h-screen w-60 shrink-0 bg-white border-r border-[#e2e8f0] flex flex-col">
         {/* Logo */}
         <div className="px-5 py-5 border-b border-[#e2e8f0]">
           <div className="flex items-center gap-2.5">
@@ -48,6 +52,7 @@ export default function RespondentLayout() {
         {/* Role switcher dropdown */}
         {isParticipantToo && (
           <div className="px-3 pt-3 pb-1 relative">
+            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide px-1 mb-1.5">View</p>
             <button
               onClick={() => setDropdownOpen((o) => !o)}
               className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-violet-50 border border-violet-200 hover:bg-violet-100 transition-colors"
@@ -103,7 +108,7 @@ export default function RespondentLayout() {
         )}
 
         {/* Nav */}
-        <nav className="flex-1 px-3 py-3 space-y-0.5">
+        <nav className="flex-1 min-h-0 overflow-y-auto px-3 py-3 space-y-0.5">
           {navItems.map((item) => {
             const Icon = item.icon
             const isActive = pathname.startsWith(item.to)
@@ -126,7 +131,7 @@ export default function RespondentLayout() {
         </nav>
 
         {/* User card */}
-        <div className="px-3 py-4 border-t border-[#e2e8f0]">
+        <div className="shrink-0 px-3 py-4 border-t border-[#e2e8f0]">
           <div className="flex items-center gap-3 px-3 py-2">
             <div className="w-8 h-8 rounded-full bg-[#1e4d8c] flex items-center justify-center text-white text-xs font-semibold shrink-0">
               {user.initials}
@@ -137,7 +142,7 @@ export default function RespondentLayout() {
             </div>
           </div>
           <button
-            onClick={() => navigate('/')}
+            onClick={() => { logout(); navigate('/') }}
             className="flex items-center gap-2 px-3 py-1.5 mt-1 text-xs text-gray-500 hover:text-gray-700 rounded-lg hover:bg-gray-50 transition-colors w-full"
           >
             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

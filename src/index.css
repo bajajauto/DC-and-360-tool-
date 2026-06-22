@@ -11,3 +11,11 @@ body {
 * {
   box-sizing: border-box;
 }
+
+@media print {
+  @page { size: A4; margin: 0; }
+  body { background: white; }
+  .report-sheet { width: 210mm; max-width: none; margin: 0; }
+  .report-page { min-height: 297mm; page-break-after: always; break-after: page; }
+  .report-page:last-child { page-break-after: auto; break-after: auto; }
+}

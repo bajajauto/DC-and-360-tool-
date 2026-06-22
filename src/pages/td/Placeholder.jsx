@@ -1,0 +1,2 @@
+import { Construction } from 'lucide-react'
+export default function Placeholder({ title = 'Coming next' }) { return <div><header className="h-20 bg-white border-b border-[#e4e9f1] px-8 flex items-center"><h1 className="text-xl font-bold text-[#172033]">{title}</h1></header><div className="p-8"><div className="bg-white border border-[#e2e8f0] rounded-2xl p-14 text-center"><Construction className="mx-auto text-gray-300"/><p className="text-sm font-semibold text-gray-600 mt-4">This TD workspace section is ready for the next product slice.</p></div></div></div> }

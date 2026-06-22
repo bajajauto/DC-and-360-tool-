@@ -17,6 +17,13 @@ import RespondentLayout from './layouts/RespondentLayout'
 import RespondentDashboard from './pages/respondent/Dashboard'
 import FeedbackForm from './pages/respondent/FeedbackForm'
 
+// Talent Development admin
+import TDLayout from './layouts/TDLayout'
+import Cohorts from './pages/td/Cohorts'
+import ParticipantDetail from './pages/td/ParticipantDetail'
+import ReportPreview from './pages/td/ReportPreview'
+import Placeholder from './pages/td/Placeholder'
+
 export default function App() {
   return (
     <UserProvider>
@@ -38,6 +45,15 @@ export default function App() {
           <Route index element={<Navigate to="/respondent/dashboard" replace />} />
           <Route path="dashboard" element={<RespondentDashboard />} />
           <Route path="feedback/:taskId" element={<FeedbackForm />} />
+        </Route>
+
+        <Route path="/td" element={<TDLayout />}>
+          <Route index element={<Navigate to="/td/cohorts" replace />} />
+          <Route path="cohorts" element={<Cohorts />} />
+          <Route path="participants/:participantId" element={<ParticipantDetail />} />
+          <Route path="reports" element={<Placeholder title="360 reports" />} />
+          <Route path="reports/:participantId" element={<ReportPreview />} />
+          <Route path="settings" element={<Placeholder title="Programme setup" />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

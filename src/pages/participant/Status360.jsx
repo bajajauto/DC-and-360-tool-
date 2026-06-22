@@ -1,15 +1,19 @@
 import { Link } from 'react-router-dom'
 
 const respondents = [
+  { name: 'Rahul Kumar (Self)', relationship: 'Self', status: 'submitted', submittedOn: '10 Jun 2025' },
   { name: 'Priya Menon', relationship: 'Reporting Manager', status: 'submitted', submittedOn: '12 Jun 2025' },
   { name: 'Vikram Sood', relationship: 'Skip Manager', status: 'submitted', submittedOn: '14 Jun 2025' },
-  { name: 'Rahul Kumar (Self)', relationship: 'Self', status: 'submitted', submittedOn: '10 Jun 2025' },
   { name: 'Anika Kapoor', relationship: 'Peer', status: 'submitted', submittedOn: '13 Jun 2025' },
   { name: 'Deepak Rajan', relationship: 'Peer', status: 'pending', submittedOn: null },
   { name: 'Shalini Nair', relationship: 'Peer', status: 'pending', submittedOn: null },
   { name: 'Arjun Mehta', relationship: 'Peer', status: 'pending', submittedOn: null },
   { name: 'Kavitha S', relationship: 'Peer', status: 'pending', submittedOn: null },
 ]
+
+const orderedRespondents = [...respondents].sort(
+  (a, b) => Number(b.relationship === 'Self') - Number(a.relationship === 'Self'),
+)
 
 const submitted = respondents.filter((r) => r.status === 'submitted').length
 const total = respondents.length
@@ -20,12 +24,12 @@ function initials(name) {
   return name.split(' ').map((w) => w[0]).join('').slice(0, 2)
 }
 
-const relColour = {
-  'Reporting Manager': 'bg-purple-50 text-purple-700',
-  'Skip Manager': 'bg-indigo-50 text-indigo-700',
-  'Peer': 'bg-blue-50 text-blue-700',
-  'Self': 'bg-orange-50 text-orange-700',
-  'Direct Report': 'bg-teal-50 text-teal-700',
+const relationshipStyles = {
+  Self: { row: 'bg-amber-50 border-amber-100', avatar: 'bg-amber-100 text-amber-700', badge: 'bg-amber-100 text-amber-700' },
+  'Reporting Manager': { row: 'bg-purple-50 border-purple-100', avatar: 'bg-purple-100 text-purple-700', badge: 'bg-purple-100 text-purple-700' },
+  'Skip Manager': { row: 'bg-indigo-50 border-indigo-100', avatar: 'bg-indigo-100 text-indigo-700', badge: 'bg-indigo-100 text-indigo-700' },
+  Peer: { row: 'bg-sky-50 border-sky-100', avatar: 'bg-sky-100 text-sky-700', badge: 'bg-sky-100 text-sky-700' },
+  'Direct Report': { row: 'bg-teal-50 border-teal-100', avatar: 'bg-teal-100 text-teal-700', badge: 'bg-teal-100 text-teal-700' },
 }
 
 export default function Status360() {
@@ -71,15 +75,15 @@ export default function Status360() {
             <div className="px-5 py-3 border-b border-[#f1f4f9]">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Respondents ({total})</p>
             </div>
-            <div className="divide-y divide-[#f1f4f9]">
-              {respondents.map((r) => (
-                <div key={r.name} className="flex items-center gap-4 px-5 py-3.5">
-                  <div className="w-8 h-8 rounded-full bg-[#f1f4f9] flex items-center justify-center text-gray-500 text-xs font-semibold shrink-0">
+            <div className="space-y-2 p-3">
+              {orderedRespondents.map((r) => (
+                <div key={r.name} className={`flex items-center gap-4 rounded-lg border px-4 py-3.5 ${relationshipStyles[r.relationship]?.row ?? 'bg-gray-50 border-gray-100'}`}>
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold shrink-0 ${relationshipStyles[r.relationship]?.avatar ?? 'bg-gray-100 text-gray-500'}`}>
                     {initials(r.name)}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-[#1a1f2e]">{r.name === 'Rahul Kumar (Self)' ? 'You (Self)' : r.name}</p>
-                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${relColour[r.relationship] ?? 'bg-gray-100 text-gray-500'}`}>{r.relationship}</span>
+                    <span className={`inline-flex mt-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded-full ${relationshipStyles[r.relationship]?.badge ?? 'bg-gray-100 text-gray-500'}`}>{r.relationship}</span>
                   </div>
                   <div className="text-right shrink-0">
                     {r.status === 'submitted' ? (
