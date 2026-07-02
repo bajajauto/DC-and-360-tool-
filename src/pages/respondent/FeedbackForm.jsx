@@ -94,7 +94,6 @@ const RATING_LABELS = {
   2: 'Occasionally',
   3: 'Often',
   4: 'Almost Always',
-  NA: 'Not Applicable',
 }
 
 function RatingButton({ value, selected, onChange }) {
@@ -114,9 +113,7 @@ function RatingButton({ value, selected, onChange }) {
       {value}
       <span
         role="tooltip"
-        className={`pointer-events-none absolute bottom-full z-20 mb-2 w-max rounded-md bg-[#1a1f2e] px-2.5 py-1.5 text-[11px] font-medium leading-none text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 ${
-          value === 'NA' ? 'right-0' : 'left-1/2 -translate-x-1/2'
-        }`}
+        className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 w-max -translate-x-1/2 rounded-md bg-[#1a1f2e] px-2.5 py-1.5 text-[11px] font-medium leading-none text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
       >
         {label}
       </span>
@@ -129,7 +126,7 @@ function BehaviourRow({ behaviour, rating, onRate, index }) {
     <div className={`flex items-center gap-4 py-3 ${index > 0 ? 'border-t border-[#f1f4f9]' : ''}`}>
       <p className="flex-1 text-sm text-[#1a1f2e] leading-snug pr-2">{behaviour.text}</p>
       <div className="flex items-center gap-1.5 shrink-0">
-        {[1, 2, 3, 4, 'NA'].map((v) => (
+        {[1, 2, 3, 4].map((v) => (
           <RatingButton key={v} value={v} selected={rating === v} onChange={onRate} />
         ))}
       </div>

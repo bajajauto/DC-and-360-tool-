@@ -1,7 +1,8 @@
-import { ArrowLeft, Check, ChevronRight, Clock, FileText, Mail, MoreHorizontal, Users } from 'lucide-react'
+import { ArrowLeft, Check, ChevronRight, Clock, Download, FileText, Mail, Users } from 'lucide-react'
 import { Link, Navigate, useParams } from 'react-router-dom'
 import { useState } from 'react'
-import { getParticipant, processSteps } from '../../data/adminData'
+import { cohorts, getParticipant, processSteps } from '../../data/adminData'
+import { exportParticipantNomineeStatus, exportParticipantProcessStatus } from '../../lib/trackingExport'
 
 function stepState(participant, index) {
   const completed = Math.floor((participant.progress / 100) * processSteps.length)
@@ -20,6 +21,17 @@ export default function ParticipantDetail() {
 
   const allNomineesSubmitted = participant.totalResponses > 0 && participant.responses === participant.totalResponses
   const reportReady = allNomineesSubmitted && participant.reportStatus !== 'waiting'
+  const cohort = cohorts.find((item) => item.id === participant.cohortId)
+  const nominees = participant.nominees || []
+  const pendingNominees = nominees.filter((nominee) => nominee.status !== 'responded')
+  const relationshipSummary = ['Self', 'Reporting manager', 'Peer', 'Direct report'].map((relationship) => {
+    const items = nominees.filter((nominee) => nominee.relationship === relationship)
+    return {
+      relationship,
+      responded: items.filter((nominee) => nominee.status === 'responded').length,
+      total: items.length,
+    }
+  }).filter((item) => item.total > 0)
 
   const tasksWithState = processSteps.map((step, index) => ({ ...step, index, state: stepState(participant, index) }))
   const completedTasks = tasksWithState.filter((step) => step.state === 'complete')
@@ -36,7 +48,10 @@ export default function ParticipantDetail() {
   return <div>
     <header className="h-20 bg-white border-b border-[#e4e9f1] px-8 flex items-center justify-between">
       <div className="flex items-center gap-4"><Link to="/td/cohorts" className="w-9 h-9 rounded-lg border border-[#e2e8f0] flex items-center justify-center text-gray-500 hover:text-[#1e4d8c]"><ArrowLeft size={17} /></Link><div><p className="text-xs text-gray-400">Cohorts / {participant.name}</p><h1 className="text-xl font-bold text-[#172033]">Participant process</h1></div></div>
-      <button className="w-9 h-9 rounded-lg border border-[#e2e8f0] flex items-center justify-center text-gray-500"><MoreHorizontal size={18} /></button>
+      <div className="flex items-center gap-2">
+        <button onClick={() => exportParticipantProcessStatus(participant, cohort?.name)} className="flex items-center gap-2 rounded-lg border border-[#dce3ed] bg-white px-3 py-2 text-xs font-semibold text-[#1e4d8c] hover:bg-blue-50"><Download size={15} />Process status</button>
+        <button onClick={() => exportParticipantNomineeStatus(participant)} className="flex items-center gap-2 rounded-lg border border-[#dce3ed] bg-white px-3 py-2 text-xs font-semibold text-[#1e4d8c] hover:bg-blue-50"><Download size={15} />Nominee status</button>
+      </div>
     </header>
     <div className="p-8 max-w-[1360px] mx-auto">
       <section className="bg-white border border-[#e2e8f0] rounded-2xl p-6 mb-6 flex flex-col lg:flex-row lg:items-center gap-5">
@@ -109,9 +124,31 @@ export default function ParticipantDetail() {
           <section className="bg-white border border-[#e2e8f0] rounded-2xl overflow-hidden">
             <div className="px-6 py-5 border-b border-[#e8edf3] flex justify-between"><div><h3 className="font-semibold text-[#172033]">360 feedback collection</h3><p className="text-xs text-gray-400 mt-1">Individual responses remain confidential</p></div><div className="text-right"><p className="text-lg font-bold text-violet-700">{participant.responses}/{participant.totalResponses}</p><p className="text-[10px] text-gray-400">responses received</p></div></div>
             <div className="p-5 grid sm:grid-cols-4 gap-3">
-              {[['Self', 1, 1], ['Reporting manager', 1, 1], ['Peers', Math.max(0, participant.responses - 3), 4], ['Direct reports', Math.min(2, Math.max(0, participant.responses - 2)), 2]].map(([label, count, total]) => <div key={label} className="rounded-xl bg-[#f8fafc] border border-[#edf1f5] p-4"><p className="text-[11px] text-gray-500">{label}</p><p className="text-lg font-bold text-[#172033] mt-2">{count}<span className="text-xs font-normal text-gray-400">/{total}</span></p><div className="h-1 bg-gray-200 rounded mt-2"><div className="h-1 bg-violet-500 rounded" style={{ width: `${Math.min(100, count / total * 100)}%` }} /></div></div>)}
+              {relationshipSummary.map(({ relationship, responded, total }) => <div key={relationship} className="rounded-xl bg-[#f8fafc] border border-[#edf1f5] p-4"><p className="text-[11px] text-gray-500">{relationship}</p><p className="text-lg font-bold text-[#172033] mt-2">{responded}<span className="text-xs font-normal text-gray-400">/{total}</span></p><div className="h-1 bg-gray-200 rounded mt-2"><div className="h-1 bg-violet-500 rounded" style={{ width: `${Math.min(100, total ? responded / total * 100 : 0)}%` }} /></div></div>)}
             </div>
             {participant.responses < participant.totalResponses && <div className="px-5 pb-5"><button className="flex items-center gap-2 text-xs font-semibold text-[#1e4d8c] border border-blue-200 rounded-lg px-3 py-2 hover:bg-blue-50"><Mail size={14} />Send reminder to pending nominees</button></div>}
+          </section>
+
+          <section className="bg-white border border-[#e2e8f0] rounded-2xl overflow-hidden">
+            <div className="px-6 py-5 border-b border-[#e8edf3] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div><h3 className="font-semibold text-[#172033]">Nominated respondents</h3><p className="text-xs text-gray-400 mt-1">Names are visible for tracking completion; feedback content remains confidential</p></div>
+              <span className="text-xs font-semibold text-rose-600">{pendingNominees.length} pending</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead className="bg-[#f8fafc] border-b border-[#e8edf4]"><tr>{['Nominee', 'Relationship', 'Status', 'Nominated', 'Responded'].map((label) => <th key={label} className="px-5 py-3 text-[10px] uppercase tracking-wider font-semibold text-gray-400">{label}</th>)}</tr></thead>
+                <tbody className="divide-y divide-[#eef2f6]">
+                  {nominees.map((nominee) => <tr key={`${nominee.email}-${nominee.relationship}`}>
+                    <td className="px-5 py-4"><p className="text-sm font-semibold text-[#172033]">{nominee.name}</p><p className="text-[11px] text-gray-400">{nominee.email}</p></td>
+                    <td className="px-5 py-4 text-xs text-gray-600">{nominee.relationship}</td>
+                    <td className="px-5 py-4"><span className={`inline-flex rounded-full border px-2 py-1 text-[10px] font-semibold ${nominee.status === 'responded' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-700'}`}>{nominee.status === 'responded' ? 'Responded' : 'Pending'}</span></td>
+                    <td className="px-5 py-4 text-xs text-gray-500">{nominee.nominatedOn}</td>
+                    <td className="px-5 py-4 text-xs text-gray-500">{nominee.respondedOn || '-'}</td>
+                  </tr>)}
+                </tbody>
+              </table>
+              {!nominees.length && <div className="py-12 text-center"><Users className="mx-auto text-gray-300" /><p className="text-sm text-gray-500 mt-3">No nominees submitted yet.</p></div>}
+            </div>
           </section>
         </div>
 

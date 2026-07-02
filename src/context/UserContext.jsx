@@ -106,9 +106,9 @@ function readNomineeDraft() {
 }
 
 function buildUserFromMagicLink(payload) {
-  const role = ['respondent', 'td'].includes(payload.role) ? payload.role : 'participant'
-  const name = payload.name?.trim() || (role === 'respondent' ? '360 Respondent' : role === 'td' ? 'TD Administrator' : MOCK_USER.name)
-  const email = payload.email?.trim() || (role === 'respondent' ? 'respondent@bajaj.com' : role === 'td' ? 'td.admin@bajaj.com' : MOCK_USER.email)
+  const role = ['respondent', 'td', 'assessor'].includes(payload.role) ? payload.role : 'participant'
+  const name = payload.name?.trim() || (role === 'respondent' ? '360 Respondent' : role === 'td' ? 'TD Administrator' : role === 'assessor' ? 'DC Assessor' : MOCK_USER.name)
+  const email = payload.email?.trim() || (role === 'respondent' ? 'respondent@bajaj.com' : role === 'td' ? 'td.admin@bajaj.com' : role === 'assessor' ? 'assessor@bajaj.com' : MOCK_USER.email)
   const employeeId = payload.employeeId?.trim() || payload.email?.trim() || MOCK_USER.employeeId
 
   return {

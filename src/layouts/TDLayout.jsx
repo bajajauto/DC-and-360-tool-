@@ -1,6 +1,5 @@
-import { BarChart3, ChevronDown, LayoutDashboard, LogOut, Settings, Users } from 'lucide-react'
+import { BarChart3, LayoutDashboard, LogOut, Settings, Users } from 'lucide-react'
 import { Link, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { useState } from 'react'
 import { useUser } from '../context/UserContext'
 
 const navItems = [
@@ -13,7 +12,6 @@ export default function TDLayout() {
   const { pathname } = useLocation()
   const navigate = useNavigate()
   const { user, logout } = useUser()
-  const [cohortOpen, setCohortOpen] = useState(false)
 
   if (!user || !user.roles.includes('td')) return <Navigate to="/" replace />
 
@@ -52,12 +50,14 @@ export default function TDLayout() {
         </nav>
 
         <div className="border-t border-white/10 p-4">
-          <button onClick={() => setCohortOpen(!cohortOpen)} className="w-full flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-white/10 text-left">
+          <div className="w-full flex items-center gap-3 rounded-lg px-2 py-2">
             <div className="w-8 h-8 rounded-full bg-blue-200 text-[#123b70] flex items-center justify-center text-xs font-bold">{user.initials}</div>
             <div className="flex-1 min-w-0"><p className="text-xs font-medium truncate">{user.name}</p><p className="text-[10px] text-blue-200">TD administrator</p></div>
-            <ChevronDown size={14} className={cohortOpen ? 'rotate-180' : ''} />
+          </div>
+          <button onClick={() => { logout(); navigate('/') }} className="mt-1 w-full flex items-center gap-2 px-3 py-2 text-xs text-blue-100 hover:bg-white/10 rounded-lg">
+            <LogOut size={14} />
+            Sign out
           </button>
-          {cohortOpen && <button onClick={() => { logout(); navigate('/') }} className="mt-1 w-full flex items-center gap-2 px-3 py-2 text-xs text-blue-100 hover:bg-white/10 rounded-lg"><LogOut size={14} /> Sign out</button>}
         </div>
       </aside>
       <main className="min-w-0 flex-1"><Outlet /></main>

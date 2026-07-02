@@ -2,6 +2,7 @@ import { Check, ChevronDown, ChevronRight, Download, Search, Users } from 'lucid
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { cohorts, participants } from '../../data/adminData'
+import { exportCohortNomineeStatus, exportCohortProcessStatus } from '../../lib/trackingExport'
 
 const statusStyle = {
   ready: 'bg-amber-50 text-amber-700 border-amber-200',
@@ -43,7 +44,11 @@ export default function Cohorts() {
             <h2 className="text-2xl font-bold">{cohort.name}</h2>
             <p className="text-sm text-blue-100 mt-1">DC event: {cohort.eventDate} · {allInCohort.length} participants</p>
           </div>
-          <button disabled={!ready || generated} onClick={() => setGenerated(true)} className="shrink-0 flex items-center gap-2 rounded-lg bg-white text-[#17477f] px-4 py-2.5 text-sm font-semibold hover:bg-blue-50 disabled:opacity-60"><Download size={16} />{generated ? 'Reports prepared' : `Generate ready reports (${ready})`}</button>
+          <div className="flex shrink-0 flex-wrap justify-end gap-2">
+            <button onClick={() => exportCohortProcessStatus(cohort, allInCohort)} className="flex items-center gap-2 rounded-lg border border-white/25 bg-white/10 text-white px-4 py-2.5 text-sm font-semibold hover:bg-white/15"><Download size={16} />Process status</button>
+            <button onClick={() => exportCohortNomineeStatus(cohort, allInCohort)} className="flex items-center gap-2 rounded-lg border border-white/25 bg-white/10 text-white px-4 py-2.5 text-sm font-semibold hover:bg-white/15"><Download size={16} />Nominee status</button>
+            <button disabled={!ready || generated} onClick={() => setGenerated(true)} className="flex items-center gap-2 rounded-lg bg-white text-[#17477f] px-4 py-2.5 text-sm font-semibold hover:bg-blue-50 disabled:opacity-60"><Download size={16} />{generated ? 'Reports prepared' : `Generate ready reports (${ready})`}</button>
+          </div>
         </section>
 
         <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">

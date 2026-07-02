@@ -9,6 +9,10 @@ const demoLinks = [
     href: '/?role=td&name=Aditi%20Deshmukh&email=aditi.deshmukh%40bajaj.com&employeeId=TD-1042',
   },
   {
+    label: 'Open as assessor',
+    href: '/?role=assessor&name=Kabir%20Sethi&email=kabir.sethi%40bajaj.com&employeeId=AS-2031',
+  },
+  {
     label: 'Open as DC participant',
     href: '/?role=participant&name=Rahul%20Kumar&email=rahul.kumar%40bajaj.com&employeeId=EX-78432',
   },
@@ -41,6 +45,8 @@ export default function LoginPage() {
     const taskId = user.magicLink.taskId
     if (user.magicLink.role === 'td') {
       navigate('/td/cohorts', { replace: true })
+    } else if (user.magicLink.role === 'assessor') {
+      navigate('/assessor/candidates', { replace: true })
     } else if (user.magicLink.role === 'respondent') {
       navigate(taskId ? `/respondent/feedback/${taskId}` : '/respondent/dashboard', { replace: true })
     } else {

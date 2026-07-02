@@ -22,7 +22,13 @@ import TDLayout from './layouts/TDLayout'
 import Cohorts from './pages/td/Cohorts'
 import ParticipantDetail from './pages/td/ParticipantDetail'
 import ReportPreview from './pages/td/ReportPreview'
+import TDReports from './pages/td/TDReports'
 import Placeholder from './pages/td/Placeholder'
+
+// Assessor
+import AssessorLayout from './layouts/AssessorLayout'
+import CandidateProfiles from './pages/assessor/CandidateProfiles'
+import EvidenceDetail from './pages/assessor/EvidenceDetail'
 
 export default function App() {
   return (
@@ -51,9 +57,15 @@ export default function App() {
           <Route index element={<Navigate to="/td/cohorts" replace />} />
           <Route path="cohorts" element={<Cohorts />} />
           <Route path="participants/:participantId" element={<ParticipantDetail />} />
-          <Route path="reports" element={<Placeholder title="360 reports" />} />
+          <Route path="reports" element={<TDReports />} />
           <Route path="reports/:participantId" element={<ReportPreview />} />
           <Route path="settings" element={<Placeholder title="Programme setup" />} />
+        </Route>
+
+        <Route path="/assessor" element={<AssessorLayout />}>
+          <Route index element={<Navigate to="/assessor/candidates" replace />} />
+          <Route path="candidates" element={<CandidateProfiles />} />
+          <Route path="candidates/:participantId/:evidenceType" element={<EvidenceDetail />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />
