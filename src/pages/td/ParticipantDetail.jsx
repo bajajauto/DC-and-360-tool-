@@ -1,8 +1,16 @@
 import { ArrowLeft, Check, ChevronRight, Clock, Download, FileText, Mail, Users } from 'lucide-react'
 import { Link, Navigate, useParams } from 'react-router-dom'
-import { useState } from 'react'
-import { cohorts, getParticipant, processSteps } from '../../data/adminData'
+import { useEffect, useState } from 'react'
+import { processSteps } from '../../data/adminData'
+import { api } from '../../lib/api'
 import { exportParticipantNomineeStatus, exportParticipantProcessStatus } from '../../lib/trackingExport'
+
+const relationshipLabels = {
+  'reporting-manager': 'Reporting Manager',
+  'skip-manager': 'Skip Manager / BU Head',
+  peer: 'Peer / Internal Customer',
+  'direct-report': 'Direct Report',
+}
 
 function stepState(participant, index) {
   const completed = Math.floor((participant.progress / 100) * processSteps.length)
@@ -15,20 +23,44 @@ function stepState(participant, index) {
 
 export default function ParticipantDetail() {
   const { participantId } = useParams()
-  const participant = getParticipant(participantId)
+  const [participant, setParticipant] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
   const [taskView, setTaskView] = useState('all')
+
+  useEffect(() => {
+    if (!participantId) return
+    setLoading(true)
+    setError('')
+    api.getParticipant(participantId)
+      .then((result) => setParticipant(result.data))
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false))
+  }, [participantId])
+
+  if (loading) {
+    return (
+      <div className="p-8">
+        <div className="animate-pulse space-y-4">
+          <div className="h-10 bg-gray-100 rounded w-64" />
+          <div className="h-56 bg-gray-100 rounded" />
+        </div>
+      </div>
+    )
+  }
+
   if (!participant) return <Navigate to="/td/cohorts" replace />
 
   const allNomineesSubmitted = participant.totalResponses > 0 && participant.responses === participant.totalResponses
   const reportReady = allNomineesSubmitted && participant.reportStatus !== 'waiting'
-  const cohort = cohorts.find((item) => item.id === participant.cohortId)
+  const cohort = participant.cohort
   const nominees = participant.nominees || []
-  const pendingNominees = nominees.filter((nominee) => nominee.status !== 'responded')
-  const relationshipSummary = ['Self', 'Reporting manager', 'Peer', 'Direct report'].map((relationship) => {
+  const pendingNominees = nominees.filter((nominee) => nominee.status !== 'submitted')
+  const relationshipSummary = ['reporting-manager', 'skip-manager', 'peer', 'direct-report'].map((relationship) => {
     const items = nominees.filter((nominee) => nominee.relationship === relationship)
     return {
       relationship,
-      responded: items.filter((nominee) => nominee.status === 'responded').length,
+      responded: items.filter((nominee) => nominee.status === 'submitted').length,
       total: items.length,
     }
   }).filter((item) => item.total > 0)
@@ -67,9 +99,9 @@ export default function ParticipantDetail() {
           </p>
           <p className="text-xs mt-3">
             <span className="text-gray-400">Reporting manager: </span>
-            <span className="font-semibold text-amber-700">Priya Menon</span>
+            <span className="font-semibold text-amber-700">Available in HR upload</span>
             <span className="mx-3 text-gray-300">•</span>
-            <span className="font-semibold text-emerald-700">EX to LX Cohort '25</span>
+            <span className="font-semibold text-emerald-700">{cohort?.name || 'Unassigned cohort'}</span>
           </p>
         </div>
         <div className="min-w-56"><div className="flex justify-between text-xs mb-2"><span className="text-gray-500">Overall completion</span><strong>{participant.progress}%</strong></div><div className="h-2 bg-gray-100 rounded-full"><div className="h-2 rounded-full bg-[#2867a7]" style={{ width: `${participant.progress}%` }} /></div></div>
@@ -124,7 +156,7 @@ export default function ParticipantDetail() {
           <section className="bg-white border border-[#e2e8f0] rounded-2xl overflow-hidden">
             <div className="px-6 py-5 border-b border-[#e8edf3] flex justify-between"><div><h3 className="font-semibold text-[#172033]">360 feedback collection</h3><p className="text-xs text-gray-400 mt-1">Individual responses remain confidential</p></div><div className="text-right"><p className="text-lg font-bold text-violet-700">{participant.responses}/{participant.totalResponses}</p><p className="text-[10px] text-gray-400">responses received</p></div></div>
             <div className="p-5 grid sm:grid-cols-4 gap-3">
-              {relationshipSummary.map(({ relationship, responded, total }) => <div key={relationship} className="rounded-xl bg-[#f8fafc] border border-[#edf1f5] p-4"><p className="text-[11px] text-gray-500">{relationship}</p><p className="text-lg font-bold text-[#172033] mt-2">{responded}<span className="text-xs font-normal text-gray-400">/{total}</span></p><div className="h-1 bg-gray-200 rounded mt-2"><div className="h-1 bg-violet-500 rounded" style={{ width: `${Math.min(100, total ? responded / total * 100 : 0)}%` }} /></div></div>)}
+              {relationshipSummary.map(({ relationship, responded, total }) => <div key={relationship} className="rounded-xl bg-[#f8fafc] border border-[#edf1f5] p-4"><p className="text-[11px] text-gray-500">{relationshipLabels[relationship] || relationship}</p><p className="text-lg font-bold text-[#172033] mt-2">{responded}<span className="text-xs font-normal text-gray-400">/{total}</span></p><div className="h-1 bg-gray-200 rounded mt-2"><div className="h-1 bg-violet-500 rounded" style={{ width: `${Math.min(100, total ? responded / total * 100 : 0)}%` }} /></div></div>)}
             </div>
             {participant.responses < participant.totalResponses && <div className="px-5 pb-5"><button className="flex items-center gap-2 text-xs font-semibold text-[#1e4d8c] border border-blue-200 rounded-lg px-3 py-2 hover:bg-blue-50"><Mail size={14} />Send reminder to pending nominees</button></div>}
           </section>
@@ -140,10 +172,10 @@ export default function ParticipantDetail() {
                 <tbody className="divide-y divide-[#eef2f6]">
                   {nominees.map((nominee) => <tr key={`${nominee.email}-${nominee.relationship}`}>
                     <td className="px-5 py-4"><p className="text-sm font-semibold text-[#172033]">{nominee.name}</p><p className="text-[11px] text-gray-400">{nominee.email}</p></td>
-                    <td className="px-5 py-4 text-xs text-gray-600">{nominee.relationship}</td>
-                    <td className="px-5 py-4"><span className={`inline-flex rounded-full border px-2 py-1 text-[10px] font-semibold ${nominee.status === 'responded' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-700'}`}>{nominee.status === 'responded' ? 'Responded' : 'Pending'}</span></td>
-                    <td className="px-5 py-4 text-xs text-gray-500">{nominee.nominatedOn}</td>
-                    <td className="px-5 py-4 text-xs text-gray-500">{nominee.respondedOn || '-'}</td>
+                    <td className="px-5 py-4 text-xs text-gray-600">{nominee.relationshipLabel || relationshipLabels[nominee.relationship] || nominee.relationship}</td>
+                    <td className="px-5 py-4"><span className={`inline-flex rounded-full border px-2 py-1 text-[10px] font-semibold ${nominee.status === 'submitted' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-700'}`}>{nominee.status === 'submitted' ? 'Submitted' : 'Pending'}</span></td>
+                    <td className="px-5 py-4 text-xs text-gray-500">{nominee.submittedAt ? new Date(nominee.submittedAt).toLocaleDateString('en-GB') : '-'}</td>
+                    <td className="px-5 py-4 text-xs text-gray-500">{nominee.status === 'submitted' ? 'Awaiting response' : '-'}</td>
                   </tr>)}
                 </tbody>
               </table>
@@ -154,7 +186,7 @@ export default function ParticipantDetail() {
 
         <aside className="space-y-5">
           <section className="rounded-2xl bg-[#173f72] text-white p-5"><div className="flex items-start justify-between"><span className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center"><FileText size={19} /></span><span className={`text-[10px] font-semibold px-2 py-1 rounded-full ${reportReady ? 'bg-emerald-400/20 text-emerald-100' : 'bg-white/10 text-blue-100'}`}>{reportReady ? 'Data ready' : 'Not ready'}</span></div><h3 className="font-semibold mt-5">Aggregated 360 report</h3><p className="text-xs text-blue-200 mt-2 leading-relaxed">{reportReady ? 'All nominees have submitted. Scores can now be aggregated and populated into the report template.' : `${participant.totalResponses - participant.responses} nominee response${participant.totalResponses - participant.responses === 1 ? '' : 's'} still pending. The report unlocks only after every nominee submits.`}</p>{reportReady ? <Link to={`/td/reports/${participant.id}`} className="mt-5 w-full bg-white text-[#173f72] rounded-lg py-2.5 text-sm font-semibold flex items-center justify-center gap-2">Preview report <ChevronRight size={16} /></Link> : <button disabled className="mt-5 w-full bg-white/10 text-blue-200 rounded-lg py-2.5 text-sm font-semibold">Waiting for all nominees ({participant.responses}/{participant.totalResponses})</button>}</section>
-          <section className="bg-white border border-[#e2e8f0] rounded-2xl p-5"><h3 className="text-sm font-semibold text-[#172033] mb-4">Participant details</h3>{[['Email', `${participant.name.toLowerCase().replace(' ', '.')}@bajaj.com`], ['DC type', 'EX to LX'], ['Event', '25–26 Jul 2025'], ['Location', 'Akurdi, Pune']].map(([label, value]) => <div key={label} className="flex justify-between py-2.5 border-b last:border-0 border-[#edf1f5] gap-3"><span className="text-xs text-gray-400">{label}</span><span className="text-xs font-medium text-[#374151] text-right">{value}</span></div>)}</section>
+          <section className="bg-white border border-[#e2e8f0] rounded-2xl p-5"><h3 className="text-sm font-semibold text-[#172033] mb-4">Participant details</h3>{[['Email', participant.email || '-'], ['DC type', cohort?.programme || 'Development Centre'], ['Event', cohort?.eventDate || 'TBD'], ['Location', 'Akurdi, Pune']].map(([label, value]) => <div key={label} className="flex justify-between py-2.5 border-b last:border-0 border-[#edf1f5] gap-3"><span className="text-xs text-gray-400">{label}</span><span className="text-xs font-medium text-[#374151] text-right">{value}</span></div>)}</section>
           <section className="bg-white border border-[#e2e8f0] rounded-2xl p-5"><div className="flex gap-3"><Users size={17} className="text-gray-400 mt-0.5"/><div><h3 className="text-xs font-semibold text-[#172033]">Confidentiality</h3><p className="text-[11px] text-gray-500 mt-1.5 leading-relaxed">TD can monitor completion, but the report exposes only aggregated nominee scores. Individual ratings are never shown.</p></div></div></section>
         </aside>
       </div>

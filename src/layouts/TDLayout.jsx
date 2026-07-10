@@ -1,11 +1,40 @@
-import { BarChart3, LayoutDashboard, LogOut, Settings, Users } from 'lucide-react'
+import {
+  BarChart3,
+  Bell,
+  BookOpen,
+  ChevronDown,
+  ClipboardList,
+  FileText,
+  History,
+  LayoutDashboard,
+  LogOut,
+  Mail,
+  Settings,
+  Users,
+} from 'lucide-react'
 import { Link, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useUser } from '../context/UserContext'
+import bajajBrandLockup from '../assets/bajaj-brand-lockup.png'
 
-const navItems = [
-  { to: '/td/cohorts', label: 'Cohorts', icon: Users },
-  { to: '/td/reports', label: 'Reports', icon: BarChart3 },
-  { to: '/td/settings', label: 'Programme setup', icon: Settings },
+const navSections = [
+  {
+    label: 'Workspace',
+    items: [
+      { to: '/td/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+      { to: '/td/cohorts', label: 'Current Cohort', icon: Users, badge: '8' },
+      { to: '/td/reports', label: 'Generate & Release', icon: FileText },
+    ],
+  },
+  {
+    label: 'Operations',
+    items: [
+      { to: '/td/exports', label: 'Trackers & Exports', icon: ClipboardList },
+      { to: '/td/outbox', label: 'Email Outbox', icon: Mail },
+      { to: '/td/question-bank', label: 'Question Bank', icon: BookOpen },
+      { to: '/td/templates', label: 'Templates', icon: Bell },
+      { to: '/td/audit', label: 'Audit Log', icon: History },
+    ],
+  },
 ]
 
 export default function TDLayout() {
@@ -16,51 +45,69 @@ export default function TDLayout() {
   if (!user || !user.roles.includes('td')) return <Navigate to="/" replace />
 
   return (
-    <div className="min-h-screen flex bg-[#f6f8fb]">
-      <aside className="sticky top-0 h-screen w-64 shrink-0 bg-[#123b70] text-white flex flex-col print:hidden">
-        <div className="h-20 px-6 flex items-center border-b border-white/10">
-          <div className="w-9 h-9 rounded-lg bg-white flex items-center justify-center text-[#123b70] font-extrabold">B</div>
-          <div className="ml-3">
-            <p className="text-sm font-semibold leading-tight">Bajaj Auto</p>
-            <p className="text-[11px] text-blue-200">Talent Development</p>
-          </div>
+    <div className="min-h-screen bg-[#f4f7fb] text-[#0f172a]">
+      <header className="sticky top-0 z-30 h-[52px] border-b border-[#d5dce5] bg-[#ebf2fa] px-6 flex items-center gap-4 print:hidden">
+        <img src={bajajBrandLockup} alt="Bajaj Auto" className="h-8 w-auto rounded" />
+        <div className="h-5 w-px bg-slate-300" />
+        <p className="text-xs tracking-wide text-slate-500">360 & DC Tool</p>
+        <div className="flex-1" />
+        <button className="inline-flex items-center gap-2 rounded-full border border-[#d6e4f7] bg-[#d6e4f7]/50 px-3.5 py-1.5 text-xs font-semibold text-[#1e5fba]">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
+          TD Admin
+          <ChevronDown size={12} />
+        </button>
+        <div className="flex items-center gap-2 text-xs text-slate-600">
+          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#1e5fba] text-[11px] font-bold text-white">{user.initials}</span>
+          <span>{user.name}</span>
         </div>
+      </header>
 
-        <div className="px-4 pt-5">
-          <p className="px-2 text-[10px] font-semibold tracking-[0.14em] text-blue-300 uppercase mb-2">Workspace</p>
-          <div className="flex items-center gap-3 rounded-xl bg-white/10 border border-white/10 px-3 py-3">
-            <LayoutDashboard size={17} className="text-blue-200" />
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold">TD Admin</p>
-              <p className="text-[10px] text-blue-200">Programme operations</p>
+      <div className="flex min-h-[calc(100vh-52px)]">
+        <aside className="sticky top-[52px] h-[calc(100vh-52px)] w-[228px] shrink-0 border-r border-[#d5dce5] bg-white px-3 py-4 print:hidden">
+          {navSections.map((section) => (
+            <div key={section.label} className="mb-5">
+              <p className="px-3 pb-2 pt-1 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">{section.label}</p>
+              <nav className="space-y-1">
+                {section.items.map(({ to, label, icon: Icon, badge }) => {
+                  const active = pathname === to || (to === '/td/cohorts' && pathname.startsWith('/td/participants')) || (to === '/td/reports' && pathname.startsWith('/td/reports'))
+                  return (
+                    <Link
+                      key={`${section.label}-${label}`}
+                      to={to}
+                      className={`flex items-center gap-2.5 rounded-[10px] border px-3 py-2.5 text-[13px] transition-colors ${
+                        active
+                          ? 'border-[#d6e4f7] bg-[#ebf2fa] font-semibold text-[#1e5fba]'
+                          : 'border-transparent text-slate-500 hover:bg-[#f4f7fb] hover:text-slate-900'
+                      }`}
+                    >
+                      <Icon size={16} />
+                      <span className="flex-1">{label}</span>
+                      {badge && <span className="rounded-full bg-[#1e5fba] px-2 py-0.5 text-[10px] font-bold text-white">{badge}</span>}
+                    </Link>
+                  )
+                })}
+              </nav>
             </div>
-          </div>
-        </div>
+          ))}
 
-        <nav className="flex-1 px-4 pt-6 space-y-1">
-          {navItems.map(({ to, label, icon: Icon }) => {
-            const active = pathname === to || (to === '/td/cohorts' && pathname.startsWith('/td/participants'))
-            return (
-              <Link key={to} to={to} className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors ${active ? 'bg-white text-[#123b70] font-semibold' : 'text-blue-100 hover:bg-white/10'}`}>
-                <Icon size={17} />
-                {label}
-              </Link>
-            )
-          })}
-        </nav>
-
-        <div className="border-t border-white/10 p-4">
-          <div className="w-full flex items-center gap-3 rounded-lg px-2 py-2">
-            <div className="w-8 h-8 rounded-full bg-blue-200 text-[#123b70] flex items-center justify-center text-xs font-bold">{user.initials}</div>
-            <div className="flex-1 min-w-0"><p className="text-xs font-medium truncate">{user.name}</p><p className="text-[10px] text-blue-200">TD administrator</p></div>
+          <div className="absolute bottom-4 left-3 right-3 border-t border-[#d5dce5] pt-3">
+            <button
+              onClick={() => {
+                logout()
+                navigate('/')
+              }}
+              className="flex w-full items-center gap-2 rounded-[10px] px-3 py-2 text-xs font-medium text-slate-500 hover:bg-[#f4f7fb] hover:text-[#1e5fba]"
+            >
+              <LogOut size={14} />
+              Sign out
+            </button>
           </div>
-          <button onClick={() => { logout(); navigate('/') }} className="mt-1 w-full flex items-center gap-2 px-3 py-2 text-xs text-blue-100 hover:bg-white/10 rounded-lg">
-            <LogOut size={14} />
-            Sign out
-          </button>
-        </div>
-      </aside>
-      <main className="min-w-0 flex-1"><Outlet /></main>
+        </aside>
+
+        <main className="min-w-0 flex-1">
+          <Outlet />
+        </main>
+      </div>
     </div>
   )
 }

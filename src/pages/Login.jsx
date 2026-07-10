@@ -1,62 +1,57 @@
-import { useEffect, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useUser } from '../context/UserContext'
+import { api } from '../lib/api'
 import bajajBrandLockup from '../assets/bajaj-brand-lockup.png'
 
-const demoLinks = [
-  {
-    label: 'Open as TD admin',
-    href: '/?role=td&name=Aditi%20Deshmukh&email=aditi.deshmukh%40bajaj.com&employeeId=TD-1042',
-  },
-  {
-    label: 'Open as assessor',
-    href: '/?role=assessor&name=Kabir%20Sethi&email=kabir.sethi%40bajaj.com&employeeId=AS-2031',
-  },
-  {
-    label: 'Open as DC participant',
-    href: '/?role=participant&name=Rahul%20Kumar&email=rahul.kumar%40bajaj.com&employeeId=EX-78432',
-  },
-  {
-    label: 'Open as 360 nominee',
-    href: '/?role=respondent&name=Anika%20Kapoor&email=anika.kapoor%40bajaj.com&taskId=r1',
-  },
+const demoCredentials = [
+  { label: 'TD Admin', identifier: 'td.admin@bajajauto.co.in', password: 'Admin@123' },
+  { label: 'Assessor', identifier: 'assessor@bajajauto.co.in', password: 'Assessor@123' },
+  { label: 'BUHR', identifier: 'buhr.ev@bajajauto.co.in', password: 'Buhr@123' },
+  { label: 'Participant', identifier: '', password: 'Welcome@123', hint: 'Enter employee ID above' },
 ]
+
+function destinationForUser(user) {
+  if (user.roles.includes('td')) return '/td/dashboard'
+  if (user.roles.includes('assessor')) return '/assessor/candidates'
+  if (user.roles.includes('buhr')) return '/buhr/dashboard'
+  if (user.roles.includes('participant')) return '/participant/dashboard'
+  if (user.roles.includes('respondent')) {
+    const firstTask = user.respondentTasks?.[0]
+    return firstTask ? `/respondent/feedback/${firstTask.id}` : '/respondent/dashboard'
+  }
+
+  return '/participant/dashboard'
+}
 
 export default function LoginPage() {
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
-  const { loginFromMagicLink } = useUser()
+  const { loginFromCredentials } = useUser()
+  const [identifier, setIdentifier] = useState('')
+  const [password, setPassword] = useState('')
   const [manualLink, setManualLink] = useState('')
-
-  useEffect(() => {
-    const role = searchParams.get('role')
-    const email = searchParams.get('email')
-
-    if (!role || !email) return
-
-    const user = loginFromMagicLink({
-      role,
-      name: searchParams.get('name'),
-      email,
-      employeeId: searchParams.get('employeeId'),
-      taskId: searchParams.get('taskId'),
-    })
-
-    const taskId = user.magicLink.taskId
-    if (user.magicLink.role === 'td') {
-      navigate('/td/cohorts', { replace: true })
-    } else if (user.magicLink.role === 'assessor') {
-      navigate('/assessor/candidates', { replace: true })
-    } else if (user.magicLink.role === 'respondent') {
-      navigate(taskId ? `/respondent/feedback/${taskId}` : '/respondent/dashboard', { replace: true })
-    } else {
-      navigate('/participant/dashboard', { replace: true })
-    }
-  }, [loginFromMagicLink, navigate, searchParams])
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
 
   function openManualLink() {
     if (!manualLink.trim()) return
     window.location.href = manualLink.trim()
+  }
+
+  async function handleCredentialLogin(event) {
+    event.preventDefault()
+    setError('')
+    setLoading(true)
+
+    try {
+      const body = await api.login(identifier, password)
+      const user = loginFromCredentials(body.data)
+      navigate(destinationForUser(user), { replace: true })
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -99,9 +94,57 @@ export default function LoginPage() {
           </div>
 
           <h2 className="text-2xl font-bold text-[#1a1f2e] mb-1">Sign in</h2>
-          <p className="text-gray-500 text-sm mb-8">Use the secure magic link sent to your email</p>
+          <p className="text-gray-500 text-sm mb-8">Use your employee ID or email to access the portal.</p>
 
-          <div className="space-y-4">
+          <form onSubmit={handleCredentialLogin} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-[#1a1f2e] mb-1.5">
+                Employee ID or email
+              </label>
+              <input
+                type="text"
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
+                placeholder="TD-ADMIN"
+                className="w-full px-4 py-2.5 rounded-lg border border-[#e2e8f0] bg-white text-[#1a1f2e] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1e4d8c] focus:border-transparent text-sm"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-[#1a1f2e] mb-1.5">
+                Password
+              </label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Enter password"
+                className="w-full px-4 py-2.5 rounded-lg border border-[#e2e8f0] bg-white text-[#1a1f2e] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1e4d8c] focus:border-transparent text-sm"
+              />
+            </div>
+
+            {error && (
+              <p className="rounded-lg bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
+                {error}
+              </p>
+            )}
+
+            <button
+              type="submit"
+              disabled={!identifier.trim() || !password || loading}
+              className="block w-full bg-[#1e4d8c] text-white text-center py-2.5 rounded-lg font-medium hover:bg-[#183f73] transition-colors text-sm mt-6 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {loading ? 'Signing in...' : 'Sign in'}
+            </button>
+          </form>
+
+          <div className="mt-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="flex-1 h-px bg-[#e2e8f0]" />
+              <span className="text-gray-400 text-xs">magic link</span>
+              <div className="flex-1 h-px bg-[#e2e8f0]" />
+            </div>
+
             <div>
               <label className="block text-sm font-medium text-[#1a1f2e] mb-1.5">
                 Paste magic link
@@ -110,7 +153,7 @@ export default function LoginPage() {
                 type="url"
                 value={manualLink}
                 onChange={(e) => setManualLink(e.target.value)}
-                placeholder="https://dc-tool/.../?role=respondent&name=..."
+                placeholder="https://dc-tool/.../invite/..."
                 className="w-full px-4 py-2.5 rounded-lg border border-[#e2e8f0] bg-white text-[#1a1f2e] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1e4d8c] focus:border-transparent text-sm"
               />
             </div>
@@ -118,7 +161,7 @@ export default function LoginPage() {
             <button
               onClick={openManualLink}
               disabled={!manualLink.trim()}
-              className="block w-full bg-[#1e4d8c] text-white text-center py-2.5 rounded-lg font-medium hover:bg-[#183f73] transition-colors text-sm mt-6 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="block w-full border border-[#d6e3f5] bg-white text-[#1e4d8c] text-center py-2.5 rounded-lg font-medium hover:bg-blue-50 transition-colors text-sm disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Continue with Magic Link
             </button>
@@ -131,13 +174,20 @@ export default function LoginPage() {
           </div>
 
           <div className="mt-4 grid grid-cols-1 gap-3">
-            {demoLinks.map((link) => (
+            {demoCredentials.map((demo) => (
               <button
-                key={link.label}
-                onClick={() => navigate(link.href)}
-                className="flex items-center justify-center gap-2 border border-[#e2e8f0] bg-white px-4 py-2.5 rounded-lg text-sm font-medium text-[#1a1f2e] hover:bg-gray-50 transition-colors"
+                key={demo.label}
+                onClick={() => {
+                  if (demo.identifier) setIdentifier(demo.identifier)
+                  setPassword(demo.password)
+                  setError('')
+                }}
+                className="flex items-center justify-between gap-2 border border-[#e2e8f0] bg-white px-4 py-2.5 rounded-lg text-sm font-medium text-[#1a1f2e] hover:bg-gray-50 transition-colors"
               >
-                {link.label}
+                <span>{demo.label}</span>
+                <span className="text-xs text-gray-400 font-normal">
+                  {demo.hint || demo.identifier}
+                </span>
               </button>
             ))}
           </div>

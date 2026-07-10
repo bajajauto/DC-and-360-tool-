@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 
 const reports = [
   {
@@ -44,6 +44,7 @@ const timeline = [
 ]
 
 export default function Reports() {
+  const navigate = useNavigate()
   return (
     <div className="p-6">
       <div className="flex items-center gap-2 text-xs text-gray-400 mb-5">
@@ -80,9 +81,18 @@ export default function Reports() {
                 {r.status === 'available' ? (
                   <div className="flex items-center justify-between">
                     <p className="text-[10px] text-gray-400">Released: {r.releasedOn}</p>
-                    <button className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-[#1e4d8c] text-white text-xs font-medium hover:bg-[#183f73] transition-colors">
-                      ↓ Download PDF
-                    </button>
+                    {r.id === '360' ? (
+                      <button
+                        onClick={() => navigate('/participant/360-report')}
+                        className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-[#1e4d8c] text-white text-xs font-medium hover:bg-[#183f73] transition-colors"
+                      >
+                        View Report →
+                      </button>
+                    ) : (
+                      <button className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-[#1e4d8c] text-white text-xs font-medium hover:bg-[#183f73] transition-colors">
+                        ↓ Download PDF
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <p className="text-xs text-gray-400 flex items-center gap-1.5">🔒 You will be notified when this report is released by TD</p>

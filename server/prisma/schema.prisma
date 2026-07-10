@@ -1,0 +1,267 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  PARTICIPANT
+  RESPONDENT
+  ASSESSOR
+  TD
+  BUHR
+}
+
+enum ParticipantStage {
+  APPLICATION_PROFILE
+  ROLE_INTERVIEW
+  PHOTOGRAPH
+  PRE_WORK
+  NOMINEES_360
+  FEEDBACK_360
+  DC_ASSESSMENTS
+  COMPLETED
+}
+
+enum SubmissionStatus {
+  DRAFT
+  SUBMITTED
+}
+
+enum FeedbackStatus {
+  PENDING
+  SAVED
+  SUBMITTED
+}
+
+enum ReportStatus {
+  WAITING
+  READY
+  GENERATED
+  RELEASED
+}
+
+enum EmailStatus {
+  QUEUED
+  SENT
+  FAILED
+  SKIPPED
+}
+
+enum NomineeRelationship {
+  REPORTING_MANAGER
+  SKIP_MANAGER
+  PEER
+  DIRECT_REPORT
+}
+
+model User {
+  id              String             @id @default(cuid())
+  name            String
+  email           String             @unique
+  employeeId      String?            @unique
+  passwordHash    String?
+  designation     String?
+  businessUnit    String?
+  roles           Role[]             @default([])
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  participant     Participant?
+  nomineeRecords  Nominee[]
+  respondentTasks FeedbackTask[]     @relation("RespondentTasks")
+  magicLinks      MagicLink[]
+  sentEmails      EmailOutbox[]       @relation("EmailActor")
+}
+
+model Cohort {
+  id           String        @id @default(cuid())
+  slug         String        @unique
+  name         String
+  programme    String
+  eventStart   DateTime?
+  eventEnd     DateTime?
+  participants Participant[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+model Participant {
+  id                 String            @id @default(cuid())
+  userId             String            @unique
+  cohortId           String
+  stage              ParticipantStage  @default(APPLICATION_PROFILE)
+  progress           Int               @default(0)
+  reportStatus       ReportStatus      @default(WAITING)
+  lastActivityAt     DateTime?
+  preWork            Json?
+  photoUrl           String?
+  user               User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cohort             Cohort            @relation(fields: [cohortId], references: [id], onDelete: Cascade)
+  nominees           Nominee[]
+  feedbackTasks      FeedbackTask[]
+  assessorReviews    AssessorReview[]
+  reports            Report[]
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+}
+
+model Nominee {
+  id             String              @id @default(cuid())
+  participantId  String
+  userId         String?
+  name           String
+  email          String
+  designation    String?
+  relationship   NomineeRelationship
+  source         String              @default("manual")
+  locked         Boolean             @default(false)
+  status         SubmissionStatus    @default(DRAFT)
+  submittedAt    DateTime?
+  participant    Participant         @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  user           User?               @relation(fields: [userId], references: [id])
+  feedbackTask   FeedbackTask?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  @@unique([participantId, email, relationship])
+}
+
+model Competency {
+  id        String     @id @default(cuid())
+  code      String     @unique
+  name      String
+  sortOrder Int        @default(0)
+  questions Question[]
+}
+
+model Question {
+  id           String     @id @default(cuid())
+  competencyId String
+  code         String     @unique
+  text         String
+  sortOrder    Int        @default(0)
+  competency   Competency @relation(fields: [competencyId], references: [id], onDelete: Cascade)
+}
+
+model FeedbackTask {
+  id             String         @id @default(cuid())
+  participantId  String
+  respondentId   String?
+  nomineeId      String?        @unique
+  relationship   String
+  status         FeedbackStatus @default(PENDING)
+  dueAt          DateTime?
+  submittedAt    DateTime?
+  participant    Participant    @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  respondent     User?          @relation("RespondentTasks", fields: [respondentId], references: [id])
+  nominee        Nominee?       @relation(fields: [nomineeId], references: [id])
+  responses      FeedbackResponse[]
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+}
+
+model FeedbackResponse {
+  id             String       @id @default(cuid())
+  feedbackTaskId String
+  responseKey    String       @default("overall")
+  questionId     String?
+  rating         Int?
+  ratings        Json?
+  sectionSsc     Json?
+  overallSsc     Json?
+  feedbackTask   FeedbackTask @relation(fields: [feedbackTaskId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([feedbackTaskId, responseKey])
+}
+
+model AssessorReview {
+  id            String      @id @default(cuid())
+  participantId String
+  assessorName  String
+  status        String      @default("review-blocked")
+  evidence      Json?
+  participant   Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
+
+model Report {
+  id            String       @id @default(cuid())
+  participantId String
+  type          String
+  status        ReportStatus @default(WAITING)
+  fileUrl       String?
+  generatedAt   DateTime?
+  releasedAt    DateTime?
+  participant   Participant  @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+}
+
+model MagicLink {
+  id        String   @id @default(cuid())
+  userId    String?
+  email     String
+  role      Role
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  payload   Json?
+  user      User?    @relation(fields: [userId], references: [id])
+  emails    EmailOutbox[]
+  createdAt DateTime @default(now())
+}
+
+model NotificationTemplate {
+  id          String        @id @default(cuid())
+  templateId  String        @unique
+  phase       String
+  trigger     String
+  recipient   String
+  subject     String
+  body        String
+  active      Boolean       @default(true)
+  emails      EmailOutbox[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model EmailOutbox {
+  id                  String                @id @default(cuid())
+  templateId          String?
+  template            NotificationTemplate? @relation(fields: [templateId], references: [templateId])
+  toEmail             String
+  toName              String?
+  recipientRole       String
+  subject             String
+  body                String
+  status              EmailStatus           @default(QUEUED)
+  providerMessageId   String?
+  error               String?
+  magicLinkId         String?
+  magicLink           MagicLink?            @relation(fields: [magicLinkId], references: [id])
+  entity              String?
+  entityId            String?
+  metadata            Json?
+  queuedAt            DateTime              @default(now())
+  sentAt              DateTime?
+  actorId             String?
+  actor               User?                 @relation("EmailActor", fields: [actorId], references: [id])
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String?
+  action    String
+  entity    String
+  entityId  String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+}

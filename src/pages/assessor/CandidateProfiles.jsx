@@ -166,41 +166,42 @@ export default function CandidateProfiles() {
                 <StatusPill tone={analysisConfirmed ? 'green' : 'amber'}>{analysisConfirmed ? 'Uploaded' : uploadedAnalysis ? 'Pending confirmation' : 'Awaiting upload'}</StatusPill>
               </div>
               <div className="p-5">
-                <label className="flex min-h-36 cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-[#bfd3ea] bg-[#f8fbff] px-5 py-8 text-center hover:border-[#1e4d8c] hover:bg-blue-50/60 transition-colors">
-                  <input
-                    type="file"
-                    accept=".xls,.xlsx,.csv"
-                    className="sr-only"
-                    onChange={(event) => {
-                      const file = event.target.files?.[0]
-                      if (!file || !selected) return
-                      setAnalysisUploads((current) => ({
-                        ...current,
-                        [selected.id]: {
-                          name: file.name,
-                          size: file.size,
-                          status: 'selected',
-                          selectedAt: new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
-                        },
-                      }))
-                      event.target.value = ''
-                    }}
-                  />
-                  <span className="w-12 h-12 rounded-xl bg-white text-[#1e4d8c] border border-blue-100 flex items-center justify-center">
-                    <Upload size={20} />
-                  </span>
-                  <span className="mt-4 text-sm font-semibold text-[#172033]">Upload assessor analysis Excel</span>
-                  <span className="mt-1 text-xs text-gray-500">Supports .xls, .xlsx, or .csv files</span>
-                </label>
+                {!uploadedAnalysis && (
+                  <label className="flex min-h-36 cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-[#bfd3ea] bg-[#f8fbff] px-5 py-8 text-center hover:border-[#1e4d8c] hover:bg-blue-50/60 transition-colors">
+                    <input
+                      type="file"
+                      accept=".xls,.xlsx,.csv"
+                      className="sr-only"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0]
+                        if (!file || !selected) return
+                        setAnalysisUploads((current) => ({
+                          ...current,
+                          [selected.id]: {
+                            name: file.name,
+                            size: file.size,
+                            status: 'selected',
+                          },
+                        }))
+                        event.target.value = ''
+                      }}
+                    />
+                    <span className="w-12 h-12 rounded-xl bg-white text-[#1e4d8c] border border-blue-100 flex items-center justify-center">
+                      <Upload size={20} />
+                    </span>
+                    <span className="mt-4 text-sm font-semibold text-[#172033]">Upload assessor analysis Excel</span>
+                    <span className="mt-1 text-xs text-gray-500">Supports .xls, .xlsx, or .csv files</span>
+                  </label>
+                )}
                 {uploadedAnalysis && (
-                  <div className={`mt-4 rounded-xl border px-4 py-3 flex flex-col gap-3 sm:flex-row sm:items-center ${analysisConfirmed ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}>
+                  <div className={`rounded-xl border px-4 py-3 flex flex-col gap-3 sm:flex-row sm:items-center ${analysisConfirmed ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}>
                     <span className={`w-9 h-9 rounded-lg bg-white flex items-center justify-center shrink-0 ${analysisConfirmed ? 'text-emerald-700' : 'text-amber-700'}`}>
                       <FileSpreadsheet size={17} />
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-semibold text-[#172033] truncate">{uploadedAnalysis.name}</p>
                       <p className={`text-[11px] mt-0.5 ${analysisConfirmed ? 'text-emerald-700/70' : 'text-amber-700/70'}`}>
-                        {analysisConfirmed ? `Uploaded ${uploadedAnalysis.uploadedAt}` : `Selected ${uploadedAnalysis.selectedAt}. Confirm to upload.`}
+                        {analysisConfirmed ? `Uploaded ${uploadedAnalysis.uploadedAt}` : 'Confirm to upload.'}
                       </p>
                     </div>
                     <div className="flex shrink-0 flex-wrap gap-2">

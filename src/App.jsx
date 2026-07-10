@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { UserProvider } from './context/UserContext'
 import LoginPage from './pages/Login'
+import InviteRedeem from './pages/InviteRedeem'
 
 // Participant
 import ParticipantLayout from './layouts/ParticipantLayout'
@@ -11,6 +12,7 @@ import PreWork from './pages/participant/PreWork'
 import Nominees360 from './pages/participant/Nominees360'
 import Status360 from './pages/participant/Status360'
 import Reports from './pages/participant/Reports'
+import Report360 from './pages/participant/Report360'
 
 // Respondent
 import RespondentLayout from './layouts/RespondentLayout'
@@ -24,17 +26,23 @@ import ParticipantDetail from './pages/td/ParticipantDetail'
 import ReportPreview from './pages/td/ReportPreview'
 import TDReports from './pages/td/TDReports'
 import Placeholder from './pages/td/Placeholder'
+import { AuditLog, EmailOutbox, NotificationTemplates, QuestionBank, TrackersExports } from './pages/td/TDOperations'
 
 // Assessor
 import AssessorLayout from './layouts/AssessorLayout'
 import CandidateProfiles from './pages/assessor/CandidateProfiles'
 import EvidenceDetail from './pages/assessor/EvidenceDetail'
 
+// BUHR
+import BUHRLayout from './layouts/BUHRLayout'
+import BUHRDashboard from './pages/buhr/Dashboard'
+
 export default function App() {
   return (
     <UserProvider>
       <Routes>
         <Route path="/" element={<LoginPage />} />
+        <Route path="/invite/:token" element={<InviteRedeem />} />
 
         <Route path="/participant" element={<ParticipantLayout />}>
           <Route index element={<Navigate to="/participant/dashboard" replace />} />
@@ -45,6 +53,7 @@ export default function App() {
           <Route path="360-nominees" element={<Nominees360 />} />
           <Route path="360-status" element={<Status360 />} />
           <Route path="reports" element={<Reports />} />
+          <Route path="360-report" element={<Report360 />} />
         </Route>
 
         <Route path="/respondent" element={<RespondentLayout />}>
@@ -54,11 +63,17 @@ export default function App() {
         </Route>
 
         <Route path="/td" element={<TDLayout />}>
-          <Route index element={<Navigate to="/td/cohorts" replace />} />
+          <Route index element={<Navigate to="/td/dashboard" replace />} />
+          <Route path="dashboard" element={<Cohorts />} />
           <Route path="cohorts" element={<Cohorts />} />
           <Route path="participants/:participantId" element={<ParticipantDetail />} />
           <Route path="reports" element={<TDReports />} />
           <Route path="reports/:participantId" element={<ReportPreview />} />
+          <Route path="exports" element={<TrackersExports />} />
+          <Route path="outbox" element={<EmailOutbox />} />
+          <Route path="question-bank" element={<QuestionBank />} />
+          <Route path="templates" element={<NotificationTemplates />} />
+          <Route path="audit" element={<AuditLog />} />
           <Route path="settings" element={<Placeholder title="Programme setup" />} />
         </Route>
 
@@ -66,6 +81,11 @@ export default function App() {
           <Route index element={<Navigate to="/assessor/candidates" replace />} />
           <Route path="candidates" element={<CandidateProfiles />} />
           <Route path="candidates/:participantId/:evidenceType" element={<EvidenceDetail />} />
+        </Route>
+
+        <Route path="/buhr" element={<BUHRLayout />}>
+          <Route index element={<Navigate to="/buhr/dashboard" replace />} />
+          <Route path="dashboard" element={<BUHRDashboard />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

@@ -212,7 +212,7 @@ export default function ParticipantLayout() {
               className="w-full flex items-center gap-4 px-5 py-3.5 bg-white border border-violet-200 rounded-xl hover:bg-violet-50 hover:border-violet-300 transition-all group shadow-sm"
             >
               <div className="w-9 h-9 rounded-lg bg-violet-100 flex items-center justify-center shrink-0">
-                <svg className="w-4.5 h-4.5 text-violet-600" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <svg className="w-4 h-4 text-violet-600" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                 </svg>
               </div>

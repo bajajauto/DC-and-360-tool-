@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useUser } from '../../context/UserContext'
+import { api } from '../../lib/api'
 
 const ecDirectory = [
   { id: 'e1', name: 'Priya Menon', email: 'priya.menon@bajaj.com', designation: 'GM - Sales Strategy' },
@@ -36,11 +37,6 @@ const emptyExternalDrafts = {
   'direct-report': { name: '', email: '' },
 }
 
-const defaultNominees = [
-  { id: 'e1', name: 'Priya Menon', email: 'priya.menon@bajaj.com', designation: 'GM - Sales Strategy', relationship: 'reporting-manager', source: 'ec', locked: true },
-  { id: 'e2', name: 'Vikram Sood', email: 'vikram.sood@bajaj.com', designation: 'VP - Operations', relationship: 'skip-manager', source: 'ec', locked: true },
-]
-
 function validate(nominees) {
   const errors = []
   if (nominees.filter((n) => n.relationship === 'reporting-manager').length < 1) errors.push('At least 1 Reporting Manager required.')
@@ -53,14 +49,41 @@ function initials(name) {
 }
 
 export default function Nominees360() {
-  const { nomineeDraft, saveNominees, submitNominees } = useUser()
-  const [nominees, setNominees] = useState(() => nomineeDraft?.nominees ?? defaultNominees)
+  const { user, refreshParticipantData } = useUser()
+  const participantId = user?.participantId
+
+  const [nominees, setNominees] = useState([])
+  const [inviteLinks, setInviteLinks] = useState([])
+  const [selectedInvite, setSelectedInvite] = useState(null)
   const [directorySearches, setDirectorySearches] = useState({ 'reporting-manager': '', peer: '', 'direct-report': '' })
   const [externalDrafts, setExternalDrafts] = useState(emptyExternalDrafts)
-  const [mode, setMode] = useState(() => nomineeDraft?.submitted ? 'submitted' : nomineeDraft?.nominees ? 'review' : 'edit')
+  const [mode, setMode] = useState('edit')
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState('')
+
   const isEditing = mode === 'edit'
   const isReviewing = mode === 'review'
   const submitted = mode === 'submitted'
+
+  useEffect(() => {
+    if (!participantId) return
+    api.getParticipant(participantId)
+      .then((result) => {
+        const loaded = result.data.nominees || []
+        setNominees(loaded)
+        if (loaded.some(n => n.status === 'submitted')) {
+          setMode('submitted')
+        } else if (loaded.length > 0) {
+          setMode('review')
+        } else {
+          setMode('edit')
+        }
+      })
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false))
+  }, [participantId])
 
   const errors = validate(nominees)
   const grouped = {
@@ -72,55 +95,37 @@ export default function Nominees360() {
 
   function getDirectoryMatches(relationship) {
     const search = directorySearches[relationship].trim().toLowerCase()
-
     return ecDirectory.filter((person) => {
-      const isAlreadyAdded = nominees.some((n) => n.id === person.id)
+      const isAlreadyAdded = nominees.some((n) => n.email === person.email)
       const matchesSearch = !search || person.name.toLowerCase().includes(search) || person.designation.toLowerCase().includes(search)
       return !isAlreadyAdded && matchesSearch
     })
   }
 
   function updateExternalDraft(relationship, field, value) {
-    setExternalDrafts((prev) => ({
-      ...prev,
-      [relationship]: {
-        ...prev[relationship],
-        [field]: value,
-      },
-    }))
+    setExternalDrafts((prev) => ({ ...prev, [relationship]: { ...prev[relationship], [field]: value } }))
   }
 
   function addExternalNominee(relationship) {
     const draft = externalDrafts[relationship]
-
     setNominees((prev) => [
       ...prev,
-      {
-        id: `ext-${relationship}-${Date.now()}`,
-        name: draft.name,
-        email: draft.email,
-        relationship,
-        source: 'external',
-      },
+      { id: `ext-${relationship}-${Date.now()}`, name: draft.name, email: draft.email, relationship, source: 'external' },
     ])
-    setExternalDrafts((prev) => ({
-      ...prev,
-      [relationship]: { name: '', email: '' },
-    }))
+    setExternalDrafts((prev) => ({ ...prev, [relationship]: { name: '', email: '' } }))
   }
 
   function renderNominee(n) {
     const isLocked = n.locked
-
     return (
-      <div key={n.id} className={`flex items-center gap-3 bg-white border rounded-lg px-3 py-2.5 mb-2 ${isLocked ? 'border-[#dbeafe]' : 'border-[#e2e8f0]'}`}>
+      <div key={n.id ?? n.email} className={`flex items-center gap-3 bg-white border rounded-lg px-3 py-2.5 mb-2 ${isLocked ? 'border-[#dbeafe]' : 'border-[#e2e8f0]'}`}>
         <div className="w-7 h-7 rounded-full bg-[#dbeafe] flex items-center justify-center text-[#1e4d8c] text-xs font-semibold shrink-0">{initials(n.name)}</div>
         <div className="flex-1 min-w-0">
           <p className="text-xs font-medium text-[#1a1f2e] truncate">{n.name}</p>
           <p className="text-[10px] text-gray-400 truncate">{n.designation ?? n.email}</p>
         </div>
         {isEditing && !isLocked && (
-          <button onClick={() => setNominees((prev) => prev.filter((x) => x.id !== n.id))} className="text-gray-300 hover:text-red-400 ml-1">x</button>
+          <button onClick={() => setNominees((prev) => prev.filter((x) => (x.id ?? x.email) !== (n.id ?? n.email)))} className="text-gray-300 hover:text-red-400 ml-1">x</button>
         )}
       </div>
     )
@@ -129,7 +134,6 @@ export default function Nominees360() {
   function renderAddControls(relationship) {
     if (!isEditing) return null
     if (!addableRelationships.includes(relationship)) return null
-
     const matches = getDirectoryMatches(relationship)
     const draft = externalDrafts[relationship]
     const canAddExternal = draft.name.trim() && draft.email.trim()
@@ -204,16 +208,67 @@ export default function Nominees360() {
     return REL_REQUIREMENTS[rel]
   }
 
-  function handleSaveList() {
-    if (errors.length > 0) return
-    saveNominees(nominees)
-    setMode('review')
+  async function handleSaveList() {
+    if (errors.length > 0 || !participantId) return
+    setSaving(true)
+    setError('')
+    try {
+      const result = await api.saveNominees(participantId, nominees.map(n => ({
+        name: n.name,
+        email: n.email,
+        designation: n.designation || null,
+        relationship: n.relationship,
+        source: n.source || 'manual',
+        locked: n.locked || false,
+      })))
+      setNominees(result.data)
+      refreshParticipantData(participantId)
+      setMode('review')
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSaving(false)
+    }
   }
 
-  function handleFinalSubmit() {
-    if (errors.length > 0) return
-    submitNominees(nominees)
-    setMode('submitted')
+  async function handleFinalSubmit() {
+    if (errors.length > 0 || !participantId) return
+    setSubmitting(true)
+    setError('')
+    try {
+      const result = await api.submitNominees(participantId)
+      setNominees(result.data)
+      setInviteLinks(result.invites || [])
+      setSelectedInvite(null)
+      refreshParticipantData(participantId)
+      setMode('submitted')
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  function showInviteLink(nominee) {
+    const invite = inviteLinks.find(link => link.nomineeId === nominee.id)
+    if (!invite) return
+    setSelectedInvite({ ...invite, name: nominee.name, email: nominee.email })
+  }
+
+  async function copySelectedInvite() {
+    if (!selectedInvite?.inviteUrl) return
+    await navigator.clipboard?.writeText(selectedInvite.inviteUrl)
+  }
+
+  if (loading) {
+    return (
+      <div className="p-6">
+        <div className="animate-pulse space-y-4">
+          <div className="h-8 bg-gray-100 rounded w-64" />
+          <div className="h-48 bg-gray-100 rounded" />
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -232,9 +287,15 @@ export default function Nominees360() {
             ? 'Select respondents who will provide feedback on your behaviours - Due 20 Jun 2025'
             : isReviewing
               ? 'Review the saved nominee list before final submission. Links are sent only after final submit.'
-              : 'Nominee list submitted. Links have been sent to the selected respondents.'}
+              : 'Nominee list submitted. Emails have been sent to the selected respondents.'}
         </p>
       </div>
+
+      {error && (
+        <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+          {error}
+        </div>
+      )}
 
       {submitted ? (
         <div className="bg-white border border-[#e2e8f0] rounded-xl overflow-hidden max-w-2xl">
@@ -247,7 +308,7 @@ export default function Nominees360() {
               </div>
               <div>
                 <h3 className="text-sm font-semibold text-green-800">Nominees submitted ({nominees.length} respondents)</h3>
-                <p className="text-xs text-green-600 mt-0.5">Links have been sent. Your BUHR can view this list.</p>
+                <p className="text-xs text-green-600 mt-0.5">Emails have been sent. Your BUHR can view this list.</p>
               </div>
             </div>
           </div>
@@ -256,30 +317,60 @@ export default function Nominees360() {
             <p className="text-xs text-gray-400">{nominees.length} total</p>
           </div>
           <div className="divide-y divide-[#f1f4f9]">
-            {nominees.map((n) => (
-              <div key={n.id} className="flex items-center gap-4 px-5 py-3.5">
-                <div className="w-8 h-8 rounded-full bg-[#dbeafe] flex items-center justify-center text-[#1e4d8c] text-xs font-semibold shrink-0">
-                  {initials(n.name)}
+            {nominees.map((n) => {
+              const invite = inviteLinks.find(l => l.nomineeId === n.id)
+              const isSelected = selectedInvite?.nomineeId === n.id
+
+              return (
+                <div key={n.id} className="px-5 py-3.5">
+                  <div className="flex items-center gap-4">
+                    <div className="w-8 h-8 rounded-full bg-[#dbeafe] flex items-center justify-center text-[#1e4d8c] text-xs font-semibold shrink-0">
+                      {initials(n.name)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-[#1a1f2e] truncate">{n.name}</p>
+                      <p className="text-xs text-gray-400 truncate">{n.email}</p>
+                    </div>
+                    <div className="hidden sm:block min-w-[150px] text-right">
+                      <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                        {REL_LABELS[n.relationship] || n.relationship}
+                      </span>
+                    </div>
+                    {invite && (
+                      <div className="shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => showInviteLink(n)}
+                          className="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-100 px-2 py-0.5 rounded-full hover:bg-green-200 transition-colors"
+                        >
+                          View link
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  {isSelected && (
+                    <div className="mt-3 ml-12 rounded-lg border border-[#e2e8f0] bg-[#f8f9fc] p-3">
+                      <div className="flex items-start justify-between gap-3 mb-2">
+                        <div>
+                          <p className="text-xs font-semibold text-[#1a1f2e]">Magic link</p>
+                          <p className="text-[10px] text-gray-400">{selectedInvite.email}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={copySelectedInvite}
+                          className="shrink-0 rounded-lg border border-[#bfdbfe] bg-white px-3 py-1.5 text-xs font-medium text-[#1e4d8c] hover:bg-blue-50"
+                        >
+                          Copy
+                        </button>
+                      </div>
+                      <div className="rounded-lg border border-[#e2e8f0] bg-white px-3 py-2">
+                        <p className="break-all text-xs leading-5 text-gray-600">{selectedInvite.inviteUrl}</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-[#1a1f2e] truncate">{n.name}</p>
-                  <p className="text-xs text-gray-400 truncate">{n.email}</p>
-                </div>
-                <div className="hidden sm:block min-w-[150px] text-right">
-                  <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
-                    {REL_LABELS[n.relationship]}
-                  </span>
-                </div>
-                <div className="shrink-0">
-                  <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-100 px-2 py-0.5 rounded-full">
-                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                    </svg>
-                    Link sent
-                  </span>
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
           <div className="px-5 py-4 bg-[#f8f9fc]">
             <Link to="/participant/dashboard" className="text-xs text-[#1e4d8c] font-medium hover:underline">Back to Dashboard</Link>
@@ -287,7 +378,6 @@ export default function Nominees360() {
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_240px] gap-6">
-          {/* Main form */}
           <div>
             <div className="flex items-center justify-between gap-3 mb-4">
               <h2 className="text-sm font-semibold text-[#1a1f2e] uppercase tracking-wide">
@@ -335,11 +425,11 @@ export default function Nominees360() {
 
             {isEditing ? (
               <button
-                disabled={errors.length > 0}
+                disabled={errors.length > 0 || saving}
                 onClick={handleSaveList}
                 className="mt-5 w-full py-2.5 rounded-lg bg-[#1e4d8c] text-white text-sm font-medium hover:bg-[#183f73] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                Save Nominee List
+                {saving ? 'Saving...' : 'Save Nominee List'}
               </button>
             ) : (
               <div className="mt-5 flex flex-col sm:flex-row gap-3">
@@ -350,19 +440,17 @@ export default function Nominees360() {
                   Edit List
                 </button>
                 <button
-                  disabled={errors.length > 0}
+                  disabled={errors.length > 0 || submitting}
                   onClick={handleFinalSubmit}
                   className="flex-1 py-2.5 rounded-lg bg-[#1e4d8c] text-white text-sm font-medium hover:bg-[#183f73] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  Final Submit and Send Links
+                  {submitting ? 'Submitting...' : 'Final Submit and Send Links'}
                 </button>
               </div>
             )}
           </div>
 
-          {/* Right sidebar */}
           <div className="space-y-4">
-            {/* Requirements checklist */}
             <div className="bg-white rounded-xl border border-[#e2e8f0] p-4 sticky top-6">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Requirements</p>
               <div className="space-y-2.5">
@@ -394,19 +482,17 @@ export default function Nominees360() {
               </div>
             </div>
 
-            {/* Deadline */}
             <div className="bg-white rounded-xl border border-[#e2e8f0] p-4">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Deadline</p>
               <p className="text-sm font-semibold text-[#1a1f2e]">20 Jun 2025</p>
               <p className="text-xs text-gray-400 mt-0.5">Nominee list must be submitted by EOD</p>
             </div>
 
-            {/* What happens on submit */}
             <div className="bg-[#f1f4f9] rounded-xl border border-[#e2e8f0] p-4">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">On Final Submit</p>
               <div className="space-y-2">
                 {[
-                  'Magic links sent to all respondents',
+                  'Emails sent to all respondents with their unique link',
                   'List locked and visible to your BUHR',
                   'Respondents can\'t be changed after this',
                 ].map((tip) => (

@@ -75,20 +75,25 @@ function StepIcon({ status, step }) {
 }
 
 export default function Dashboard() {
-  const { user, nomineeDraft } = useUser()
-  const nomineeStatus = nomineeDraft?.submitted ? 'completed' : nomineeDraft?.nominees ? 'saved' : 'pending'
+  const { user, participantData } = useUser()
+  const nominees = participantData?.nominees ?? []
+  const nomineeStatus = nominees.some(n => n.status === 'submitted')
+    ? 'completed'
+    : nominees.length > 0
+      ? 'saved'
+      : 'pending'
   const journeySteps = baseJourneySteps.map((step) => (
     step.label === '360 Nominees' ? { ...step, status: nomineeStatus } : step
   ))
   const visiblePendingTasks = pendingTasks
     .map((task) => {
       if (task.to !== '/participant/360-nominees') return task
-      if (nomineeDraft?.submitted) return null
-      if (nomineeDraft?.nominees) {
+      if (nomineeStatus === 'completed') return null
+      if (nomineeStatus === 'saved') {
         return {
           ...task,
           title: 'Review saved 360 nominees',
-          description: `${nomineeDraft.nominees.length} nominees saved. Final submit will send magic links.`,
+          description: `${nominees.length} nominees saved. Final submit will send magic links.`,
           urgency: 'medium',
           progress: 80,
         }
@@ -199,10 +204,8 @@ export default function Dashboard() {
                 ['Employee ID', user.employeeId],
                 ['Designation', user.designation],
                 ['Business Unit', user.bu],
-                ['Level', user.level],
-                ['DC Type', user.dcType],
-                ['Reporting Manager', user.reportingManager],
-              ].map(([label, value]) => (
+                user.cohort && ['Cohort', user.cohort],
+              ].filter(Boolean).map(([label, value]) => (
                 <div key={label} className="flex justify-between gap-2">
                   <p className="text-xs text-gray-400 shrink-0">{label}</p>
                   <p className="text-xs text-[#1a1f2e] font-medium text-right">{value}</p>
