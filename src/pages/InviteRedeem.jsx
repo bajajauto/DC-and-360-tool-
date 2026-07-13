@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useUser } from '../context/UserContext'
+import { api } from '../lib/api'
 import bajajBrandLockup from '../assets/bajaj-brand-lockup.png'
-
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000'
 
 export default function InviteRedeem() {
   const { token } = useParams()
@@ -17,17 +16,7 @@ export default function InviteRedeem() {
 
     async function redeemInvite() {
       try {
-        const response = await fetch(`${API_BASE}/api/invites/redeem`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token }),
-        })
-        const body = await response.json()
-
-        if (!response.ok) {
-          throw new Error(body?.error?.message || 'Invite link could not be opened')
-        }
-
+        const body = await api.redeemInvite(token)
         const user = loginFromMagicLink(body.data)
         if (!isMounted) return
         navigate(`/respondent/feedback/${user.magicLink.taskId}`, { replace: true })

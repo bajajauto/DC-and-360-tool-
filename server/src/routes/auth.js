@@ -4,6 +4,7 @@ import { prisma } from '../db.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
 import { httpError } from '../utils/httpError.js'
 import { verifyPassword } from '../utils/passwords.js'
+import { signToken } from '../utils/jwt.js'
 import { getRelationshipLabel, getRequiredQuestionTotal } from '../../../src/data/surveyConfig.js'
 
 export const authRouter = Router()
@@ -53,8 +54,17 @@ authRouter.post('/login', asyncHandler(async (req, res) => {
   const validPassword = await verifyPassword(payload.password, user.passwordHash)
   if (!validPassword) throw httpError(401, 'Invalid employee ID/email or password')
 
+  const roles = user.roles.map(roleToClient)
+  const token = signToken({
+    sub: user.id,
+    roles,
+    typ: 'user',
+    participantId: user.participant?.id || null,
+  })
+
   res.json({
     data: {
+      token,
       id: user.id,
       name: user.name,
       email: user.email,
@@ -62,7 +72,7 @@ authRouter.post('/login', asyncHandler(async (req, res) => {
       initials: initials(user.name),
       designation: user.designation,
       bu: user.businessUnit,
-      roles: user.roles.map(roleToClient),
+      roles,
       participantId: user.participant?.id || null,
       cohort: user.participant?.cohort?.name || null,
       respondentTasks: user.respondentTasks.map((task) => {

@@ -85,8 +85,11 @@ export function UserProvider({ children }) {
   }, [refreshParticipantData])
 
   const loginFromCredentials = useCallback((apiData) => {
-    const roles = apiData.roles?.length ? apiData.roles : ['participant']
-    const nextUser = { ...apiData, roles, magicLink: null }
+    // The token is persisted separately by the api client; keep it out of the
+    // stored user object.
+    const { token, ...userFields } = apiData
+    const roles = userFields.roles?.length ? userFields.roles : ['participant']
+    const nextUser = { ...userFields, roles, magicLink: null }
     setUser(nextUser)
     setActiveRole(roles[0])
     writeJson(SESSION_KEY, nextUser)
@@ -106,6 +109,7 @@ export function UserProvider({ children }) {
 
   const logout = useCallback(() => {
     window.localStorage.removeItem(SESSION_KEY)
+    api.clearToken()
     setUser(null)
     setParticipantData(null)
     setActiveRole('participant')

@@ -13,6 +13,14 @@ const responseSchema = z.object({
   ssc: z.record(z.string()).default({}),
 })
 
+function assertTaskAccess(req, task) {
+  const auth = req.auth
+  if (auth.roles.includes('td')) return
+  if (auth.typ === 'respondent' && auth.taskId === task.id) return
+  if (task.respondentId && task.respondentId === auth.userId) return
+  throw httpError(403, 'You do not have access to this feedback task')
+}
+
 async function findTask(id) {
   const task = await prisma.feedbackTask.findUnique({
     where: { id },
@@ -29,6 +37,7 @@ async function findTask(id) {
 
 feedbackTasksRouter.get('/:taskId', asyncHandler(async (req, res) => {
   const task = await findTask(req.params.taskId)
+  assertTaskAccess(req, task)
 
   res.json({
     data: {
@@ -43,7 +52,8 @@ feedbackTasksRouter.get('/:taskId', asyncHandler(async (req, res) => {
 }))
 
 feedbackTasksRouter.put('/:taskId/draft', asyncHandler(async (req, res) => {
-  await findTask(req.params.taskId)
+  const task = await findTask(req.params.taskId)
+  assertTaskAccess(req, task)
   const payload = responseSchema.parse(req.body)
 
   const response = await prisma.$transaction(async (tx) => {
@@ -78,6 +88,7 @@ feedbackTasksRouter.put('/:taskId/draft', asyncHandler(async (req, res) => {
 }))
 
 feedbackTasksRouter.post('/:taskId/submit', asyncHandler(async (req, res) => {
+  assertTaskAccess(req, await findTask(req.params.taskId))
   const payload = responseSchema.parse(req.body)
 
   const task = await prisma.$transaction(async (tx) => {

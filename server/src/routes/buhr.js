@@ -8,6 +8,13 @@ import { toParticipantSummary } from '../utils/mappers.js'
 
 export const buhrRouter = Router()
 
+function assertBuhrSelf(req) {
+  if (req.auth.roles.includes('td')) return
+  if (req.auth.userId !== req.params.userId) {
+    throw httpError(403, 'You can only access your own BUHR portfolio')
+  }
+}
+
 async function getBuhrUser(userId) {
   const user = await prisma.user.findUnique({ where: { id: userId } })
   if (!user || !user.roles.includes('BUHR')) throw httpError(403, 'BUHR access required')
@@ -22,6 +29,7 @@ function latest360Report(participant) {
 }
 
 buhrRouter.get('/:userId/participants', asyncHandler(async (req, res) => {
+  assertBuhrSelf(req)
   const buhr = await getBuhrUser(req.params.userId)
 
   const participants = await prisma.participant.findMany({
@@ -84,6 +92,7 @@ buhrRouter.get('/:userId/participants', asyncHandler(async (req, res) => {
 }))
 
 buhrRouter.get('/:userId/reports/:participantId/360/download', asyncHandler(async (req, res) => {
+  assertBuhrSelf(req)
   const buhr = await getBuhrUser(req.params.userId)
   const participant = await prisma.participant.findUnique({
     where: { id: req.params.participantId },

@@ -35,6 +35,13 @@ const nomineesPayloadSchema = z.object({
   nominees: z.array(nomineeSchema).min(1),
 })
 
+function assertParticipantAccess(req, participant) {
+  const auth = req.auth
+  if (auth.roles.includes('td')) return
+  if (participant.userId === auth.userId) return
+  throw httpError(403, 'You do not have access to this participant')
+}
+
 async function findParticipant(id) {
   const participant = await prisma.participant.findUnique({
     where: { id },
@@ -52,6 +59,7 @@ async function findParticipant(id) {
 
 participantsRouter.get('/:participantId', asyncHandler(async (req, res) => {
   const participant = await findParticipant(req.params.participantId)
+  assertParticipantAccess(req, participant)
 
   res.json({
     data: {
@@ -74,6 +82,7 @@ participantsRouter.get('/:participantId', asyncHandler(async (req, res) => {
 participantsRouter.put('/:participantId/nominees', asyncHandler(async (req, res) => {
   const payload = nomineesPayloadSchema.parse(req.body)
   const participant = await findParticipant(req.params.participantId)
+  assertParticipantAccess(req, participant)
 
   const nominees = await prisma.$transaction(async (tx) => {
     await tx.nominee.deleteMany({
@@ -119,6 +128,7 @@ participantsRouter.put('/:participantId/nominees', asyncHandler(async (req, res)
 
 participantsRouter.post('/:participantId/nominees/submit', asyncHandler(async (req, res) => {
   const participant = await findParticipant(req.params.participantId)
+  assertParticipantAccess(req, participant)
   const nominees = participant.nominees
 
   if (!nominees.length) throw httpError(400, 'Add nominees before submitting')

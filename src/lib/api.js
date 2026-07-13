@@ -1,15 +1,43 @@
 const BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000'
+const TOKEN_KEY = 'dc-tool.token'
+const SESSION_KEY = 'dc-tool.session'
+
+export function getToken() {
+  try { return window.localStorage.getItem(TOKEN_KEY) } catch { return null }
+}
+
+export function setToken(token) {
+  try { if (token) window.localStorage.setItem(TOKEN_KEY, token) } catch {}
+}
+
+export function clearToken() {
+  try { window.localStorage.removeItem(TOKEN_KEY) } catch {}
+}
 
 async function apiFetch(path, options = {}) {
+  const token = getToken()
   let response
   try {
     response = await fetch(`${BASE}${path}`, {
-      headers: { 'Content-Type': 'application/json', ...options.headers },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...options.headers,
+      },
       ...options,
     })
   } catch {
     throw new Error('Cannot reach the server. Make sure the backend is running on port 4000.')
   }
+
+  // An authenticated request that comes back 401 means the stored session is no
+  // longer valid — clear it and bounce to the login screen.
+  if (response.status === 401 && token) {
+    clearToken()
+    try { window.localStorage.removeItem(SESSION_KEY) } catch {}
+    if (window.location.pathname !== '/') window.location.assign('/')
+  }
+
   if (!response.ok) {
     const body = await response.json().catch(() => ({}))
     throw new Error(body?.error?.message || `Request failed (${response.status})`)
@@ -18,8 +46,23 @@ async function apiFetch(path, options = {}) {
 }
 
 export const api = {
-  login: (identifier, password) =>
-    apiFetch('/api/auth/login', { method: 'POST', body: JSON.stringify({ identifier, password }) }),
+  login: async (identifier, password) => {
+    const body = await apiFetch('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ identifier, password }),
+    })
+    if (body?.data?.token) setToken(body.data.token)
+    return body
+  },
+
+  redeemInvite: async (token) => {
+    const body = await apiFetch('/api/invites/redeem', {
+      method: 'POST',
+      body: JSON.stringify({ token }),
+    })
+    if (body?.data?.token) setToken(body.data.token)
+    return body
+  },
 
   getCohorts: () => apiFetch('/api/cohorts'),
 
@@ -54,4 +97,8 @@ export const api = {
 
   release360Report: (participantId) =>
     apiFetch(`/api/reports/${participantId}/360/release`, { method: 'POST' }),
+
+  setToken,
+  getToken,
+  clearToken,
 }

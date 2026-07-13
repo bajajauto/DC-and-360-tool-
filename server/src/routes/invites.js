@@ -4,6 +4,7 @@ import { prisma } from '../db.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
 import { httpError } from '../utils/httpError.js'
 import { hashMagicToken } from '../utils/magicLinks.js'
+import { signToken } from '../utils/jwt.js'
 
 export const invitesRouter = Router()
 
@@ -47,8 +48,23 @@ invitesRouter.post('/redeem', asyncHandler(async (req, res) => {
   const respondentName = task.respondent?.name || task.nominee?.name || magicLink.payload?.name || '360 Respondent'
   const respondentEmail = task.respondent?.email || task.nominee?.email || magicLink.email
 
+  // Scoped token: this respondent (internal or external) may only act on this
+  // one feedback task. Expiry tracks the magic link's own lifetime.
+  const ttlSeconds = Math.max(60, Math.floor((magicLink.expiresAt.getTime() - Date.now()) / 1000))
+  const authToken = signToken(
+    {
+      sub: task.respondent?.id || null,
+      roles: ['respondent'],
+      typ: 'respondent',
+      taskId: task.id,
+      participantId: task.participantId,
+    },
+    { expiresInSeconds: ttlSeconds },
+  )
+
   res.json({
     data: {
+      token: authToken,
       role: 'respondent',
       name: respondentName,
       email: respondentEmail,
