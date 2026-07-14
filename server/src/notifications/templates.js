@@ -26,6 +26,19 @@ Regards,
 Talent Development, Bajaj Auto`,
   },
   {
+    templateId: 'stage-deadline-reminder',
+    phase: 'Documents',
+    trigger: 'Role Interview / Photograph / Pre-Work deadline approaching (T-3, T-1)',
+    recipient: 'Participant',
+    subject: 'Reminder: complete your {{Item Name}} by {{Deadline}}',
+    body: `Dear {{Participant Name}},
+
+A quick reminder that your {{Item Name}} is still pending. Please sign in to the 360 & DC Tool and complete it by {{Deadline}}.
+
+Regards,
+Talent Development, Bajaj Auto`,
+  },
+  {
     templateId: 'nom-reminder',
     phase: '360 cycle',
     trigger: 'Nomination deadline approaching, list not yet submitted',
@@ -58,6 +71,20 @@ Your nominee list is now locked. You can track response progress from your dashb
 
 Regards,
 Talent Development, Bajaj Auto`,
+  },
+  {
+    templateId: 'nominees-submitted-buhr',
+    phase: '360 cycle',
+    trigger: '360 nominees submitted by participant',
+    recipient: 'BUHR',
+    subject: '{{Participant Name}} has submitted 360 nominations',
+    body: `Dear {{BUHR Name}},
+
+{{Participant Name}} ({{Cohort}}) has submitted their 360 nominee list and their confidential 360 feedback has been launched to {{Respondent Count}} respondents.
+
+This is for your information; no action is required. You can view the nominee list and progress from your BUHR dashboard.
+
+360 & DC Tool`,
   },
   {
     templateId: 'resp-invite',

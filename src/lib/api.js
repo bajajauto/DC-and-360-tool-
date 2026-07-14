@@ -1,4 +1,4 @@
-const BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000'
+const BASE = import.meta.env.VITE_API_URL || ''
 const TOKEN_KEY = 'dc-tool.token'
 const SESSION_KEY = 'dc-tool.session'
 
@@ -27,7 +27,7 @@ async function apiFetch(path, options = {}) {
       ...options,
     })
   } catch {
-    throw new Error('Cannot reach the server. Make sure the backend is running on port 4000.')
+    throw new Error('Cannot reach the server. Please try again in a moment.')
   }
 
   // An authenticated request that comes back 401 means the stored session is no
@@ -65,6 +65,12 @@ export const api = {
   },
 
   getCohorts: () => apiFetch('/api/cohorts'),
+
+  createCohort: (payload) =>
+    apiFetch('/api/cohorts', { method: 'POST', body: JSON.stringify(payload) }),
+
+  updateCohort: (cohortId, payload) =>
+    apiFetch(`/api/cohorts/${cohortId}`, { method: 'PATCH', body: JSON.stringify(payload) }),
 
   getCohortParticipants: (cohortId) => apiFetch(`/api/cohorts/${cohortId}/participants`),
 

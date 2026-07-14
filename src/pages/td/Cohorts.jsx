@@ -1,4 +1,4 @@
-import { AlertCircle, Check, ChevronRight, Download, FileText, Plus, Search, Send, Upload } from 'lucide-react'
+import { AlertCircle, Check, ChevronRight, Download, FileText, Pencil, Plus, Search, Send, Upload, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../../lib/api'
@@ -77,7 +77,7 @@ function RoleGuide() {
   )
 }
 
-function PageHead({ cohort, onExportProcess, onExportNominees }) {
+function PageHead({ cohort, onExportProcess, onExportNominees, onCreateCohort }) {
   return (
     <div className="mb-5 flex items-start justify-between gap-4">
       <div>
@@ -86,7 +86,7 @@ function PageHead({ cohort, onExportProcess, onExportNominees }) {
         <p className="mt-1 text-sm text-slate-600">Run the 360 and DC end to end: create a cohort, track progress, follow up, and release reports.</p>
       </div>
       <div className="flex flex-wrap justify-end gap-2">
-        <button className="inline-flex items-center gap-2 rounded-lg border border-[#c2ccda] bg-white px-4 py-2 text-[13px] font-medium text-slate-700 hover:border-[#1e5fba] hover:bg-[#ebf2fa] hover:text-[#1e5fba]">
+        <button onClick={onCreateCohort} className="inline-flex items-center gap-2 rounded-lg border border-[#c2ccda] bg-white px-4 py-2 text-[13px] font-medium text-slate-700 hover:border-[#1e5fba] hover:bg-[#ebf2fa] hover:text-[#1e5fba]">
           <Plus size={14} />
           Create Cohort
         </button>
@@ -98,6 +98,154 @@ function PageHead({ cohort, onExportProcess, onExportNominees }) {
           <Download size={14} />
           Nomination Tracker
         </button>
+      </div>
+    </div>
+  )
+}
+
+const dcTypeOptions = ['EX to LX', 'LX to MX']
+
+const deadlineFieldDefs = [
+  { key: 'roleInterviewDeadline', label: 'Role Interview Deadline' },
+  { key: 'photoDeadline', label: 'Photograph Deadline' },
+  { key: 'preWorkDeadline', label: 'Pre-Work Deadline' },
+  { key: 'nominationDeadline', label: 'Nomination Deadline' },
+  { key: 'threeSixtyCutoff', label: '360 Cutoff' },
+]
+
+function toDateInputValue(isoString) {
+  return isoString ? isoString.slice(0, 10) : ''
+}
+
+function emptyCohortForm() {
+  return {
+    name: '',
+    programme: dcTypeOptions[0],
+    eventStart: '',
+    eventEnd: '',
+    roleInterviewDeadline: '',
+    photoDeadline: '',
+    preWorkDeadline: '',
+    nominationDeadline: '',
+    threeSixtyCutoff: '',
+  }
+}
+
+function cohortToForm(cohort) {
+  return {
+    name: cohort.name || '',
+    programme: cohort.programme || dcTypeOptions[0],
+    eventStart: toDateInputValue(cohort.eventStart),
+    eventEnd: toDateInputValue(cohort.eventEnd),
+    roleInterviewDeadline: toDateInputValue(cohort.roleInterviewDeadline),
+    photoDeadline: toDateInputValue(cohort.photoDeadline),
+    preWorkDeadline: toDateInputValue(cohort.preWorkDeadline),
+    nominationDeadline: toDateInputValue(cohort.nominationDeadline),
+    threeSixtyCutoff: toDateInputValue(cohort.threeSixtyCutoff),
+  }
+}
+
+function CohortFormModal({ mode, initialCohort, onClose, onSubmit }) {
+  const [form, setForm] = useState(() => (initialCohort ? cohortToForm(initialCohort) : emptyCohortForm()))
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  function update(key, value) {
+    setForm((prev) => ({ ...prev, [key]: value }))
+  }
+
+  async function handleSubmit(event) {
+    event.preventDefault()
+    if (!form.name.trim()) {
+      setError('Cohort name is required')
+      return
+    }
+
+    setSaving(true)
+    setError('')
+    try {
+      const payload = { ...form }
+      for (const key of Object.keys(payload)) {
+        if (payload[key] === '') payload[key] = null
+      }
+      await onSubmit(payload)
+    } catch (err) {
+      setError(err.message)
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
+        <div className="mb-4 flex items-start justify-between">
+          <h2 className="text-lg font-semibold text-[#0f172a]">{mode === 'edit' ? 'Edit Cohort' : 'Create Cohort'}</h2>
+          <button onClick={onClose} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Close">
+            <X size={18} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Cohort Name</label>
+            <input
+              value={form.name}
+              onChange={(event) => update('name', event.target.value)}
+              placeholder="e.g. EX to LX Cohort '26"
+              className="w-full rounded-lg border border-[#c2ccda] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#d6e4f7]"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">DC Type</label>
+            <select
+              value={form.programme}
+              onChange={(event) => update('programme', event.target.value)}
+              className="w-full rounded-lg border border-[#c2ccda] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#d6e4f7]"
+            >
+              {dcTypeOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+            </select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">DC Event Start</label>
+              <input type="date" value={form.eventStart} onChange={(event) => update('eventStart', event.target.value)} className="w-full rounded-lg border border-[#c2ccda] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#d6e4f7]" />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">DC Event End</label>
+              <input type="date" value={form.eventEnd} onChange={(event) => update('eventEnd', event.target.value)} className="w-full rounded-lg border border-[#c2ccda] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#d6e4f7]" />
+            </div>
+          </div>
+
+          <div className="border-t border-[#e2e8f0] pt-4">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Stage Deadlines</p>
+            <div className="grid grid-cols-2 gap-3">
+              {deadlineFieldDefs.map((field) => (
+                <div key={field.key}>
+                  <label className="mb-1 block text-xs text-slate-500">{field.label}</label>
+                  <input
+                    type="date"
+                    value={form[field.key]}
+                    onChange={(event) => update(field.key, event.target.value)}
+                    className="w-full rounded-lg border border-[#c2ccda] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#d6e4f7]"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {error && <p className="text-sm text-red-600">{error}</p>}
+
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" onClick={onClose} className="rounded-lg border border-[#c2ccda] bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+              Cancel
+            </button>
+            <button type="submit" disabled={saving} className="rounded-lg bg-[#1e5fba] px-4 py-2 text-sm font-medium text-white hover:bg-[#0e3f87] disabled:opacity-60">
+              {saving ? 'Saving...' : mode === 'edit' ? 'Save Changes' : 'Create Cohort'}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   )
@@ -314,6 +462,27 @@ export default function Cohorts() {
   const [loadingCohorts, setLoadingCohorts] = useState(true)
   const [loadingParticipants, setLoadingParticipants] = useState(false)
   const [error, setError] = useState('')
+  const [modalState, setModalState] = useState(null) // { mode: 'create' | 'edit', cohort? }
+
+  function refreshCohorts() {
+    return api.getCohorts().then((result) => {
+      const data = result.data || []
+      setCohorts(data)
+      return data
+    })
+  }
+
+  async function handleCohortSubmit(payload) {
+    if (modalState.mode === 'edit') {
+      await api.updateCohort(modalState.cohort.id, payload)
+      await refreshCohorts()
+    } else {
+      const result = await api.createCohort(payload)
+      await refreshCohorts()
+      if (result?.data?.id) setCohortId(result.data.id)
+    }
+    setModalState(null)
+  }
 
   useEffect(() => {
     setError('')
@@ -369,7 +538,16 @@ export default function Cohorts() {
           cohort={cohort}
           onExportProcess={() => exportCohortProcessStatus(cohort, allInCohort)}
           onExportNominees={() => exportCohortNomineeStatus(cohort, allInCohort)}
+          onCreateCohort={() => setModalState({ mode: 'create' })}
         />
+        {modalState && (
+          <CohortFormModal
+            mode={modalState.mode}
+            initialCohort={modalState.cohort}
+            onClose={() => setModalState(null)}
+            onSubmit={handleCohortSubmit}
+          />
+        )}
         <RoleGuide />
         {error && (
           <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -406,7 +584,7 @@ export default function Cohorts() {
           <div className="overflow-hidden rounded-xl border border-[#d5dce5]">
             <table className="w-full border-collapse bg-white text-left text-[13px]">
               <thead className="bg-[#ebf2fa]">
-                <tr>{['Cohort', 'Type', 'DC Dates', 'Participants', 'Status'].map((label) => <th key={label} className="border-b border-[#d5dce5] px-3 py-2.5 text-[11px] font-bold uppercase tracking-wide text-slate-600">{label}</th>)}</tr>
+                <tr>{['Cohort', 'Type', 'DC Dates', 'Participants', 'Status', ''].map((label) => <th key={label} className="border-b border-[#d5dce5] px-3 py-2.5 text-[11px] font-bold uppercase tracking-wide text-slate-600">{label}</th>)}</tr>
               </thead>
               <tbody>
                 {cohorts.map((item) => (
@@ -416,6 +594,15 @@ export default function Cohorts() {
                     <td className="border-b border-[#d5dce5] px-3 py-3 text-slate-600">{item.eventDate}</td>
                     <td className="border-b border-[#d5dce5] px-3 py-3">{item.participantCount ?? (item.id === cohortId ? allInCohort.length : 0)}</td>
                     <td className="border-b border-[#d5dce5] px-3 py-3"><Badge tone="info">Live</Badge></td>
+                    <td className="border-b border-[#d5dce5] px-3 py-3 text-right">
+                      <button
+                        onClick={(event) => { event.stopPropagation(); setModalState({ mode: 'edit', cohort: item }) }}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-[#ebf2fa] hover:text-[#1e5fba]"
+                        aria-label={`Edit ${item.name}`}
+                      >
+                        <Pencil size={14} />
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>

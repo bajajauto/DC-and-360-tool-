@@ -4,6 +4,7 @@ import { prisma } from '../db.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
 import { httpError } from '../utils/httpError.js'
 import { generate360ReportForParticipant, getOrGenerate360Report } from '../reports/generate360Report.js'
+import { queueEmail } from '../notifications/service.js'
 
 export const reportsRouter = Router()
 
@@ -72,14 +73,26 @@ reportsRouter.post('/:participantId/360/release', asyncHandler(async (req, res) 
       },
     })
 
-    await tx.participant.update({
+    const participant = await tx.participant.update({
       where: { id: req.params.participantId },
       data: {
         reportStatus: 'RELEASED',
         progress: 100,
         lastActivityAt: new Date(),
       },
+      include: { user: true },
     })
+
+    await queueEmail({
+      templateId: 'report-360-released',
+      toEmail: participant.user.email,
+      toName: participant.user.name,
+      context: {
+        'Participant Name': participant.user.name,
+      },
+      entity: 'Report',
+      entityId: updatedReport.id,
+    }, tx)
 
     return updatedReport
   })

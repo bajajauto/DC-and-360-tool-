@@ -83,6 +83,11 @@ model Cohort {
   programme    String
   eventStart   DateTime?
   eventEnd     DateTime?
+  roleInterviewDeadline DateTime?
+  photoDeadline          DateTime?
+  preWorkDeadline        DateTime?
+  nominationDeadline     DateTime?
+  threeSixtyCutoff       DateTime?
   participants Participant[]
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt

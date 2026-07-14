@@ -35,6 +35,12 @@ const nomineesPayloadSchema = z.object({
   nominees: z.array(nomineeSchema).min(1),
 })
 
+function formatCutoff(date) {
+  return date
+    ? date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+    : 'the cutoff date set for your cohort'
+}
+
 function assertParticipantAccess(req, participant) {
   const auth = req.auth
   if (auth.roles.includes('td')) return
@@ -149,6 +155,8 @@ participantsRouter.post('/:participantId/nominees/submit', asyncHandler(async (r
     })
 
     const generatedInvites = []
+    const cutoffDate = participant.cohort.threeSixtyCutoff
+    const cutoffLabel = formatCutoff(cutoffDate)
 
     for (const nominee of nominees) {
       const existingUser = await tx.user.findUnique({
@@ -169,6 +177,7 @@ participantsRouter.post('/:participantId/nominees/submit', asyncHandler(async (r
         where: { nomineeId: nominee.id },
         update: {
           respondentId: respondentUser?.id || undefined,
+          dueAt: cutoffDate,
         },
         create: {
           participantId: participant.id,
@@ -176,6 +185,7 @@ participantsRouter.post('/:participantId/nominees/submit', asyncHandler(async (r
           respondentId: respondentUser?.id || null,
           relationship: nominee.relationship,
           status: 'PENDING',
+          dueAt: cutoffDate,
         },
       })
 
@@ -217,7 +227,7 @@ participantsRouter.post('/:participantId/nominees/submit', asyncHandler(async (r
           Relationship: nominee.relationship.toLowerCase().replaceAll('_', ' '),
           'Estimated Time': '20 minutes',
           'Magic Link': inviteUrl,
-          '360 Cutoff': 'the cutoff date set for your cohort',
+          '360 Cutoff': cutoffLabel,
         },
         magicLinkId: magicLink.id,
         entity: 'FeedbackTask',
@@ -247,7 +257,7 @@ participantsRouter.post('/:participantId/nominees/submit', asyncHandler(async (r
       context: {
         'Participant Name': participant.user.name,
         'Respondent Count': String(nominees.length),
-        '360 Cutoff': 'the cutoff date set for your cohort',
+        '360 Cutoff': cutoffLabel,
       },
       entity: 'Participant',
       entityId: participant.id,
@@ -255,6 +265,29 @@ participantsRouter.post('/:participantId/nominees/submit', asyncHandler(async (r
         nomineeCount: nominees.length,
       },
     }, tx)
+
+    const buhrs = await tx.user.findMany({
+      where: {
+        roles: { has: 'BUHR' },
+        businessUnit: participant.user.businessUnit,
+      },
+    })
+
+    for (const buhr of buhrs) {
+      await queueEmail({
+        templateId: 'nominees-submitted-buhr',
+        toEmail: normalizeEmail(buhr.email),
+        toName: buhr.name,
+        context: {
+          'BUHR Name': buhr.name,
+          'Participant Name': participant.user.name,
+          Cohort: participant.cohort.name,
+          'Respondent Count': String(nominees.length),
+        },
+        entity: 'Participant',
+        entityId: participant.id,
+      }, tx)
+    }
 
     await tx.participant.update({
       where: { id: participant.id },

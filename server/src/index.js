@@ -10,6 +10,7 @@ import { notificationsRouter } from './routes/notifications.js'
 import { participantsRouter } from './routes/participants.js'
 import { reportsRouter } from './routes/reports.js'
 import { buhrRouter } from './routes/buhr.js'
+import { startNotificationScheduler } from './notifications/scheduler.js'
 import { disconnectPrisma } from './db.js'
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js'
 import { requireAuth, requireRole } from './middleware/auth.js'
@@ -50,6 +51,7 @@ app.use(errorHandler)
 
 const server = app.listen(port, () => {
   console.log(`DC Tool API listening on http://localhost:${port}`)
+  startNotificationScheduler()
 })
 
 async function shutdown() {

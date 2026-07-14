@@ -4,8 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "node scripts/dev.js",
+    "client:dev": "vite",
     "server:dev": "node server/src/index.js",
+    "postinstall": "prisma generate --schema server/prisma/schema.prisma",
     "db:generate": "prisma generate --schema server/prisma/schema.prisma",
     "db:migrate": "prisma migrate dev --schema server/prisma/schema.prisma",
     "db:seed": "node server/prisma/seed.js",
@@ -20,7 +22,8 @@
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "lucide-react": "^1.17.0",
-    "nodemailer": "^6.9.16",
+    "node-cron": "^4.6.0",
+    "nodemailer": "^9.0.3",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-router-dom": "^7.1.0",
@@ -35,6 +38,6 @@
     "postcss": "^8",
     "prisma": "^6.1.0",
     "tailwindcss": "^4",
-    "vite": "^5.4.10"
+    "vite": "^8.1.4"
   }
 }

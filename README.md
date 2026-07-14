@@ -1,4 +1,26 @@
-# React + TypeScript + Vite
+# DC and 360 Tool
+
+## Local development
+
+The app requires Node.js 20+, PostgreSQL, and a local `dc_tool` database. Copy
+`.env.example` to `.env`, then prepare the database once:
+
+```bash
+npm install
+npm run db:migrate
+npm run db:seed
+```
+
+Start the frontend and API together:
+
+```bash
+npm run dev
+```
+
+The frontend is available at `http://localhost:5173`. API requests are proxied
+to the Express server on port 4000.
+
+## Vite template notes
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 

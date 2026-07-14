@@ -4,6 +4,7 @@ import XLSX from 'xlsx'
 import { PrismaClient } from '@prisma/client'
 import { hashPassword } from '../src/utils/passwords.js'
 import { seedAccessAccounts } from './accessAccounts.js'
+import { queueEmail } from '../src/notifications/service.js'
 
 const prisma = new PrismaClient()
 
@@ -73,13 +74,15 @@ async function main() {
       passwordHash,
     }
 
+    const existingUser = await prisma.user.findUnique({ where: { email: userData.email } })
+
     const user = await prisma.user.upsert({
       where: { email: userData.email },
       update: userData,
       create: userData,
     })
 
-    await prisma.participant.upsert({
+    const participant = await prisma.participant.upsert({
       where: { userId: user.id },
       update: {
         cohortId: cohort.id,
@@ -95,6 +98,22 @@ async function main() {
         lastActivityAt: new Date(),
       },
     })
+
+    if (!existingUser) {
+      await queueEmail({
+        templateId: 'welcome',
+        toEmail: user.email,
+        toName: user.name,
+        context: {
+          'Participant Name': user.name,
+          Cohort: cohort.name,
+          'Password Link': process.env.APP_URL || '',
+          'Nomination Deadline': 'the deadline set for your cohort',
+        },
+        entity: 'Participant',
+        entityId: participant.id,
+      })
+    }
 
     imported += 1
   }
