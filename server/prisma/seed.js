@@ -1,9 +1,12 @@
 import 'dotenv/config'
 import { PrismaClient } from '@prisma/client'
 import { seedAccessAccounts } from './accessAccounts.js'
+import { hashPassword } from '../src/utils/passwords.js'
 import { SURVEY_SECTIONS } from '../../src/data/surveyConfig.js'
 
 const prisma = new PrismaClient()
+
+const PARTICIPANT_PASSWORD = process.env.MOCK_USER_PASSWORD || 'Welcome@123'
 
 const competencies = SURVEY_SECTIONS.flatMap((section) =>
   section.competencies.map((competency) => ({
@@ -97,6 +100,7 @@ async function seedCohort() {
 
 async function seedParticipants(cohort) {
   const participants = []
+  const passwordHash = await hashPassword(PARTICIPANT_PASSWORD)
 
   for (const seed of participantSeeds) {
     const [name, email, employeeId, designation, businessUnit, progress, stage, reportStatus] = seed
@@ -107,6 +111,7 @@ async function seedParticipants(cohort) {
         employeeId,
         designation,
         businessUnit,
+        passwordHash,
         roles: ['PARTICIPANT'],
       },
       create: {
@@ -115,6 +120,7 @@ async function seedParticipants(cohort) {
         employeeId,
         designation,
         businessUnit,
+        passwordHash,
         roles: ['PARTICIPANT'],
       },
     })
