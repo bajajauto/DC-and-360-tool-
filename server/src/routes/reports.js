@@ -4,7 +4,9 @@ import { prisma } from '../db.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
 import { httpError } from '../utils/httpError.js'
 import { generate360ReportForParticipant, getOrGenerate360Report } from '../reports/generate360Report.js'
+import { build360ResponseDataWorkbook } from '../reports/build360ResponseData.js'
 import { queueEmail } from '../notifications/service.js'
+import { logAudit } from '../utils/audit.js'
 
 export const reportsRouter = Router()
 
@@ -45,6 +47,15 @@ reportsRouter.get('/:participantId/360/download', asyncHandler(async (req, res) 
   const generated = await getOrGenerate360Report(prisma, req.params.participantId)
 
   res.download(generated.outputPath, generated.fileName || path.basename(generated.outputPath))
+}))
+
+reportsRouter.get('/:participantId/360/response-data', asyncHandler(async (req, res) => {
+  requireTd(req)
+  const { buffer, fileName } = await build360ResponseDataWorkbook(prisma, req.params.participantId)
+
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+  res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`)
+  res.send(buffer)
 }))
 
 reportsRouter.post('/:participantId/360/release', asyncHandler(async (req, res) => {
@@ -93,6 +104,14 @@ reportsRouter.post('/:participantId/360/release', asyncHandler(async (req, res) 
       entity: 'Report',
       entityId: updatedReport.id,
     }, tx)
+
+    await logAudit(tx, {
+      actorId: req.auth.userId,
+      action: '360 report released',
+      entity: 'Participant',
+      entityId: participant.id,
+      metadata: { participantName: participant.user.name },
+    })
 
     return updatedReport
   })

@@ -18,7 +18,7 @@ const stageLabels = {
 
 export function toParticipantSummary(participant) {
   const nominees = participant.nominees || []
-  const responses = participant.feedbackTasks?.filter((task) => task.status === 'SUBMITTED').length || 0
+  const responses = participant.feedbackTasks?.filter((task) => task.status === 'SUBMITTED' && task.relationship !== 'SELF').length || 0
 
   return {
     id: participant.id,

@@ -4,6 +4,7 @@ import { prisma } from '../db.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
 import { httpError } from '../utils/httpError.js'
 import { generate360ReportForParticipant } from '../reports/generate360Report.js'
+import { logAudit } from '../utils/audit.js'
 
 export const feedbackTasksRouter = Router()
 
@@ -127,6 +128,14 @@ feedbackTasksRouter.post('/:taskId/submit', asyncHandler(async (req, res) => {
         },
       },
     })
+  })
+
+  await logAudit(prisma, {
+    actorId: req.auth.userId,
+    action: '360 feedback submitted',
+    entity: 'FeedbackTask',
+    entityId: task.id,
+    metadata: { relationship: task.relationship, participantId: task.participantId },
   })
 
   const allSubmitted = task.participant.feedbackTasks.every((item) => item.status === 'SUBMITTED')

@@ -2,14 +2,14 @@ import { ArrowLeft, Download, Eye } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link, Navigate, useParams } from 'react-router-dom'
 import { api } from '../../lib/api'
-import { download360Pptx } from '../../lib/reportDownload'
-import Report360 from '../participant/Report360'
+import { download360Pptx, get360ReportHtml } from '../../lib/reportDownload'
 
 export default function ReportPreview() {
   const { participantId } = useParams()
   const [participant, setParticipant] = useState(null)
   const [loading, setLoading] = useState(true)
   const [downloadState, setDownloadState] = useState({ status: 'idle', message: '' })
+  const [reportUrl, setReportUrl] = useState('')
 
   useEffect(() => {
     if (!participantId) return
@@ -20,13 +20,25 @@ export default function ReportPreview() {
       .finally(() => setLoading(false))
   }, [participantId])
 
+  useEffect(() => {
+    if (!participantId || !participant) return
+    let active = true
+    let url = ''
+    get360ReportHtml(participantId).then((html) => {
+      if (!active) return
+      url = URL.createObjectURL(new Blob([html], { type: 'text/html' }))
+      setReportUrl(url)
+    }).catch((error) => setDownloadState({ status: 'error', message: error.message }))
+    return () => { active = false; if (url) URL.revokeObjectURL(url) }
+  }, [participantId, participant])
+
   async function handleDownload() {
     setDownloadState({ status: 'loading', message: '' })
     try {
       await download360Pptx(participant.id, participant.name)
       setDownloadState({ status: 'idle', message: '' })
     } catch (error) {
-      setDownloadState({ status: 'error', message: error.message || 'Unable to download PPTX report.' })
+      setDownloadState({ status: 'error', message: error.message || 'Unable to download the report.' })
     }
   }
 
@@ -35,7 +47,7 @@ export default function ReportPreview() {
   }
 
   if (!participant) return <Navigate to="/td/cohorts" replace />
-  if (participant.responses < participant.totalResponses || participant.reportStatus === 'waiting') {
+  if (participant.reportReady !== true) {
     return <Navigate to={`/td/participants/${participant.id}`} replace />
   }
 
@@ -57,7 +69,7 @@ export default function ReportPreview() {
           className="flex items-center gap-2 bg-[#1e4d8c] text-white rounded-lg px-4 py-2.5 text-xs font-semibold hover:bg-[#173f72] disabled:opacity-60 disabled:cursor-not-allowed"
         >
           <Download size={15} />
-          {downloadState.status === 'loading' ? 'Generating...' : 'Download PPTX'}
+          {downloadState.status === 'loading' ? 'Preparing...' : 'Download report'}
         </button>
       </header>
 
@@ -65,7 +77,7 @@ export default function ReportPreview() {
         <div className="rounded-xl bg-blue-50 border border-blue-200 p-3.5 flex items-center gap-3">
           <Eye size={17} className="text-[#1e4d8c] shrink-0" />
           <p className="text-xs text-blue-800">
-            <strong>TD preview.</strong> The on-screen page is a preview. Download PPTX generates the final report from the PowerPoint template.
+            <strong>TD preview.</strong> This is the final print-ready HTML report. Open the downloaded file and choose Print → Save as PDF when a PDF is required.
           </p>
         </div>
         {downloadState.status === 'error' && (
@@ -75,7 +87,7 @@ export default function ReportPreview() {
         )}
       </div>
 
-      <Report360 />
+      {reportUrl ? <iframe title="360 report preview" src={reportUrl} className="block w-full min-h-[calc(100vh-80px)] border-0 bg-slate-200" /> : <div className="p-12 text-center text-sm text-gray-500">Preparing report preview...</div>}
     </div>
   )
 }

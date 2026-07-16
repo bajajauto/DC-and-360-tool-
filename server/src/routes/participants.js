@@ -12,6 +12,8 @@ import {
 } from '../utils/magicLinks.js'
 import { toNomineeDto, toParticipantSummary } from '../utils/mappers.js'
 import { queueEmail } from '../notifications/service.js'
+import { logAudit } from '../utils/audit.js'
+import { getBehaviourIds, getSurveySections } from '../../../src/data/surveyConfig.js'
 
 export const participantsRouter = Router()
 
@@ -35,6 +37,11 @@ const nomineesPayloadSchema = z.object({
   nominees: z.array(nomineeSchema).min(1),
 })
 
+const participantWorkSchema = z.object({
+  answers: z.record(z.string(), z.unknown()),
+  submit: z.boolean().optional().default(false),
+})
+
 function formatCutoff(date) {
   return date
     ? date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
@@ -55,7 +62,7 @@ async function findParticipant(id) {
       user: true,
       cohort: true,
       nominees: { orderBy: { createdAt: 'asc' } },
-      feedbackTasks: true,
+      feedbackTasks: { include: { responses: true } },
     },
   })
 
@@ -70,6 +77,13 @@ participantsRouter.get('/:participantId', asyncHandler(async (req, res) => {
   res.json({
     data: {
       ...toParticipantSummary(participant),
+      masterData: participant.masterData || {},
+      reportReady: participant.feedbackTasks.length > 0 && participant.feedbackTasks.every((task) => {
+        if (task.status !== 'SUBMITTED') return false
+        const ratings = task.responses?.[0]?.ratings
+        if (!ratings || typeof ratings !== 'object' || Array.isArray(ratings)) return false
+        return getBehaviourIds(getSurveySections(task.relationship)).every((id) => Number.isFinite(ratings[id]) && ratings[id] >= 1 && ratings[id] <= 4)
+      }),
       cohort: {
         id: participant.cohort.id,
         name: participant.cohort.name,
@@ -83,6 +97,27 @@ participantsRouter.get('/:participantId', asyncHandler(async (req, res) => {
       nominees: participant.nominees.map(toNomineeDto),
     },
   })
+}))
+
+participantsRouter.get('/:participantId/work/:type', asyncHandler(async (req, res) => {
+  if (!['role-interview', 'pre-work'].includes(req.params.type)) throw httpError(404, 'Participant form not found')
+  const participant = await findParticipant(req.params.participantId)
+  assertParticipantAccess(req, participant)
+  const value = req.params.type === 'role-interview' ? participant.roleInterview : participant.preWork
+  res.json({ data: value || { answers: {}, status: 'draft', submittedAt: null } })
+}))
+
+participantsRouter.put('/:participantId/work/:type', asyncHandler(async (req, res) => {
+  if (!['role-interview', 'pre-work'].includes(req.params.type)) throw httpError(404, 'Participant form not found')
+  const payload = participantWorkSchema.parse(req.body)
+  const participant = await findParticipant(req.params.participantId)
+  assertParticipantAccess(req, participant)
+  const field = req.params.type === 'role-interview' ? 'roleInterview' : 'preWork'
+  const current = participant[field]
+  if (current?.status === 'submitted') throw httpError(409, 'This form has already been submitted and is locked')
+  const value = { answers: payload.answers, status: payload.submit ? 'submitted' : 'draft', submittedAt: payload.submit ? new Date().toISOString() : null, updatedAt: new Date().toISOString() }
+  await prisma.participant.update({ where: { id: participant.id }, data: { [field]: value, lastActivityAt: new Date() } })
+  res.json({ data: value })
 }))
 
 participantsRouter.put('/:participantId/nominees', asyncHandler(async (req, res) => {
@@ -301,6 +336,14 @@ participantsRouter.post('/:participantId/nominees/submit', asyncHandler(async (r
     const submitted = await tx.nominee.findMany({
       where: { participantId: participant.id },
       orderBy: { createdAt: 'asc' },
+    })
+
+    await logAudit(tx, {
+      actorId: req.auth.userId,
+      action: 'Nominations submitted',
+      entity: 'Participant',
+      entityId: participant.id,
+      metadata: { participantName: participant.user.name, respondentCount: nominees.length },
     })
 
     return { submittedNominees: submitted, invites: generatedInvites }

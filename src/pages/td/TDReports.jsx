@@ -1,8 +1,8 @@
-import { Download, Eye, FileText, Search, Send } from 'lucide-react'
+import { Download, Eye, FileSpreadsheet, FileText, Search, Send } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../../lib/api'
-import { download360Pptx } from '../../lib/reportDownload'
+import { download360Pptx, download360ResponseData } from '../../lib/reportDownload'
 
 function getCohort(cohorts, participant) {
   return cohorts.find((cohort) => cohort.id === participant.cohortId)
@@ -72,7 +72,17 @@ export default function TDReports() {
     try {
       await download360Pptx(participant.id, participant.name)
     } catch (err) {
-      setDownloadError(err.message || 'Unable to download the PPTX report.')
+      setDownloadError(err.message || 'Unable to download the report.')
+    }
+  }
+
+  async function handleDownloadResponseData(participant) {
+    setDownloadError('')
+
+    try {
+      await download360ResponseData(participant.id, participant.name)
+    } catch (err) {
+      setDownloadError(err.message || 'Unable to download the response data.')
     }
   }
 
@@ -124,7 +134,7 @@ export default function TDReports() {
           <div className="bg-white border border-[#e2e8f0] rounded-xl p-5">
             <p className="text-xs font-medium text-gray-500">Release status</p>
             <p className="text-2xl font-bold mt-2 text-emerald-600">Ready</p>
-            <p className="text-xs text-gray-400 mt-1">PPTX reports can be downloaded now</p>
+            <p className="text-xs text-gray-400 mt-1">HTML reports can be previewed, printed and downloaded</p>
           </div>
         </section>
 
@@ -193,6 +203,9 @@ export default function TDReports() {
                           </Link>
                           <button type="button" onClick={() => handleDownload(participant)} className="w-8 h-8 rounded-lg border border-[#dce3ed] flex items-center justify-center text-gray-500 hover:bg-gray-50" aria-label={`Download ${participant.name} report`}>
                             <Download size={14} />
+                          </button>
+                          <button type="button" onClick={() => handleDownloadResponseData(participant)} className="w-8 h-8 rounded-lg border border-[#dce3ed] flex items-center justify-center text-gray-500 hover:bg-gray-50" aria-label={`Download ${participant.name} response data`} title="Download 360 response data (Excel)">
+                            <FileSpreadsheet size={14} />
                           </button>
                           <button
                             type="button"

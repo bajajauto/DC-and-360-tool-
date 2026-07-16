@@ -102,7 +102,9 @@ model Participant {
   reportStatus       ReportStatus      @default(WAITING)
   lastActivityAt     DateTime?
   preWork            Json?
+  roleInterview      Json?
   photoUrl           String?
+  masterData         Json?
   user               User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   cohort             Cohort            @relation(fields: [cohortId], references: [id], onDelete: Cascade)
   nominees           Nominee[]

@@ -1,177 +1,29 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { api } from '../../lib/api'
+import { useUser } from '../../context/UserContext'
 
 const questions = [
-  { id: 1, question: 'How do you describe your leadership style, and how has it evolved in the last 2–3 years?', hint: 'Think about moments that shaped your style. What feedback have you received from your team?' },
-  { id: 2, question: 'What are your top 2–3 strengths as a leader? Provide specific examples that demonstrate each.', hint: 'Use examples from your current or recent roles. Be specific — avoid generic statements.' },
-  { id: 3, question: 'What are 2–3 areas where you know you need to grow to be effective at the next level?', hint: 'Reflect honestly. What have your managers, peers, or 360 feedback told you in the past?' },
-  { id: 4, question: 'Describe a situation where you had to lead through significant ambiguity or change. What did you do and what was the outcome?', hint: 'Focus on your role in navigating the situation, not just the outcome.' },
-  { id: 5, question: 'How do you build and sustain high-performing teams? What is your approach to developing talent in your team?', hint: 'Include examples of how you have coached, challenged, or supported team members.' },
-  { id: 6, question: 'Describe a time you had to influence key stakeholders — internal or external — without direct authority. How did you approach it?', hint: 'What was the context? What tactics worked? What would you do differently?' },
-  { id: 7, question: 'What has been your most complex cross-functional challenge in the last 2 years, and how did you navigate it?', hint: 'Focus on complexity — competing priorities, multiple stakeholders, resource constraints.' },
-  { id: 8, question: 'How do you stay current with industry, market, and functional developments? How does this inform your decisions?', hint: 'Be specific about sources, habits, and 1–2 examples where external insight influenced a call.' },
-  { id: 9, question: 'Describe a decision where you had to make a tough trade-off — between short-term and long-term, or between two competing goods. What guided your choice?', hint: 'What was at stake? Who was affected? How did it turn out?' },
-  { id: 10, question: 'What do you want to get out of this DC? What kind of leader do you aspire to be 3 years from now?', hint: 'Be honest and forward-looking. This helps your assessors understand your aspirations.' },
+  'What is the most important thing you have learned about yourself as a result of working in several positions as a leader?',
+  'Using three short phrases, indicate how your close friends might describe you.',
+  'Now describe yourself using three short phrases different from the above.',
+  'What do you think are your strongest points?',
+  'What three areas would you like to improve or change about yourself?',
+  'If we were to talk with your direct reports, what would their criticisms be of you?',
+  'If we were to talk with your peers or bosses, what would their criticisms be of you?',
+  'Sometimes people misinterpret our personality. How do others see you differently from how you really think you are?',
+  'If you picked a character from mythology, films, politics, sports or history who is closest to you psychologically, who would it be?',
+  'Reflecting deep down inside yourself, what pressures would you say are at work on you?',
 ]
 
 export default function PreWork() {
+  const { user } = useUser()
   const [answers, setAnswers] = useState({})
-  const [saved, setSaved] = useState(false)
-  const [submitted, setSubmitted] = useState(false)
-  const [activeHint, setActiveHint] = useState(null)
-
-  const answeredCount = Object.values(answers).filter((v) => v.trim().length > 0).length
-  const canSubmit = answeredCount === questions.length
-
-  function handleSave() {
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
-  }
-
-  return (
-    <div className="p-6">
-      <div className="flex items-center gap-2 text-xs text-gray-400 mb-5">
-        <Link to="/participant/dashboard" className="hover:text-gray-600">Dashboard</Link>
-        <span>/</span>
-        <span className="text-[#1a1f2e]">Pre-Work</span>
-      </div>
-
-      <div className="flex items-start justify-between mb-4">
-        <div>
-          <h1 className="text-xl font-bold text-[#1a1f2e]">Pre-Work Questionnaire</h1>
-          <p className="text-sm text-gray-500 mt-0.5">10 self-reflection questions · Due 20 Jun 2025</p>
-        </div>
-        <div className="text-right">
-          <p className="text-2xl font-bold text-[#1e4d8c]">{answeredCount}<span className="text-sm text-gray-400 font-normal"> / 10</span></p>
-          <p className="text-xs text-gray-400">Answered</p>
-        </div>
-      </div>
-
-      <div className="mb-5">
-        <div className="w-full bg-gray-100 rounded-full h-1.5">
-          <div className="bg-[#1e4d8c] rounded-full h-1.5 transition-all duration-300" style={{ width: `${(answeredCount / questions.length) * 100}%` }} />
-        </div>
-        <p className="text-xs text-gray-400 mt-1.5">
-          {canSubmit ? 'All questions answered — you can submit when ready.' : `${questions.length - answeredCount} question${questions.length - answeredCount !== 1 ? 's' : ''} remaining`}
-        </p>
-      </div>
-
-      {submitted ? (
-        <div className="bg-green-50 border border-green-200 rounded-xl p-8 text-center max-w-xl">
-          <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
-            <svg className="w-6 h-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-            </svg>
-          </div>
-          <h3 className="text-sm font-semibold text-green-800 mb-1">Pre-Work submitted</h3>
-          <p className="text-xs text-green-600">Your self-reflection responses are locked and ready for assessors.</p>
-          <Link to="/participant/dashboard" className="mt-4 inline-block text-xs text-[#1e4d8c] font-medium hover:underline">← Back to Dashboard</Link>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_240px] gap-6">
-          {/* Questions */}
-          <div className="space-y-4">
-            {questions.map((q) => {
-              const answered = (answers[q.id] ?? '').trim().length > 0
-              return (
-                <div key={q.id} className={`bg-white rounded-xl border p-5 transition-colors ${answered ? 'border-[#1e4d8c]/20' : 'border-[#e2e8f0]'}`}>
-                  <div className="flex items-start gap-3 mb-3">
-                    <span className={`shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mt-0.5 ${answered ? 'bg-[#1e4d8c] text-white' : 'bg-gray-100 text-gray-500'}`}>
-                      {answered ? '✓' : q.id}
-                    </span>
-                    <p className="text-sm font-medium text-[#1a1f2e] leading-snug">{q.question}</p>
-                  </div>
-                  <button onClick={() => setActiveHint(activeHint === q.id ? null : q.id)} className="text-xs text-[#1e4d8c] ml-9 mb-3 hover:underline flex items-center gap-1">
-                    ⓘ {activeHint === q.id ? 'Hide hint' : 'Show hint'}
-                  </button>
-                  {activeHint === q.id && (
-                    <div className="ml-9 mb-3 bg-[#f1f4f9] rounded-lg px-4 py-2.5">
-                      <p className="text-xs text-gray-500 italic">{q.hint}</p>
-                    </div>
-                  )}
-                  <textarea
-                    rows={4}
-                    value={answers[q.id] ?? ''}
-                    onChange={(e) => setAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))}
-                    placeholder="Write your response here..."
-                    style={{ marginLeft: '2.25rem', width: 'calc(100% - 2.25rem)' }}
-                    className="px-4 py-3 rounded-lg border border-[#e2e8f0] text-sm text-[#1a1f2e] placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-[#1e4d8c] focus:border-transparent resize-none"
-                  />
-                </div>
-              )
-            })}
-
-            <div className="flex items-center justify-between py-4 border-t border-[#e2e8f0]">
-              <div className="flex items-center gap-2">
-                {saved && <p className="text-xs text-green-600 font-medium">✓ Draft saved</p>}
-                <p className="text-xs text-gray-400">Auto-saved every 60 seconds</p>
-              </div>
-              <div className="flex gap-3">
-                <button onClick={handleSave} className="px-4 py-2 rounded-lg border border-[#e2e8f0] text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">Save Draft</button>
-                <button disabled={!canSubmit} onClick={() => setSubmitted(true)} className="px-5 py-2 rounded-lg bg-[#1e4d8c] text-white text-sm font-medium hover:bg-[#183f73] transition-colors disabled:opacity-40 disabled:cursor-not-allowed">Submit & Lock</button>
-              </div>
-            </div>
-          </div>
-
-          {/* Right sidebar */}
-          <div className="space-y-4">
-            {/* Progress tracker */}
-            <div className="bg-white rounded-xl border border-[#e2e8f0] p-4 sticky top-6">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Progress</p>
-              <div className="space-y-1.5">
-                {questions.map((q) => {
-                  const answered = (answers[q.id] ?? '').trim().length > 0
-                  return (
-                    <div key={q.id} className="flex items-center gap-2">
-                      <div className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ${answered ? 'bg-[#1e4d8c]' : 'bg-gray-100'}`}>
-                        {answered
-                          ? <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                          : <span className="text-[9px] text-gray-400 font-medium">{q.id}</span>
-                        }
-                      </div>
-                      <p className={`text-xs truncate ${answered ? 'text-[#1a1f2e]' : 'text-gray-400'}`}>Q{q.id}</p>
-                    </div>
-                  )
-                })}
-              </div>
-              <div className="mt-4 pt-3 border-t border-[#e2e8f0]">
-                <div className="flex justify-between text-xs mb-1.5">
-                  <span className="text-gray-400">Completion</span>
-                  <span className="font-semibold text-[#1e4d8c]">{answeredCount}/{questions.length}</span>
-                </div>
-                <div className="w-full bg-gray-100 rounded-full h-1.5">
-                  <div className="bg-[#1e4d8c] rounded-full h-1.5 transition-all" style={{ width: `${(answeredCount / questions.length) * 100}%` }} />
-                </div>
-              </div>
-            </div>
-
-            {/* Tips */}
-            <div className="bg-[#f1f4f9] rounded-xl border border-[#e2e8f0] p-4">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Answering Tips</p>
-              <div className="space-y-2.5">
-                {[
-                  'Be honest — assessors value self-awareness',
-                  'Aim for 100–200 words per answer',
-                  'Use real examples, not hypotheticals',
-                  'Responses stay confidential with assessors',
-                ].map((tip) => (
-                  <div key={tip} className="flex items-start gap-2">
-                    <div className="w-1 h-1 rounded-full bg-[#1e4d8c] mt-1.5 shrink-0" />
-                    <p className="text-xs text-gray-600 leading-relaxed">{tip}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Deadline */}
-            <div className="bg-white rounded-xl border border-[#e2e8f0] p-4">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Deadline</p>
-              <p className="text-sm font-semibold text-[#1a1f2e]">20 Jun 2025</p>
-              <p className="text-xs text-gray-400 mt-0.5">Submit before end of day</p>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  )
+  const [status, setStatus] = useState('draft')
+  const [message, setMessage] = useState('')
+  const [saving, setSaving] = useState(false)
+  useEffect(() => { if (user?.participantId) api.getParticipantWork(user.participantId, 'pre-work').then(({ data }) => { setAnswers(data.answers || {}); setStatus(data.status || 'draft') }).catch((e) => setMessage(e.message)) }, [user?.participantId])
+  const answered = questions.filter((_, index) => String(answers[`q${index + 1}`] || '').trim()).length
+  async function save(submit) { setSaving(true); setMessage(''); try { const { data } = await api.saveParticipantWork(user.participantId, 'pre-work', answers, submit); setStatus(data.status); setMessage(submit ? 'Pre-Work submitted and locked.' : 'Draft saved.'); } catch (e) { setMessage(e.message) } finally { setSaving(false) } }
+  return <div className="p-6"><div className="mb-5 flex gap-2 text-xs text-gray-400"><Link to="/participant/dashboard">Dashboard</Link><span>/</span><span>Pre-Work</span></div><div className="mb-5 flex items-start justify-between"><div><h1 className="text-xl font-bold">Participant Pre-Work</h1><p className="mt-1 text-sm text-gray-500">Self-Reflection Worksheet · {answered}/{questions.length} answered</p></div><span className={`rounded-full px-3 py-1 text-xs font-semibold ${status === 'submitted' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>{status}</span></div>{message && <div className="mb-4 rounded-lg border bg-white px-4 py-3 text-sm">{message}</div>}<div className="space-y-4">{questions.map((question, index) => { const key=`q${index+1}`; return <section key={key} className="rounded-xl border border-slate-200 bg-white p-5"><div className="mb-3 flex gap-3"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#1e4d8c] text-xs font-bold text-white">{index+1}</span><label className="text-sm font-semibold leading-6">{question}</label></div><textarea disabled={status === 'submitted'} rows={5} value={answers[key] || ''} onChange={(e)=>setAnswers((value)=>({...value,[key]:e.target.value}))} placeholder="Write your reflection here..." className="w-full rounded-lg border border-slate-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 disabled:bg-slate-50" /></section>})}</div>{status !== 'submitted' && <div className="sticky bottom-0 mt-5 flex justify-end gap-3 border-t bg-[#f4f7fb]/95 py-4"><button disabled={saving} onClick={()=>save(false)} className="rounded-lg border bg-white px-4 py-2 text-sm font-semibold">Save Draft</button><button disabled={saving || answered !== questions.length} onClick={()=>save(true)} className="rounded-lg bg-[#1e4d8c] px-5 py-2 text-sm font-semibold text-white disabled:opacity-40">Submit & Lock</button></div>}</div>
 }

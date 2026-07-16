@@ -76,6 +76,11 @@ export const api = {
 
   getParticipant: (participantId) => apiFetch(`/api/participants/${participantId}`),
 
+  getParticipantWork: (participantId, type) => apiFetch(`/api/participants/${participantId}/work/${type}`),
+
+  saveParticipantWork: (participantId, type, answers, submit = false) =>
+    apiFetch(`/api/participants/${participantId}/work/${type}`, { method: 'PUT', body: JSON.stringify({ answers, submit }) }),
+
   getBuhrParticipants: (userId) => apiFetch(`/api/buhr/${userId}/participants`),
 
   saveNominees: (participantId, nominees) =>
@@ -103,6 +108,18 @@ export const api = {
 
   release360Report: (participantId) =>
     apiFetch(`/api/reports/${participantId}/360/release`, { method: 'POST' }),
+
+  generate360Report: (participantId) =>
+    apiFetch(`/api/reports/${participantId}/360/generate`, { method: 'POST' }),
+
+  getOutbox: () => apiFetch('/api/notifications/outbox'),
+
+  sendOutboxEmail: (emailId) =>
+    apiFetch(`/api/notifications/outbox/${emailId}/send`, { method: 'POST' }),
+
+  getNotificationTemplates: () => apiFetch('/api/notifications/templates'),
+
+  getAuditLog: () => apiFetch('/api/audit-log'),
 
   setToken,
   getToken,

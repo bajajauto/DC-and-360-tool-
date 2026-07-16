@@ -1,12 +1,12 @@
-import { BarChart3, ChevronDown, FileText, LayoutDashboard, LogOut, Users } from 'lucide-react'
+import { FileText, LayoutDashboard, LogOut, Users } from 'lucide-react'
 import { Link, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useUser } from '../context/UserContext'
 import bajajBrandLockup from '../assets/bajaj-brand-lockup.png'
 
 const navItems = [
   { to: '/buhr/dashboard', label: 'BU Dashboard', icon: LayoutDashboard },
-  { to: '/buhr/dashboard', label: 'People Status', icon: Users },
-  { to: '/buhr/dashboard', label: 'Published Reports', icon: FileText },
+  { to: '/buhr/people', label: 'People Status', icon: Users },
+  { to: '/buhr/reports', label: 'Published Reports', icon: FileText },
 ]
 
 export default function BUHRLayout() {
@@ -23,11 +23,10 @@ export default function BUHRLayout() {
         <div className="h-5 w-px bg-slate-300" />
         <p className="text-xs tracking-wide text-slate-500">BUHR Workspace</p>
         <div className="flex-1" />
-        <button className="inline-flex items-center gap-2 rounded-full border border-[#d6e4f7] bg-[#ebf2fa] px-3.5 py-1.5 text-xs font-semibold text-[#1e5fba]">
+        <div className="inline-flex items-center gap-2 rounded-full border border-[#d6e4f7] bg-[#ebf2fa] px-3.5 py-1.5 text-xs font-semibold text-[#1e5fba]" title="Your mapped business unit">
           <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
           {user.bu || 'Business Unit'}
-          <ChevronDown size={12} />
-        </button>
+        </div>
         <div className="flex items-center gap-2 text-xs text-slate-600">
           <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#1e5fba] text-[11px] font-bold text-white">{user.initials}</span>
           <span>{user.name}</span>
@@ -39,7 +38,7 @@ export default function BUHRLayout() {
           <p className="px-3 pb-2 pt-1 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">Workspace</p>
           <nav className="space-y-1">
             {navItems.map(({ to, label, icon: Icon }) => {
-              const active = pathname === to
+              const active = pathname === to || pathname.startsWith(`${to}/`)
               return (
                 <Link
                   key={label}

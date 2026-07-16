@@ -1,4 +1,5 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { useEffect } from 'react'
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { UserProvider } from './context/UserContext'
 import LoginPage from './pages/Login'
 import InviteRedeem from './pages/InviteRedeem'
@@ -37,9 +38,23 @@ import EvidenceDetail from './pages/assessor/EvidenceDetail'
 import BUHRLayout from './layouts/BUHRLayout'
 import BUHRDashboard from './pages/buhr/Dashboard'
 
+function ScrollToTop() {
+  const { pathname } = useLocation()
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' })
+    document.querySelectorAll('[data-route-scroll]').forEach((element) => {
+      element.scrollTo({ top: 0, left: 0, behavior: 'instant' })
+    })
+  }, [pathname])
+
+  return null
+}
+
 export default function App() {
   return (
     <UserProvider>
+      <ScrollToTop />
       <Routes>
         <Route path="/" element={<LoginPage />} />
         <Route path="/invite/:token" element={<InviteRedeem />} />
@@ -85,7 +100,9 @@ export default function App() {
 
         <Route path="/buhr" element={<BUHRLayout />}>
           <Route index element={<Navigate to="/buhr/dashboard" replace />} />
-          <Route path="dashboard" element={<BUHRDashboard />} />
+          <Route path="dashboard" element={<BUHRDashboard view="dashboard" />} />
+          <Route path="people" element={<BUHRDashboard view="people" />} />
+          <Route path="reports" element={<BUHRDashboard view="reports" />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

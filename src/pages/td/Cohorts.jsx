@@ -145,10 +145,107 @@ function cohortToForm(cohort) {
   }
 }
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
 function CohortFormModal({ mode, initialCohort, onClose, onSubmit }) {
   const [form, setForm] = useState(() => (initialCohort ? cohortToForm(initialCohort) : emptyCohortForm()))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [importRows, setImportRows] = useState([])
+  const [fileName, setFileName] = useState('')
+  const [validation, setValidation] = useState(null)
+
+  async function handleWorkbook(event) {
+    const file = event.target.files?.[0]
+    if (!file) return
+    setError('')
+    setValidation(null)
+    setImportRows([])
+    setFileName('')
+
+    try {
+      const XLSX = await import('xlsx')
+      const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array' })
+      const sheet = workbook.Sheets[workbook.SheetNames[0]]
+      const values = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: false })
+      const headers = (values[0] || []).map((value, index) => String(value).trim() || `Column ${index + 1}`)
+      if (headers.length < 28 || headers[1].toLowerCase() !== 'emp name' || !headers[2].toLowerCase().includes('ticket')) {
+        throw new Error('This file does not match the 28-column master data template.')
+      }
+
+      const text = (value) => String(value ?? '').trim()
+      const required = [1, 2, 4, 13, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]
+      const emailColumns = [15, 18, 21, 24, 27]
+      const dataRows = values.slice(2).filter((row) => row.some((value) => text(value)))
+
+      if (!dataRows.length) throw new Error('The workbook contains no participant rows. Add data below the Field Type row.')
+
+      const rowErrors = []
+      const candidateRows = []
+      const seenIds = new Map()
+      const seenEmails = new Map()
+
+      dataRows.forEach((row, index) => {
+        const rowNumber = index + 3
+        const missing = required.filter((column) => !text(row[column]))
+        missing.forEach((column) => rowErrors.push({ row: rowNumber, ticket: text(row[2]) || '-', field: headers[column], issue: 'Missing (mandatory)' }))
+
+        emailColumns.forEach((column) => {
+          const value = text(row[column])
+          if (value && !EMAIL_RE.test(value)) rowErrors.push({ row: rowNumber, ticket: text(row[2]) || '-', field: headers[column], issue: `Not a valid email: ${value}` })
+        })
+
+        const employeeId = text(row[2]).toLowerCase()
+        const email = text(row[15]).toLowerCase()
+        if (employeeId) {
+          if (seenIds.has(employeeId)) rowErrors.push({ row: rowNumber, ticket: text(row[2]), field: 'Ticket ID', issue: `Duplicate Ticket ID (also row ${seenIds.get(employeeId)})` })
+          else seenIds.set(employeeId, rowNumber)
+        }
+        if (email) {
+          if (seenEmails.has(email)) rowErrors.push({ row: rowNumber, ticket: text(row[2]), field: 'Email', issue: `Duplicate email (also row ${seenEmails.get(email)})` })
+          else seenEmails.set(email, rowNumber)
+        }
+
+        const rowHasErrors = missing.length > 0 || rowErrors.some((err) => err.row === rowNumber && err.issue.startsWith('Not a valid email'))
+        if (rowHasErrors) return
+
+        const masterData = Object.fromEntries(headers.map((header, column) => [`${header}_${column + 1}`, text(row[column])]))
+        Object.assign(masterData, {
+          reportingManagerName: text(row[16]), reportingManagerEmail: text(row[18]),
+          skipManagerName: text(row[19]), skipManagerEmail: text(row[21]),
+          buHeadName: text(row[22]), buHeadEmail: text(row[24]),
+          buhrName: text(row[25]), buhrEmail: text(row[27]),
+          jobLevel: text(row[5]), positionLevel: text(row[6]), department: text(row[12]), location: text(row[14]),
+        })
+        candidateRows.push({
+          rowNumber,
+          name: text(row[1]), employeeId: text(row[2]), email: text(row[15]), designation: text(row[4]), businessUnit: text(row[13]),
+          reportingManager: { name: text(row[16]), employeeId: text(row[17]), email: text(row[18]) },
+          skipManager: { name: text(row[19]), employeeId: text(row[20]), email: text(row[21]) },
+          buHead: { name: text(row[22]), employeeId: text(row[23]), email: text(row[24]) },
+          buhr: { name: text(row[25]), employeeId: text(row[26]), email: text(row[27]) },
+          masterData,
+        })
+      })
+
+      const erroredRowNumbers = new Set(rowErrors.map((err) => err.row))
+      const validRows = candidateRows.filter((row) => !erroredRowNumbers.has(row.rowNumber))
+
+      setValidation({
+        total: dataRows.length,
+        validCount: validRows.length,
+        errorRowCount: erroredRowNumbers.size,
+        errors: rowErrors.sort((a, b) => a.row - b.row),
+      })
+      setImportRows(validRows)
+      setFileName(file.name)
+    } catch (err) {
+      setImportRows([])
+      setFileName('')
+      setValidation(null)
+      setError(err.message || 'Unable to read the workbook.')
+    }
+  }
 
   function update(key, value) {
     setForm((prev) => ({ ...prev, [key]: value }))
@@ -168,6 +265,7 @@ function CohortFormModal({ mode, initialCohort, onClose, onSubmit }) {
       for (const key of Object.keys(payload)) {
         if (payload[key] === '') payload[key] = null
       }
+      if (mode === 'create' && importRows.length) payload.participants = importRows
       await onSubmit(payload)
     } catch (err) {
       setError(err.message)
@@ -234,6 +332,60 @@ function CohortFormModal({ mode, initialCohort, onClose, onSubmit }) {
               ))}
             </div>
           </div>
+
+          {mode === 'create' && (
+            <div className="border-t border-[#e2e8f0] pt-4">
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Participant master sheet</label>
+              <p className="mb-3 text-xs leading-5 text-slate-500">Upload the completed 28-column Excel template. Participant accounts, BUHR access, and locked Reporting/Skip Manager nominees will be created with the cohort.</p>
+              <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-dashed border-[#c2ccda] bg-[#f8fafc] px-4 py-5 text-sm font-medium text-slate-600 hover:border-[#1e5fba] hover:bg-[#ebf2fa]">
+                <Upload size={18} />
+                {fileName || 'Choose master data workbook'}
+                <input type="file" accept=".xlsx,.xls" onChange={handleWorkbook} className="sr-only" />
+              </label>
+              {validation && (
+                <div className="mt-3 space-y-3">
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="rounded-lg bg-[#f1f5fa] px-3 py-2 text-center">
+                      <p className="text-lg font-semibold text-slate-700">{validation.total}</p>
+                      <p className="text-[10px] uppercase tracking-wide text-slate-500">Rows in file</p>
+                    </div>
+                    <div className="rounded-lg bg-emerald-50 px-3 py-2 text-center">
+                      <p className="text-lg font-semibold text-emerald-700">{validation.validCount}</p>
+                      <p className="text-[10px] uppercase tracking-wide text-emerald-700">Valid rows</p>
+                    </div>
+                    <div className={`rounded-lg px-3 py-2 text-center ${validation.errorRowCount ? 'bg-red-50' : 'bg-[#f1f5fa]'}`}>
+                      <p className={`text-lg font-semibold ${validation.errorRowCount ? 'text-red-700' : 'text-slate-700'}`}>{validation.errorRowCount}</p>
+                      <p className={`text-[10px] uppercase tracking-wide ${validation.errorRowCount ? 'text-red-700' : 'text-slate-500'}`}>Rows with errors</p>
+                    </div>
+                  </div>
+                  {validation.errors.length > 0 && (
+                    <div className="max-h-48 overflow-auto rounded-lg border border-[#e2e8f0]">
+                      <table className="w-full border-collapse text-left text-xs">
+                        <thead className="sticky top-0 bg-[#f8fafc]">
+                          <tr>
+                            {['Row', 'Ticket ID', 'Field', 'Issue'].map((label) => <th key={label} className="border-b border-[#e2e8f0] px-2 py-1.5 font-semibold text-slate-500">{label}</th>)}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {validation.errors.map((err, index) => (
+                            <tr key={`${err.row}-${err.field}-${index}`}>
+                              <td className="border-b border-[#f1f5f9] px-2 py-1.5">{err.row}</td>
+                              <td className="border-b border-[#f1f5f9] px-2 py-1.5 text-slate-500">{err.ticket}</td>
+                              <td className="border-b border-[#f1f5f9] px-2 py-1.5 font-medium">{err.field}</td>
+                              <td className="border-b border-[#f1f5f9] px-2 py-1.5 text-slate-600">{err.issue}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                  <p className="text-xs text-slate-500">
+                    Nothing is created until you submit. {validation.errorRowCount > 0 ? `Fix the rows above and re-upload, or continue to import the ${validation.validCount} valid row${validation.validCount === 1 ? '' : 's'} only.` : 'All rows passed validation.'}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
 
           {error && <p className="text-sm text-red-600">{error}</p>}
 

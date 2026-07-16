@@ -27,6 +27,19 @@ export default function ParticipantDetail() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [taskView, setTaskView] = useState('all')
+  const [reportAction, setReportAction] = useState({ loading: false, error: '' })
+
+  async function handleGenerateReport() {
+    setReportAction({ loading: true, error: '' })
+    try {
+      await api.generate360Report(participant.id)
+      setParticipant((current) => ({ ...current, reportStatus: 'generated', progress: 100, lastActivity: new Date().toISOString() }))
+    } catch (err) {
+      setReportAction({ loading: false, error: err.message || 'Unable to generate the report.' })
+      return
+    }
+    setReportAction({ loading: false, error: '' })
+  }
 
   useEffect(() => {
     if (!participantId) return
@@ -52,7 +65,7 @@ export default function ParticipantDetail() {
   if (!participant) return <Navigate to="/td/cohorts" replace />
 
   const allNomineesSubmitted = participant.totalResponses > 0 && participant.responses === participant.totalResponses
-  const reportReady = allNomineesSubmitted && participant.reportStatus !== 'waiting'
+  const reportReady = allNomineesSubmitted && participant.reportReady === true
   const cohort = participant.cohort
   const nominees = participant.nominees || []
   const pendingNominees = nominees.filter((nominee) => nominee.status !== 'submitted')
@@ -99,7 +112,7 @@ export default function ParticipantDetail() {
           </p>
           <p className="text-xs mt-3">
             <span className="text-gray-400">Reporting manager: </span>
-            <span className="font-semibold text-amber-700">Available in HR upload</span>
+            <span className="font-semibold text-amber-700">{participant.masterData?.reportingManagerName || 'Not available'}</span>
             <span className="mx-3 text-gray-300">•</span>
             <span className="font-semibold text-emerald-700">{cohort?.name || 'Unassigned cohort'}</span>
           </p>
@@ -185,8 +198,8 @@ export default function ParticipantDetail() {
         </div>
 
         <aside className="space-y-5">
-          <section className="rounded-2xl bg-[#173f72] text-white p-5"><div className="flex items-start justify-between"><span className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center"><FileText size={19} /></span><span className={`text-[10px] font-semibold px-2 py-1 rounded-full ${reportReady ? 'bg-emerald-400/20 text-emerald-100' : 'bg-white/10 text-blue-100'}`}>{reportReady ? 'Data ready' : 'Not ready'}</span></div><h3 className="font-semibold mt-5">Aggregated 360 report</h3><p className="text-xs text-blue-200 mt-2 leading-relaxed">{reportReady ? 'All nominees have submitted. Scores can now be aggregated and populated into the report template.' : `${participant.totalResponses - participant.responses} nominee response${participant.totalResponses - participant.responses === 1 ? '' : 's'} still pending. The report unlocks only after every nominee submits.`}</p>{reportReady ? <Link to={`/td/reports/${participant.id}`} className="mt-5 w-full bg-white text-[#173f72] rounded-lg py-2.5 text-sm font-semibold flex items-center justify-center gap-2">Preview report <ChevronRight size={16} /></Link> : <button disabled className="mt-5 w-full bg-white/10 text-blue-200 rounded-lg py-2.5 text-sm font-semibold">Waiting for all nominees ({participant.responses}/{participant.totalResponses})</button>}</section>
-          <section className="bg-white border border-[#e2e8f0] rounded-2xl p-5"><h3 className="text-sm font-semibold text-[#172033] mb-4">Participant details</h3>{[['Email', participant.email || '-'], ['DC type', cohort?.programme || 'Development Centre'], ['Event', cohort?.eventDate || 'TBD'], ['Location', 'Akurdi, Pune']].map(([label, value]) => <div key={label} className="flex justify-between py-2.5 border-b last:border-0 border-[#edf1f5] gap-3"><span className="text-xs text-gray-400">{label}</span><span className="text-xs font-medium text-[#374151] text-right">{value}</span></div>)}</section>
+          <section className="rounded-2xl bg-[#173f72] text-white p-5"><div className="flex items-start justify-between"><span className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center"><FileText size={19} /></span><span className={`text-[10px] font-semibold px-2 py-1 rounded-full ${reportReady ? 'bg-emerald-400/20 text-emerald-100' : 'bg-white/10 text-blue-100'}`}>{reportReady ? 'Data ready' : 'Not ready'}</span></div><h3 className="font-semibold mt-5">Aggregated 360 report</h3><p className="text-xs text-blue-200 mt-2 leading-relaxed">{reportReady ? 'Every required respondent has submitted a complete rating set. The report can now be generated.' : allNomineesSubmitted ? 'Responses are marked submitted, but one or more required rating sets are incomplete. Generation remains locked.' : `${participant.totalResponses - participant.responses} nominee response${participant.totalResponses - participant.responses === 1 ? '' : 's'} still pending. The report unlocks only after every nominee submits.`}</p>{reportAction.error && <p className="mt-3 text-xs text-red-200">{reportAction.error}</p>}{reportReady ? <div className="mt-5 space-y-2">{!['generated','released'].includes(participant.reportStatus) && <button onClick={handleGenerateReport} disabled={reportAction.loading} className="w-full bg-emerald-400 text-[#12345a] rounded-lg py-2.5 text-sm font-semibold disabled:opacity-60">{reportAction.loading ? 'Generating…' : 'Generate report'}</button>}<Link to={`/td/reports/${participant.id}`} className="w-full bg-white text-[#173f72] rounded-lg py-2.5 text-sm font-semibold flex items-center justify-center gap-2">Preview report <ChevronRight size={16} /></Link></div> : <button disabled className="mt-5 w-full bg-white/10 text-blue-200 rounded-lg py-2.5 text-sm font-semibold">Report generation locked</button>}</section>
+          <section className="bg-white border border-[#e2e8f0] rounded-2xl p-5"><h3 className="text-sm font-semibold text-[#172033] mb-4">Participant details</h3>{[['Email', participant.email || '-'], ['DC type', cohort?.programme || 'Development Centre'], ['Job level', participant.masterData?.jobLevel || '-'], ['Department', participant.masterData?.department || '-'], ['Location', participant.masterData?.location || '-'], ['Skip manager', participant.masterData?.skipManagerName || '-'], ['BU Head', participant.masterData?.buHeadName || '-'], ['BUHR', participant.masterData?.buhrName || '-']].map(([label, value]) => <div key={label} className="flex justify-between py-2.5 border-b last:border-0 border-[#edf1f5] gap-3"><span className="text-xs text-gray-400">{label}</span><span className="text-xs font-medium text-[#374151] text-right">{value}</span></div>)}</section>
           <section className="bg-white border border-[#e2e8f0] rounded-2xl p-5"><div className="flex gap-3"><Users size={17} className="text-gray-400 mt-0.5"/><div><h3 className="text-xs font-semibold text-[#172033]">Confidentiality</h3><p className="text-[11px] text-gray-500 mt-1.5 leading-relaxed">TD can monitor completion, but the report exposes only aggregated nominee scores. Individual ratings are never shown.</p></div></div></section>
         </aside>
       </div>
