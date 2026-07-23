@@ -1,4 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom'
+import { useUser } from '../../context/UserContext'
 
 const reports = [
   {
@@ -45,6 +46,14 @@ const timeline = [
 
 export default function Reports() {
   const navigate = useNavigate()
+  const { participantData } = useUser()
+  const report360Released = participantData?.reportStatus === 'released'
+  const displayReports = reports.map((report) => report.id === '360' ? {
+    ...report,
+    subtitle: participantData?.cohort?.name || 'Current cohort',
+    status: report360Released ? 'available' : 'pending',
+    releasedOn: report360Released ? 'Released by Talent Development' : null,
+  } : report)
   return (
     <div className="p-6">
       <div className="flex items-center gap-2 text-xs text-gray-400 mb-5">
@@ -61,7 +70,7 @@ export default function Reports() {
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_248px] gap-6">
         {/* Report cards */}
         <div className="space-y-4">
-          {reports.map((r) => (
+          {displayReports.map((r) => (
             <div key={r.id} className="bg-white rounded-xl border border-[#e2e8f0] p-5 flex items-start gap-5">
               <div className={`w-12 h-12 rounded-xl ${r.bgColor} flex items-center justify-center shrink-0`}>
                 <span className={`text-xs font-bold ${r.textColor}`}>{r.icon}</span>

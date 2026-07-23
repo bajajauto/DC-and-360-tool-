@@ -6,7 +6,6 @@ import { httpError } from '../utils/httpError.js'
 import { generate360ReportForParticipant, getOrGenerate360Report } from '../reports/generate360Report.js'
 import { build360ResponseDataWorkbook } from '../reports/build360ResponseData.js'
 import { queueEmail } from '../notifications/service.js'
-import { logAudit } from '../utils/audit.js'
 
 export const reportsRouter = Router()
 
@@ -18,13 +17,55 @@ async function assertReportDownloadAccess(req) {
   if (req.auth.roles.includes('td')) return
   const participant = await prisma.participant.findUnique({
     where: { id: req.params.participantId },
-    select: { userId: true },
+    select: { userId: true, reports: { where: { type: '360', status: 'RELEASED' }, take: 1, select: { id: true } } },
   })
   if (!participant) throw httpError(404, 'Participant not found')
   if (participant.userId !== req.auth.userId) {
     throw httpError(403, 'You do not have access to this report')
   }
+  if (!participant.reports.length) throw httpError(403, 'This report has not been released by Talent Development')
 }
+
+reportsRouter.get('/repository', asyncHandler(async (req, res) => {
+  requireTd(req)
+  const reports = await prisma.report.findMany({
+    orderBy: [{ generatedAt: 'desc' }, { updatedAt: 'desc' }],
+    include: {
+      participant: {
+        include: {
+          user: true,
+          cohort: true,
+          nominees: true,
+          feedbackTasks: { select: { status: true, relationship: true } },
+        },
+      },
+    },
+  })
+
+  res.json({ data: reports.map((report) => {
+    const participant = report.participant
+    const responses = participant.feedbackTasks.filter((task) => task.status === 'SUBMITTED' && task.relationship !== 'SELF').length
+    return {
+      reportId: report.id,
+      reportType: report.type.toLowerCase(),
+      reportStatus: report.status.toLowerCase(),
+      generatedAt: report.generatedAt?.toISOString() || null,
+      releasedAt: report.releasedAt?.toISOString() || null,
+      lastActivity: report.updatedAt.toISOString(),
+      id: participant.id,
+      name: participant.user.name,
+      initials: participant.user.name.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase(),
+      employeeId: participant.user.employeeId,
+      designation: participant.user.designation,
+      bu: participant.user.businessUnit,
+      cohortId: participant.cohortId,
+      cohortName: participant.cohort.name,
+      cohortProgramme: participant.cohort.programme,
+      responses,
+      totalResponses: participant.nominees.length,
+    }
+  }) })
+}))
 
 reportsRouter.post('/:participantId/360/generate', asyncHandler(async (req, res) => {
   requireTd(req)
@@ -104,14 +145,6 @@ reportsRouter.post('/:participantId/360/release', asyncHandler(async (req, res) 
       entity: 'Report',
       entityId: updatedReport.id,
     }, tx)
-
-    await logAudit(tx, {
-      actorId: req.auth.userId,
-      action: '360 report released',
-      entity: 'Participant',
-      entityId: participant.id,
-      metadata: { participantName: participant.user.name },
-    })
 
     return updatedReport
   })

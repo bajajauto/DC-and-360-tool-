@@ -14,6 +14,7 @@ import Nominees360 from './pages/participant/Nominees360'
 import Status360 from './pages/participant/Status360'
 import Reports from './pages/participant/Reports'
 import Report360 from './pages/participant/Report360'
+import Self360Survey from './pages/participant/Self360Survey'
 
 // Respondent
 import RespondentLayout from './layouts/RespondentLayout'
@@ -26,8 +27,10 @@ import Cohorts from './pages/td/Cohorts'
 import ParticipantDetail from './pages/td/ParticipantDetail'
 import ReportPreview from './pages/td/ReportPreview'
 import TDReports from './pages/td/TDReports'
+import ParticipantReports from './pages/td/ParticipantReports'
 import Placeholder from './pages/td/Placeholder'
-import { AuditLog, EmailOutbox, NotificationTemplates, QuestionBank, TrackersExports } from './pages/td/TDOperations'
+import { EmailOutbox, NotificationTemplates, QuestionBank, TrackersExports } from './pages/td/TDOperations'
+import AssessorAnalysis from './pages/td/AssessorAnalysis'
 
 // Assessor
 import AssessorLayout from './layouts/AssessorLayout'
@@ -37,6 +40,8 @@ import EvidenceDetail from './pages/assessor/EvidenceDetail'
 // BUHR
 import BUHRLayout from './layouts/BUHRLayout'
 import BUHRDashboard from './pages/buhr/Dashboard'
+import BUHRReportRepository from './pages/buhr/ReportRepository'
+import BUHRParticipantReports from './pages/buhr/ParticipantReports'
 
 function ScrollToTop() {
   const { pathname } = useLocation()
@@ -66,6 +71,7 @@ export default function App() {
           <Route path="photograph" element={<Photograph />} />
           <Route path="pre-work" element={<PreWork />} />
           <Route path="360-nominees" element={<Nominees360 />} />
+          <Route path="self-360" element={<Self360Survey />} />
           <Route path="360-status" element={<Status360 />} />
           <Route path="reports" element={<Reports />} />
           <Route path="360-report" element={<Report360 />} />
@@ -79,16 +85,17 @@ export default function App() {
 
         <Route path="/td" element={<TDLayout />}>
           <Route index element={<Navigate to="/td/dashboard" replace />} />
-          <Route path="dashboard" element={<Cohorts />} />
-          <Route path="cohorts" element={<Cohorts />} />
+          <Route path="dashboard" element={<Cohorts view="dashboard" />} />
+          <Route path="cohorts" element={<Cohorts view="current" />} />
           <Route path="participants/:participantId" element={<ParticipantDetail />} />
           <Route path="reports" element={<TDReports />} />
+          <Route path="reports/participant/:participantId" element={<ParticipantReports />} />
           <Route path="reports/:participantId" element={<ReportPreview />} />
           <Route path="exports" element={<TrackersExports />} />
+          <Route path="assessor-analysis" element={<AssessorAnalysis />} />
           <Route path="outbox" element={<EmailOutbox />} />
           <Route path="question-bank" element={<QuestionBank />} />
           <Route path="templates" element={<NotificationTemplates />} />
-          <Route path="audit" element={<AuditLog />} />
           <Route path="settings" element={<Placeholder title="Programme setup" />} />
         </Route>
 
@@ -101,8 +108,9 @@ export default function App() {
         <Route path="/buhr" element={<BUHRLayout />}>
           <Route index element={<Navigate to="/buhr/dashboard" replace />} />
           <Route path="dashboard" element={<BUHRDashboard view="dashboard" />} />
-          <Route path="people" element={<BUHRDashboard view="people" />} />
-          <Route path="reports" element={<BUHRDashboard view="reports" />} />
+          <Route path="people" element={<Navigate to="/buhr/dashboard" replace />} />
+          <Route path="reports" element={<BUHRReportRepository />} />
+          <Route path="reports/participant/:participantId" element={<BUHRParticipantReports />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

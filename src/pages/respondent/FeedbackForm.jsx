@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useUser } from '../../context/UserContext'
 import {
   getBehaviourIds,
+  getRelationshipLabel,
   getRequiredQuestionTotal,
   getSurveySections,
   getSurveyVariant,
@@ -190,12 +191,16 @@ function getCompletedCommentCount(sectionSsc, sections) {
   )
 }
 
-export default function FeedbackForm() {
-  const { taskId } = useParams()
+export default function FeedbackForm({ returnTo = '/respondent/dashboard', taskIdOverride = null }) {
+  const { taskId: routeTaskId } = useParams()
+  const taskId = taskIdOverride || routeTaskId
   const navigate = useNavigate()
   const { user } = useUser()
+  const [loadedTask, setLoadedTask] = useState(null)
 
-  const task = user?.respondentTasks.find((t) => t.id === taskId)
+  const task = loadedTask || user?.respondentTasks.find((t) => t.id === taskId)
+  const feedbackSubject = task?.relationship === 'Self' ? 'you' : task?.participantName
+  const useWideParticipantLayout = returnTo.startsWith('/participant')
   const surveySections = useMemo(() => getSurveySections(task?.relationship), [task?.relationship])
   const surveyVariant = getSurveyVariant(task?.relationship)
   const behaviourIds = useMemo(() => getBehaviourIds(surveySections), [surveySections])
@@ -217,6 +222,13 @@ export default function FeedbackForm() {
       api.getFeedbackTask(taskId)
         .then((result) => {
           const taskData = result.data
+          setLoadedTask({
+            id: taskData.id,
+            participantName: taskData.participantName,
+            relationship: getRelationshipLabel(taskData.relationship),
+            status: taskData.status,
+            deadline: taskData.dueAt,
+          })
           if (taskData.status === 'submitted') {
             setSubmitted(true)
           }
@@ -289,7 +301,7 @@ export default function FeedbackForm() {
     return (
       <div className="p-8 text-center">
         <p className="text-gray-500">Feedback task not found.</p>
-        <button onClick={() => navigate('/respondent/dashboard')} className="mt-4 text-sm text-[#1e4d8c] hover:underline">
+        <button onClick={() => navigate(returnTo)} className="mt-4 text-sm text-[#1e4d8c] hover:underline">
           Back to dashboard
         </button>
       </div>
@@ -297,15 +309,15 @@ export default function FeedbackForm() {
   }
 
   if (submitted) {
-    return <SubmissionConfirmation task={task} onBack={() => navigate('/respondent/dashboard')} />
+    return <SubmissionConfirmation task={task} onBack={() => navigate(returnTo)} />
   }
 
   return (
     <div className="pb-32">
       <div className="sticky top-0 z-10 bg-white border-b border-[#e2e8f0] px-6 py-3">
-        <div className="max-w-3xl mx-auto flex items-center gap-4">
+        <div className={`${useWideParticipantLayout ? 'w-full' : 'mx-auto max-w-3xl'} flex items-center gap-4`}>
           <button
-            onClick={() => navigate('/respondent/dashboard')}
+            onClick={() => navigate(returnTo)}
             className="text-gray-400 hover:text-gray-600 transition-colors shrink-0"
             aria-label="Back to dashboard"
           >
@@ -340,7 +352,7 @@ export default function FeedbackForm() {
         </div>
       </div>
 
-      <div className="max-w-3xl mx-auto px-6 pt-6 space-y-6">
+      <div className={`${useWideParticipantLayout ? 'w-full' : 'mx-auto max-w-3xl'} space-y-6 px-6 pt-6`}>
         <div className="bg-[#f0f6ff] border border-[#bfdbfe] rounded-xl p-5">
           <div className="flex items-start gap-3">
             <div className="w-10 h-10 rounded-full bg-[#1e4d8c] flex items-center justify-center text-white font-semibold text-sm shrink-0">
@@ -381,7 +393,7 @@ export default function FeedbackForm() {
             section={section}
             ratings={ratings}
             comments={sectionSsc[section.id]}
-            participantName={task.participantName}
+            participantName={feedbackSubject}
             onRate={handleRate}
             onCommentChange={(key, value) => handleSectionSsc(section.id, key, value)}
           />
@@ -396,9 +408,9 @@ export default function FeedbackForm() {
           </div>
           <div className="px-5 py-5 space-y-5">
             {[
-              { key: 'start', label: 'Start', prompt: `What should ${task.participantName} start doing?`, colour: 'text-green-600' },
-              { key: 'stop', label: 'Stop', prompt: `What should ${task.participantName} stop doing?`, colour: 'text-red-500' },
-              { key: 'continue', label: 'Continue', prompt: `What should ${task.participantName} continue doing?`, colour: 'text-blue-600' },
+              { key: 'start', label: 'Start', prompt: `What should ${feedbackSubject} start doing?`, colour: 'text-green-600' },
+              { key: 'stop', label: 'Stop', prompt: `What should ${feedbackSubject} stop doing?`, colour: 'text-red-500' },
+              { key: 'continue', label: 'Continue', prompt: `What should ${feedbackSubject} continue doing?`, colour: 'text-blue-600' },
             ].map(({ key, label, prompt, colour }) => (
               <div key={key}>
                 <label className="block text-xs font-semibold mb-1.5">
@@ -419,7 +431,7 @@ export default function FeedbackForm() {
       </div>
 
       <div className="fixed bottom-0 left-60 right-0 bg-white border-t border-[#e2e8f0] px-6 py-3 z-10">
-        <div className="max-w-3xl mx-auto flex items-center justify-between gap-4">
+        <div className={`${useWideParticipantLayout ? 'w-full' : 'mx-auto max-w-3xl'} flex items-center justify-between gap-4`}>
           <p className="text-xs text-gray-400">
             {allRated
               ? reflectionsComplete

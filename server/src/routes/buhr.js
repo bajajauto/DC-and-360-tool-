@@ -74,6 +74,16 @@ buhrRouter.get('/:userId/participants', asyncHandler(async (req, res) => {
             downloadUrl: released ? `/api/buhr/${buhr.id}/reports/${participant.id}/360/download` : null,
           }
         : null,
+      reports: participant.reports
+        .filter((item) => item.status === 'RELEASED')
+        .map((item) => ({
+          id: item.id,
+          type: item.type.toLowerCase(),
+          status: item.status.toLowerCase(),
+          generatedAt: item.generatedAt?.toISOString() || null,
+          releasedAt: item.releasedAt?.toISOString() || null,
+          downloadUrl: `/api/buhr/${buhr.id}/reports/${participant.id}/${item.type.toLowerCase()}/download`,
+        })),
     }
   })
 
@@ -91,7 +101,7 @@ buhrRouter.get('/:userId/participants', asyncHandler(async (req, res) => {
   })
 }))
 
-buhrRouter.get('/:userId/reports/:participantId/360/download', asyncHandler(async (req, res) => {
+buhrRouter.get('/:userId/reports/:participantId/:reportType/download', asyncHandler(async (req, res) => {
   assertBuhrSelf(req)
   const buhr = await getBuhrUser(req.params.userId)
   const participant = await prisma.participant.findUnique({
@@ -104,9 +114,9 @@ buhrRouter.get('/:userId/reports/:participantId/360/download', asyncHandler(asyn
 
   if (!participant) throw httpError(404, 'Participant not found')
   if (participant.user.businessUnit !== buhr.businessUnit) throw httpError(403, 'This participant is outside your BUHR scope')
-  if (participant.reportStatus !== 'RELEASED') throw httpError(403, 'Report is not published yet')
-
-  const report = latest360Report(participant)
+  const report = participant.reports
+    .filter((item) => item.type.toLowerCase() === req.params.reportType.toLowerCase())
+    .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())[0] || null
   if (!report || report.status !== 'RELEASED' || !report.fileUrl) throw httpError(404, 'Published report file not found')
 
   try {

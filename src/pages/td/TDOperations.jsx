@@ -1,17 +1,14 @@
 import { useEffect, useState } from 'react'
 import {
   Bell,
-  Clock,
   Download,
   Eye,
   FileText,
-  Mail,
   Search,
   Send,
-  Shield,
   Users,
 } from 'lucide-react'
-import { cohorts, competencyScores, participants } from '../../data/adminData'
+import { competencyScores } from '../../data/adminData'
 import { exportCohortNomineeStatus, exportCohortProcessStatus } from '../../lib/trackingExport'
 import { api } from '../../lib/api'
 
@@ -22,7 +19,7 @@ function Page({ eyebrow, title, subtitle, action, children }) {
         <div className="mb-5 flex items-start justify-between gap-4">
           <div>
             <p className="mb-2 text-xs text-slate-500">{eyebrow}</p>
-            <h1 className="font-serif text-[30px] font-medium leading-tight text-[#0f172a]">{title}</h1>
+            <h1 className="font-serif text-[34px] font-semibold leading-tight text-[#1e4d8c]">{title}</h1>
             <p className="mt-1 max-w-3xl text-sm text-slate-600">{subtitle}</p>
           </div>
           {action}
@@ -41,7 +38,7 @@ function CardHeader({ title, subtitle, action }) {
   return (
     <div className="mb-4 flex items-start justify-between gap-4 border-b border-[#d5dce5] pb-3">
       <div>
-        <h3 className="text-[15px] font-semibold text-[#0f172a]">{title}</h3>
+        <h3 className="text-lg font-bold text-[#1e5fba]">{title}</h3>
         {subtitle && <p className="mt-1 text-xs text-slate-500">{subtitle}</p>}
       </div>
       {action}
@@ -75,18 +72,7 @@ function ActionButton({ children, onClick, primary = false }) {
   )
 }
 
-const cohort = cohorts[0]
-const activeParticipants = participants.filter((participant) => participant.cohortId === cohort.id)
-
 const exportCards = [
-  {
-    id: 'pending',
-    icon: Clock,
-    title: 'Pending Actions Follow-up',
-    desc: 'One row per pending item per participant, with contact details, so TD can chase directly.',
-    cols: 'Ticket ID, Name, Email, BU, Manager, Pending Item, Deadline',
-    best: 'Weekly follow-up nudges before deadlines',
-  },
   {
     id: 'master',
     icon: FileText,
@@ -103,36 +89,50 @@ const exportCards = [
     cols: 'Ticket ID, Participant, Respondent Group, Nominated, Responded, Pending',
     best: 'Deciding where reminders are needed',
   },
-  {
-    id: 'nominees',
-    icon: Mail,
-    title: 'Nomination Submission Tracker',
-    desc: 'Who has and has not submitted their nominee list.',
-    cols: 'Ticket ID, Name, BU, Status, Submitted On',
-    best: 'Chasing the last few submissions',
-  },
-  {
-    id: 'assessor',
-    icon: Shield,
-    title: 'Assessor Excel Tracker',
-    desc: 'Per participant: Excel generated, shared, uploaded back, validation status.',
-    cols: 'Ticket ID, Name, Generated On, Uploaded Back, Validation',
-    best: 'Post-DC chase with the assessor team',
-  },
 ]
 
 export function TrackersExports() {
+  const [cohortRows, setCohortRows] = useState([])
+  const [selectedCohortId, setSelectedCohortId] = useState('')
+  const [cohortParticipants, setCohortParticipants] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const selectedCohort = cohortRows.find((item) => item.id === selectedCohortId)
+
+  useEffect(() => {
+    api.getCohorts().then(({ data }) => {
+      const rows = data || []
+      setCohortRows(rows)
+      setSelectedCohortId(rows.at(-1)?.id || '')
+    }).catch((err) => setError(err.message)).finally(() => setLoading(false))
+  }, [])
+
+  useEffect(() => {
+    if (!selectedCohortId) { setCohortParticipants([]); return }
+    setLoading(true)
+    api.getCohortParticipants(selectedCohortId).then(({ data }) => setCohortParticipants(data || [])).catch((err) => setError(err.message)).finally(() => setLoading(false))
+  }, [selectedCohortId])
+
   function download(id) {
-    if (id === 'nominees' || id === 'threesixty') exportCohortNomineeStatus(cohort, activeParticipants)
-    else exportCohortProcessStatus(cohort, activeParticipants)
+    if (!selectedCohort) return
+    if (id === 'threesixty') exportCohortNomineeStatus(selectedCohort, cohortParticipants)
+    else exportCohortProcessStatus(selectedCohort, cohortParticipants)
   }
 
   return (
     <Page
       eyebrow="Talent Development / Operations"
       title="Trackers and Exports"
-      subtitle="Ready-to-use Excel trackers for follow-ups, generated live from the current cohort. Every tracker downloads with full headers, and Ticket ID is always the first column."
+      subtitle="Select any current or historic DC cohort, then download its live status trackers."
     >
+      {error && <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+      <Card className="mb-5">
+        <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500">DC cohort</label>
+        <select value={selectedCohortId} onChange={(event) => setSelectedCohortId(event.target.value)} className="w-full max-w-lg rounded-lg border border-[#c2ccda] bg-white px-3 py-2.5 text-sm font-semibold text-slate-700">
+          {cohortRows.map((item) => <option key={item.id} value={item.id}>{item.name} · {item.programme} · {item.eventDate}</option>)}
+        </select>
+        <p className="mt-2 text-xs text-slate-500">{loading ? 'Loading cohort…' : `${cohortParticipants.length} participant${cohortParticipants.length === 1 ? '' : 's'} in this cohort`}</p>
+      </Card>
       <div className="mb-5 rounded-xl border border-[#7ba6e0] bg-[#ebf2fa] p-4 text-sm text-[#123e77]">
         <strong>Status only, never scores.</strong> Exports carry completion status for follow-ups. 360 ratings and individual responses are never included in any export.
       </div>
@@ -329,13 +329,23 @@ function TemplateText({ text }) {
 export function NotificationTemplates() {
   const [templates, setTemplates] = useState([])
   const [selected, setSelected] = useState(null)
+  const [recipients, setRecipients] = useState([])
+  const [selectedRecipientIds, setSelectedRecipientIds] = useState([])
+  const [recipientSearch, setRecipientSearch] = useState('')
+  const [bulkEmails, setBulkEmails] = useState('')
+  const [subject, setSubject] = useState('')
+  const [body, setBody] = useState('')
+  const [sending, setSending] = useState(false)
+  const [sent, setSent] = useState(false)
+  const [recipientsLoading, setRecipientsLoading] = useState(false)
+  const [notice, setNotice] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
   useEffect(() => {
     api.getNotificationTemplates()
-      .then((result) => {
-        const rows = result.data || []
+      .then((templateResult) => {
+        const rows = templateResult.data || []
         setTemplates(rows)
         setSelected(rows.find((template) => template.templateId === 'resp-invite') || rows[0] || null)
       })
@@ -343,7 +353,65 @@ export function NotificationTemplates() {
       .finally(() => setLoading(false))
   }, [])
 
+  useEffect(() => {
+    if (!selected) return
+    setSubject(selected.subject)
+    setBody(selected.body)
+    setNotice('')
+    setSent(false)
+    setError('')
+    setSelectedRecipientIds([])
+    setRecipientsLoading(true)
+    api.getNotificationRecipients(selected.templateId)
+      .then((result) => setRecipients(result.data || []))
+      .catch((err) => setError(err.message))
+      .finally(() => setRecipientsLoading(false))
+  }, [selected])
+
   const phases = [...new Set(templates.map((template) => template.phase))]
+  const visibleRecipients = recipients.filter((recipient) => {
+    const haystack = `${recipient.name} ${recipient.email} ${recipient.employeeId || ''} ${recipient.roles.join(' ')} ${recipient.businessUnit || ''}`.toLowerCase()
+    return haystack.includes(recipientSearch.trim().toLowerCase())
+  })
+  const selectedDirectoryRecipients = recipients
+    .filter((recipient) => selectedRecipientIds.includes(recipient.id))
+    .map((recipient) => ({ email: recipient.email, name: recipient.name, sourceType: recipient.sourceType, sourceId: recipient.sourceId }))
+  const pastedAddresses = bulkEmails
+    .split(/[\s,;]+/)
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean)
+  const invalidAddresses = pastedAddresses.filter((email) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+  const selectedEmails = new Set(selectedDirectoryRecipients.map((recipient) => recipient.email.toLowerCase()))
+  const pastedRecipients = [...new Set(pastedAddresses)]
+    .filter((email) => !invalidAddresses.includes(email) && !selectedEmails.has(email))
+    .map((email) => ({ email, name: null, sourceType: 'manual', sourceId: null }))
+  const composedRecipients = [...selectedDirectoryRecipients, ...pastedRecipients]
+
+  function toggleRecipient(id) {
+    setSent(false)
+    setSelectedRecipientIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id])
+  }
+
+  async function handleSend() {
+    setError('')
+    setNotice('')
+    if (!composedRecipients.length) return setError('Select at least one recipient or paste an email address.')
+    if (invalidAddresses.length) return setError(`Fix invalid email address${invalidAddresses.length === 1 ? '' : 'es'}: ${invalidAddresses.join(', ')}`)
+    if (!subject.trim() || !body.trim()) return setError('Subject and email body are required.')
+    if (!window.confirm(`Send this email to ${composedRecipients.length} recipient${composedRecipients.length === 1 ? '' : 's'} now?`)) return
+
+    setSending(true)
+    try {
+      const result = await api.sendNotification({ templateId: selected.templateId, subject, body, recipients: composedRecipients })
+      const summary = result.data
+      setNotice(`${summary.sent} email${summary.sent === 1 ? '' : 's'} sent${summary.failed ? `; ${summary.failed} failed. Check Email Outbox for details.` : '.'}`)
+      setSent(summary.sent > 0 && summary.failed === 0)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSending(false)
+    }
+  }
 
   return (
     <Page
@@ -353,7 +421,7 @@ export function NotificationTemplates() {
     >
       {error && <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
       {!loading && !templates.length && !error && <Card><p className="text-sm text-slate-500">No templates configured yet.</p></Card>}
-      <div className="grid gap-5 xl:grid-cols-[1fr_420px]">
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_500px]">
         <div className="space-y-4">
           {phases.map((phase) => (
             <Card key={phase}>
@@ -367,7 +435,7 @@ export function NotificationTemplates() {
                         <td className="border-b border-[#d5dce5] px-3 py-3 font-semibold">{template.trigger}</td>
                         <td className="border-b border-[#d5dce5] px-3 py-3"><span className="rounded-full border border-[#d5dce5] bg-[#f1f5fa] px-3 py-1 text-xs text-slate-600">{template.recipient}</span></td>
                         <td className="border-b border-[#d5dce5] px-3 py-3 text-slate-600">{template.subject}</td>
-                        <td className="border-b border-[#d5dce5] px-3 py-3 text-right"><button onClick={() => setSelected(template)} className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-[#1e5fba] hover:bg-[#ebf2fa]"><Eye size={13} />Preview</button></td>
+                        <td className="border-b border-[#d5dce5] px-3 py-3 text-right"><button onClick={() => setSelected(template)} className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-[#1e5fba] hover:bg-[#ebf2fa]"><Eye size={13} />Compose</button></td>
                       </tr>
                     ))}
                   </tbody>
@@ -377,13 +445,33 @@ export function NotificationTemplates() {
           ))}
         </div>
         {selected && (
-          <Card>
-            <CardHeader title={`Template: ${selected.trigger}`} subtitle={`Recipient: ${selected.recipient} - Phase: ${selected.phase}`} action={<Bell size={16} className="text-[#1e5fba]" />} />
-            <p className="mb-3 text-sm font-semibold text-[#0f172a]">Subject: <TemplateText text={selected.subject} /></p>
-            <div className="whitespace-pre-wrap rounded-xl border border-[#d5dce5] bg-[#f8fbff] p-4 text-sm leading-6 text-slate-700">
-              <TemplateText text={selected.body} />
+          <Card className="h-fit xl:sticky xl:top-5">
+            <CardHeader title="Compose & send" subtitle={`${selected.trigger} · ${selected.recipient}`} action={<Bell size={16} className="text-[#1e5fba]" />} />
+            {notice && <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700">{notice}</div>}
+
+            <label className="mb-1 block text-xs font-semibold text-slate-700">Select recipients</label>
+            <input value={recipientSearch} onChange={(event) => setRecipientSearch(event.target.value)} placeholder="Search name, email, role or BU" className="mb-2 w-full rounded-lg border border-[#c2ccda] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#d6e4f7]" />
+            <div className="mb-3 max-h-48 overflow-y-auto rounded-lg border border-[#d5dce5]">
+              {recipientsLoading && <p className="p-3 text-xs text-slate-500">Loading eligible recipients…</p>}
+              {!visibleRecipients.length && <p className="p-3 text-xs text-slate-500">No matching accounts.</p>}
+              {visibleRecipients.map((recipient) => (
+                <label key={recipient.id} className="flex cursor-pointer items-start gap-3 border-b border-[#edf1f6] px-3 py-2 last:border-b-0 hover:bg-[#f8fbff]">
+                  <input type="checkbox" checked={selectedRecipientIds.includes(recipient.id)} onChange={() => toggleRecipient(recipient.id)} className="mt-1" />
+                  <span className="min-w-0"><span className="block truncate text-xs font-semibold text-slate-800">{recipient.name}</span><span className="block truncate text-[11px] text-slate-500">{recipient.email} · {recipient.detail || recipient.roles.join(', ')}</span></span>
+                </label>
+              ))}
             </div>
-            <p className="mt-3 text-xs text-slate-500">Highlighted placeholders are filled by the tool at send time.</p>
+
+            <label className="mb-1 block text-xs font-semibold text-slate-700">Or paste email addresses in bulk</label>
+            <textarea value={bulkEmails} onChange={(event) => { setBulkEmails(event.target.value); setSent(false) }} rows={3} placeholder="name@company.com, another@company.com" className="mb-3 w-full rounded-lg border border-[#c2ccda] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#d6e4f7]" />
+            <p className="mb-4 text-[11px] text-slate-500">Separate addresses with commas, semicolons, spaces, or new lines. {composedRecipients.length} unique recipient{composedRecipients.length === 1 ? '' : 's'} selected.</p>
+
+            <label className="mb-1 block text-xs font-semibold text-slate-700">Subject</label>
+            <input value={subject} onChange={(event) => { setSubject(event.target.value); setSent(false) }} className="mb-3 w-full rounded-lg border border-[#c2ccda] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#d6e4f7]" />
+            <label className="mb-1 block text-xs font-semibold text-slate-700">Email body</label>
+            <textarea value={body} onChange={(event) => { setBody(event.target.value); setSent(false) }} rows={14} className="w-full rounded-lg border border-[#c2ccda] px-3 py-2 text-sm leading-6 focus:outline-none focus:ring-2 focus:ring-[#d6e4f7]" />
+            <p className="mt-2 text-[11px] text-slate-500">You can change any template text. Replace or remove placeholders such as {'{{Participant Name}}'} before sending a manual email.</p>
+            <button onClick={handleSend} disabled={sending || sent || !composedRecipients.length} className={`mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed ${sent ? 'bg-emerald-600' : 'bg-[#1e5fba] hover:bg-[#0e3f87] disabled:opacity-50'}`}><Send size={15} />{sending ? 'Sending…' : sent ? 'Sent ✓' : `Send to ${composedRecipients.length || 0} recipient${composedRecipients.length === 1 ? '' : 's'}`}</button>
           </Card>
         )}
       </div>
@@ -391,59 +479,3 @@ export function NotificationTemplates() {
   )
 }
 
-function auditDetail(entry) {
-  const meta = entry.metadata && typeof entry.metadata === 'object' ? entry.metadata : {}
-  const parts = Object.entries(meta).map(([key, value]) => `${key}: ${value}`)
-  return parts.length ? parts.join(', ') : (entry.entityId ? `${entry.entity} ${entry.entityId}` : entry.entity)
-}
-
-export function AuditLog() {
-  const [query, setQuery] = useState('')
-  const [rows, setRows] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-
-  useEffect(() => {
-    api.getAuditLog()
-      .then((result) => setRows(result.data || []))
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false))
-  }, [])
-
-  const filtered = rows.filter((entry) => `${entry.actor} ${entry.action} ${auditDetail(entry)}`.toLowerCase().includes(query.toLowerCase()))
-
-  return (
-    <Page
-      eyebrow="Talent Development / Governance"
-      title="Audit Log"
-      subtitle="Every action in the tool, timestamped and attributable. Nominee edits, report releases, uploads and generated links are all recorded."
-    >
-      {error && <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
-      <Card>
-        <CardHeader
-          title="Activity"
-          subtitle="Search by actor, action or detail."
-          action={<div className="relative"><Search size={15} className="absolute left-3 top-2.5 text-slate-400" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search audit" className="w-64 rounded-lg border border-[#c2ccda] bg-white py-2 pl-9 pr-3 text-xs focus:outline-none focus:ring-2 focus:ring-[#d6e4f7]" /></div>}
-        />
-        <div className="overflow-hidden rounded-xl border border-[#d5dce5]">
-          <table className="w-full border-collapse bg-white text-left text-[13px]">
-            <thead className="bg-[#ebf2fa]"><tr>{['Timestamp', 'Actor', 'Action', 'Detail'].map((label) => <th key={label} className="border-b border-[#d5dce5] px-3 py-2.5 text-[11px] font-bold uppercase tracking-wide text-slate-600">{label}</th>)}</tr></thead>
-            <tbody>
-              {!loading && !filtered.length && (
-                <tr><td colSpan={4} className="px-3 py-6 text-center text-sm text-slate-500">No audit entries yet.</td></tr>
-              )}
-              {filtered.map((entry) => (
-                <tr key={entry.id} className="hover:bg-[#f4f7fb]">
-                  <td className="border-b border-[#d5dce5] px-3 py-3 text-xs text-slate-500">{new Date(entry.timestamp).toLocaleString('en-GB')}</td>
-                  <td className="border-b border-[#d5dce5] px-3 py-3">{entry.actor}</td>
-                  <td className="border-b border-[#d5dce5] px-3 py-3 font-semibold">{entry.action}</td>
-                  <td className="border-b border-[#d5dce5] px-3 py-3 text-slate-600">{auditDetail(entry)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-    </Page>
-  )
-}

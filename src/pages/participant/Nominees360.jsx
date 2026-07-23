@@ -3,17 +3,6 @@ import { Link } from 'react-router-dom'
 import { useUser } from '../../context/UserContext'
 import { api } from '../../lib/api'
 
-const ecDirectory = [
-  { id: 'e1', name: 'Priya Menon', email: 'priya.menon@bajaj.com', designation: 'GM - Sales Strategy' },
-  { id: 'e2', name: 'Vikram Sood', email: 'vikram.sood@bajaj.com', designation: 'VP - Operations' },
-  { id: 'e3', name: 'Anika Kapoor', email: 'anika.kapoor@bajaj.com', designation: 'Manager - Digital Marketing' },
-  { id: 'e4', name: 'Deepak Rajan', email: 'deepak.rajan@bajaj.com', designation: 'Manager - Brand Strategy' },
-  { id: 'e5', name: 'Shalini Nair', email: 'shalini.nair@bajaj.com', designation: 'Senior Manager - Fleet' },
-  { id: 'e6', name: 'Arjun Mehta', email: 'arjun.mehta@bajaj.com', designation: 'Senior Manager - EV Sales' },
-  { id: 'e7', name: 'Kavitha S', email: 'kavitha.s@bajaj.com', designation: 'DM - Sales Analytics' },
-  { id: 'e8', name: 'Ravi Kumar', email: 'ravi.kumar@bajaj.com', designation: 'DM - Sales Strategy' },
-]
-
 const REL_LABELS = {
   'reporting-manager': 'Reporting Manager',
   'skip-manager': 'Skip Manager',
@@ -28,11 +17,11 @@ const REL_REQUIREMENTS = {
   'direct-report': 'Optional, no cap',
 }
 
-const addableRelationships = ['reporting-manager', 'peer', 'direct-report']
-const externalRelationships = ['peer', 'direct-report']
+const addableRelationships = ['reporting-manager', 'skip-manager', 'peer', 'direct-report']
 
 const emptyExternalDrafts = {
   'reporting-manager': { name: '', email: '' },
+  'skip-manager': { name: '', email: '' },
   peer: { name: '', email: '' },
   'direct-report': { name: '', email: '' },
 }
@@ -40,6 +29,7 @@ const emptyExternalDrafts = {
 function validate(nominees) {
   const errors = []
   if (nominees.filter((n) => n.relationship === 'reporting-manager').length < 1) errors.push('At least 1 Reporting Manager required.')
+  if (nominees.filter((n) => n.relationship === 'skip-manager').length !== 1) errors.push('Exactly 1 Skip Manager required.')
   if (nominees.filter((n) => n.relationship === 'peer').length < 4) errors.push(`At least 4 Peers required (${nominees.filter((n) => n.relationship === 'peer').length} added).`)
   return errors
 }
@@ -55,7 +45,6 @@ export default function Nominees360() {
   const [nominees, setNominees] = useState([])
   const [inviteLinks, setInviteLinks] = useState([])
   const [selectedInvite, setSelectedInvite] = useState(null)
-  const [directorySearches, setDirectorySearches] = useState({ 'reporting-manager': '', peer: '', 'direct-report': '' })
   const [externalDrafts, setExternalDrafts] = useState(emptyExternalDrafts)
   const [mode, setMode] = useState('edit')
   const [loading, setLoading] = useState(true)
@@ -93,15 +82,6 @@ export default function Nominees360() {
     'direct-report': nominees.filter((n) => n.relationship === 'direct-report'),
   }
 
-  function getDirectoryMatches(relationship) {
-    const search = directorySearches[relationship].trim().toLowerCase()
-    return ecDirectory.filter((person) => {
-      const isAlreadyAdded = nominees.some((n) => n.email === person.email)
-      const matchesSearch = !search || person.name.toLowerCase().includes(search) || person.designation.toLowerCase().includes(search)
-      return !isAlreadyAdded && matchesSearch
-    })
-  }
-
   function updateExternalDraft(relationship, field, value) {
     setExternalDrafts((prev) => ({ ...prev, [relationship]: { ...prev[relationship], [field]: value } }))
   }
@@ -134,44 +114,14 @@ export default function Nominees360() {
   function renderAddControls(relationship) {
     if (!isEditing) return null
     if (!addableRelationships.includes(relationship)) return null
-    const matches = getDirectoryMatches(relationship)
     const draft = externalDrafts[relationship]
-    const canAddExternal = draft.name.trim() && draft.email.trim()
+    const relationshipAtLimit = relationship === 'skip-manager' && grouped[relationship].length >= 1
+    const canAdd = draft.name.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.email.trim()) && !relationshipAtLimit
 
     return (
       <div className="mt-3 rounded-lg border border-[#e2e8f0] bg-[#f8f9fc] p-3">
-        <div className="mb-3">
-          <p className="text-xs font-semibold text-[#1a1f2e] mb-2">Add from Employee Directory</p>
-          <input
-            type="text"
-            placeholder={`Search ${REL_LABELS[relationship].toLowerCase()} by name or designation...`}
-            value={directorySearches[relationship]}
-            onChange={(e) => setDirectorySearches((prev) => ({ ...prev, [relationship]: e.target.value }))}
-            className="w-full px-3 py-2 rounded-lg border border-[#e2e8f0] bg-white text-sm placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-[#1e4d8c] mb-2"
-          />
-          <div className="space-y-1.5 max-h-44 overflow-y-auto">
-            {matches.map((person) => (
-              <button
-                key={person.id}
-                onClick={() => setNominees((prev) => [...prev, { ...person, relationship, source: 'ec' }])}
-                className="w-full flex items-center gap-3 px-3 py-2 rounded-lg bg-white hover:bg-[#f1f4f9] transition-colors text-left"
-              >
-                <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 text-xs font-semibold shrink-0">{initials(person.name)}</div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium text-[#1a1f2e]">{person.name}</p>
-                  <p className="text-[10px] text-gray-400 truncate">{person.designation}</p>
-                </div>
-                <span className="text-[#1e4d8c] text-lg shrink-0">+</span>
-              </button>
-            ))}
-            {matches.length === 0 && <p className="text-xs text-gray-300 italic text-center py-3">No more employees to add</p>}
-          </div>
-        </div>
-
-        {externalRelationships.includes(relationship) && (
-          <div className="border-t border-[#e2e8f0] pt-3">
-            <p className="text-xs font-semibold text-[#1a1f2e] mb-1">Add External Respondent</p>
-            <p className="text-[10px] text-gray-400 mb-2">For stakeholders outside Bajaj Auto.</p>
+          <div>
+            <p className="text-xs font-semibold text-[#1a1f2e] mb-2">Add {REL_LABELS[relationship]}</p>
             <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2">
               <input
                 type="text"
@@ -188,15 +138,14 @@ export default function Nominees360() {
                 className="px-3 py-2 rounded-lg border border-[#e2e8f0] bg-white text-sm placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-[#1e4d8c]"
               />
               <button
-                disabled={!canAddExternal}
+                disabled={!canAdd}
                 onClick={() => addExternalNominee(relationship)}
                 className="px-4 py-2 rounded-lg border border-[#1e4d8c] text-[#1e4d8c] text-sm font-medium hover:bg-[#dbeafe] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                Add
+                {relationshipAtLimit ? 'Added' : 'Add'}
               </button>
             </div>
           </div>
-        )}
       </div>
     )
   }
@@ -204,7 +153,7 @@ export default function Nominees360() {
   function getVisibleRequirement(rel) {
     if (rel === 'reporting-manager' && grouped['reporting-manager'].length >= 1) return null
     if (rel === 'peer' && grouped.peer.length >= 4) return null
-    if (rel === 'skip-manager') return null
+    if (rel === 'skip-manager' && grouped['skip-manager'].length === 1) return null
     return REL_REQUIREMENTS[rel]
   }
 
@@ -281,7 +230,7 @@ export default function Nominees360() {
 
       <div className="mb-5">
         <h1 className="text-xl font-bold text-[#1a1f2e]">360 Nominee Submission</h1>
-        <p className="text-xs text-gray-400 mt-1">Current Reporting Manager and Skip Manager cannot be changed here. Previous Reporting Managers can be added below.</p>
+        <p className="text-xs text-gray-400 mt-1">Enter the name and email address for every nominee, including your Reporting Manager and Skip Manager.</p>
         <p className="text-sm text-gray-500 mt-0.5">
           {isEditing
             ? 'Select respondents who will provide feedback on your behaviours - Due 20 Jun 2025'
@@ -297,6 +246,12 @@ export default function Nominees360() {
         </div>
       )}
 
+      {!submitted && (
+        <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <strong>Final submission warning:</strong> Once submitted, your 360 nominations cannot be edited or changed. Please verify every name, email address and relationship before submitting.
+        </div>
+      )}
+
       {submitted ? (
         <div className="bg-white border border-[#e2e8f0] rounded-xl overflow-hidden max-w-2xl">
           <div className="bg-green-50 border-b border-green-200 px-5 py-5">
@@ -307,16 +262,23 @@ export default function Nominees360() {
                 </svg>
               </div>
               <div>
-                <h3 className="text-sm font-semibold text-green-800">Nominees submitted ({nominees.length} respondents)</h3>
+                <h3 className="text-sm font-semibold text-green-800">Nominees submitted ({nominees.length + 1} respondents including you)</h3>
                 <p className="text-xs text-green-600 mt-0.5">Emails have been sent. Your BUHR can view this list.</p>
               </div>
             </div>
           </div>
           <div className="px-5 py-4 border-b border-[#f1f4f9] flex items-center justify-between">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Submitted Nominees</p>
-            <p className="text-xs text-gray-400">{nominees.length} total</p>
+            <p className="text-xs text-gray-400">{nominees.length + 1} total</p>
           </div>
           <div className="divide-y divide-[#f1f4f9]">
+            <div className="bg-amber-50 px-5 py-3.5">
+              <div className="flex items-center gap-4">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100 text-xs font-semibold text-amber-700">ME</div>
+                <div className="min-w-0 flex-1"><p className="text-sm font-medium text-[#1a1f2e]">You (Self)</p><p className="text-xs text-gray-400">Automatically included for your self 360 survey</p></div>
+                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700">Self</span>
+              </div>
+            </div>
             {nominees.map((n) => {
               const invite = inviteLinks.find(l => l.nomineeId === n.id)
               const isSelected = selectedInvite?.nomineeId === n.id
@@ -456,7 +418,7 @@ export default function Nominees360() {
               <div className="space-y-2.5">
                 {[
                   { label: 'Reporting Manager', detail: '1 or more', ok: grouped['reporting-manager'].length >= 1 },
-                  { label: 'Skip Manager', detail: 'Required (pre-filled)', ok: grouped['skip-manager'].length === 1 },
+                  { label: 'Skip Manager', detail: 'Exactly 1', ok: grouped['skip-manager'].length === 1 },
                   { label: 'Peers / Int. Customers', detail: 'Minimum 4', ok: grouped.peer.length >= 4 },
                   { label: 'Direct Reportees', detail: 'Optional', ok: true },
                 ].map((r) => (

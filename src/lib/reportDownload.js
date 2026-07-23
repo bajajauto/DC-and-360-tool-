@@ -127,3 +127,23 @@ export async function downloadBuhr360Pptx(userId, participantId, participantName
   link.remove()
   window.URL.revokeObjectURL(url)
 }
+
+export async function downloadBuhrReport(userId, participantId, reportType, participantName = 'participant') {
+  const token = getToken()
+  const response = await fetch(`${API_BASE}/api/buhr/${userId}/reports/${participantId}/${reportType}/download`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  })
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}))
+    throw new Error(body?.error?.message || 'Unable to download the published report.')
+  }
+  const blob = await response.blob()
+  const url = window.URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = getFileName(response, `${participantName.replace(/\s+/g, '-')}-${reportType}-report`)
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  window.URL.revokeObjectURL(url)
+}

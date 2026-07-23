@@ -6,19 +6,23 @@ import { httpError } from '../utils/httpError.js'
 import { toParticipantSummary } from '../utils/mappers.js'
 import { hashPassword } from '../utils/passwords.js'
 import { queueEmail } from '../notifications/service.js'
-import { logAudit } from '../utils/audit.js'
 
 export const cohortsRouter = Router()
 
 const dateField = z.coerce.date().optional().nullable()
 
 const emailField = z.string().trim().email()
+const optionalMasterPersonSchema = z.object({
+  name: z.string().trim().optional(),
+  employeeId: z.string().trim().optional(),
+  email: z.union([emailField, z.literal('')]).optional(),
+})
 const participantImportSchema = z.object({
   name: z.string().trim().min(1), employeeId: z.string().trim().min(1), email: emailField,
   designation: z.string().trim().min(1), businessUnit: z.string().trim().min(1),
-  reportingManager: z.object({ name: z.string().trim().min(1), employeeId: z.string().trim().min(1), email: emailField }),
-  skipManager: z.object({ name: z.string().trim().min(1), employeeId: z.string().trim().min(1), email: emailField }),
-  buHead: z.object({ name: z.string().trim().min(1), employeeId: z.string().trim().min(1), email: emailField }),
+  reportingManager: optionalMasterPersonSchema.optional(),
+  skipManager: optionalMasterPersonSchema.optional(),
+  buHead: optionalMasterPersonSchema.optional(),
   buhr: z.object({ name: z.string().trim().min(1), employeeId: z.string().trim().min(1), email: emailField }),
   masterData: z.record(z.string(), z.union([z.string(), z.number(), z.null()])),
 })
@@ -37,6 +41,14 @@ const createCohortSchema = z.object({
 })
 
 const updateCohortSchema = createCohortSchema.omit({ participants: true }).partial()
+
+const addParticipantSchema = z.object({
+  name: z.string().trim().min(1),
+  employeeId: z.string().trim().min(1),
+  email: emailField,
+  designation: z.string().trim().min(1),
+  businessUnit: z.string().trim().min(1),
+})
 
 function slugify(name) {
   return name
@@ -112,20 +124,6 @@ cohortsRouter.post('/', asyncHandler(async (req, res) => {
         update: { cohortId: created.id, masterData: row.masterData, stage: 'APPLICATION_PROFILE', progress: 10, reportStatus: 'WAITING', lastActivityAt: new Date() },
         create: { userId: user.id, cohortId: created.id, masterData: row.masterData, stage: 'APPLICATION_PROFILE', progress: 10, lastActivityAt: new Date() },
       })
-      const skipIsBuHead = row.skipManager.email.toLowerCase() === row.buHead.email.toLowerCase()
-      const nomineesToCreate = [
-        { ...row.reportingManager, relationship: 'REPORTING_MANAGER', designation: 'Reporting Manager' },
-      ]
-      if (!skipIsBuHead) {
-        nomineesToCreate.push({ ...row.skipManager, relationship: 'SKIP_MANAGER', designation: 'Skip Manager' })
-      }
-      for (const nominee of nomineesToCreate) {
-        await tx.nominee.upsert({
-          where: { participantId_email_relationship: { participantId: participant.id, email: nominee.email.toLowerCase(), relationship: nominee.relationship } },
-          update: { name: nominee.name, designation: nominee.designation, locked: true, source: 'employee-master' },
-          create: { participantId: participant.id, name: nominee.name, email: nominee.email.toLowerCase(), designation: nominee.designation, relationship: nominee.relationship, locked: true, source: 'employee-master' },
-        })
-      }
       await tx.user.upsert({
         where: { email: row.buhr.email.toLowerCase() },
         update: { name: row.buhr.name, employeeId: row.buhr.employeeId, businessUnit: row.businessUnit, roles: ['BUHR'] },
@@ -133,14 +131,6 @@ cohortsRouter.post('/', asyncHandler(async (req, res) => {
       })
       await queueEmail({ templateId: 'welcome', toEmail: user.email, toName: user.name, context: { 'Participant Name': user.name, Cohort: created.name, 'Password Link': process.env.APP_URL || '', 'Nomination Deadline': created.nominationDeadline?.toISOString() || 'TBD' }, entity: 'Participant', entityId: participant.id }, tx)
     }
-    await logAudit(tx, {
-      actorId: req.auth.userId,
-      action: 'Cohort created',
-      entity: 'Cohort',
-      entityId: created.id,
-      metadata: { name: created.name, participantCount: participants.length },
-    })
-
     return tx.cohort.findUnique({ where: { id: created.id }, include: { _count: { select: { participants: true } } } })
   })
 
@@ -156,14 +146,6 @@ cohortsRouter.patch('/:cohortId', asyncHandler(async (req, res) => {
     where: { id: req.params.cohortId },
     data: payload,
     include: { _count: { select: { participants: true } } },
-  })
-
-  await logAudit(prisma, {
-    actorId: req.auth.userId,
-    action: 'Cohort updated',
-    entity: 'Cohort',
-    entityId: cohort.id,
-    metadata: { name: cohort.name, fields: Object.keys(payload) },
   })
 
   res.json({ data: toCohortDto(cohort) })
@@ -189,4 +171,52 @@ cohortsRouter.get('/:cohortId/participants', asyncHandler(async (req, res) => {
   res.json({
     data: participants.map(toParticipantSummary),
   })
+}))
+
+cohortsRouter.post('/:cohortId/participants', asyncHandler(async (req, res) => {
+  const payload = addParticipantSchema.parse(req.body)
+  const cohort = await prisma.cohort.findUnique({ where: { id: req.params.cohortId } })
+  if (!cohort) throw httpError(404, 'Cohort not found')
+
+  const email = payload.email.toLowerCase()
+  const existingByEmail = await prisma.user.findUnique({ where: { email }, include: { participant: true } })
+  const existingByEmployeeId = await prisma.user.findUnique({ where: { employeeId: payload.employeeId }, include: { participant: true } })
+  const existing = existingByEmail || existingByEmployeeId
+  if (existingByEmail && existingByEmployeeId && existingByEmail.id !== existingByEmployeeId.id) throw httpError(409, 'Email and Ticket ID belong to different existing accounts')
+  if (existing?.participant) throw httpError(409, 'This employee already belongs to a cohort')
+
+  const passwordHash = await hashPassword(process.env.MOCK_USER_PASSWORD || 'Welcome@123')
+  const participant = await prisma.$transaction(async (tx) => {
+    const user = existing
+      ? await tx.user.update({
+          where: { id: existing.id },
+          data: { ...payload, email, roles: existing.roles.includes('PARTICIPANT') ? existing.roles : [...existing.roles, 'PARTICIPANT'] },
+        })
+      : await tx.user.create({ data: { ...payload, email, passwordHash, roles: ['PARTICIPANT'] } })
+    const created = await tx.participant.create({
+      data: { userId: user.id, cohortId: cohort.id, masterData: {}, stage: 'APPLICATION_PROFILE', progress: 0, reportStatus: 'WAITING', lastActivityAt: new Date() },
+      include: { user: true, nominees: true, feedbackTasks: true },
+    })
+    await queueEmail({ templateId: 'welcome', toEmail: user.email, toName: user.name, context: { 'Participant Name': user.name, Cohort: cohort.name, 'Password Link': process.env.APP_URL || '', 'Nomination Deadline': cohort.nominationDeadline?.toISOString() || 'TBD' }, entity: 'Participant', entityId: created.id }, tx)
+    return created
+  })
+
+  res.status(201).json({ data: toParticipantSummary(participant) })
+}))
+
+cohortsRouter.delete('/:cohortId/participants/:participantId', asyncHandler(async (req, res) => {
+  const participant = await prisma.participant.findFirst({
+    where: { id: req.params.participantId, cohortId: req.params.cohortId },
+    include: { user: true },
+  })
+  if (!participant) throw httpError(404, 'Participant not found in this cohort')
+
+  await prisma.$transaction(async (tx) => {
+    await tx.participant.delete({ where: { id: participant.id } })
+    const remainingRoles = participant.user.roles.filter((role) => role !== 'PARTICIPANT')
+    if (remainingRoles.length) await tx.user.update({ where: { id: participant.userId }, data: { roles: remainingRoles } })
+    else await tx.user.delete({ where: { id: participant.userId } })
+  })
+
+  res.json({ data: { id: participant.id, deleted: true } })
 }))

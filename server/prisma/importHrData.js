@@ -8,7 +8,7 @@ import { queueEmail } from '../src/notifications/service.js'
 
 const prisma = new PrismaClient()
 
-const DEFAULT_FILE = String.raw`C:\Users\achaturvedi2\Documents\Docs for DC Tool\Docs for DC Tool\Copy of HR Data for DC 360 Tool.xlsx`
+const DEFAULT_FILE = String.raw`C:\Users\achaturvedi2\Documents\Docs for DC Tool\Docs for DC Tool\master data template.xlsx`
 const DEFAULT_PASSWORD = process.env.MOCK_USER_PASSWORD || 'Welcome@123'
 
 function text(value) {
@@ -23,16 +23,16 @@ function parseRows(filePath) {
   const workbook = XLSX.readFile(filePath)
   const sheetName = workbook.SheetNames[0]
   const sheet = workbook.Sheets[sheetName]
-  return XLSX.utils.sheet_to_json(sheet, { defval: '' })
+  return XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: false }).slice(1)
 }
 
 function toUser(row, passwordHash) {
-  const employeeId = text(row['Users Sys Id'])
-  const name = text(row['Full Name as per Aadhar Card'])
-  const email = normalizeEmail(row['Email Address'])
-  const designation = text(row['Local Designation'])
-  const businessUnit = text(row['BU Head']) || 'Human Resources'
-  const level = text(row['Job Level (Label)'])
+  const employeeId = text(row[2])
+  const name = text(row[1])
+  const email = normalizeEmail(row[15])
+  const designation = text(row[4])
+  const businessUnit = text(row[13])
+  const level = text(row[5])
 
   return {
     employeeId,

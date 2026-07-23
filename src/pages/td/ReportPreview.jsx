@@ -46,16 +46,13 @@ export default function ReportPreview() {
     return <div className="p-8 text-sm text-gray-500">Loading report preview...</div>
   }
 
-  if (!participant) return <Navigate to="/td/cohorts" replace />
-  if (participant.reportReady !== true) {
-    return <Navigate to={`/td/participants/${participant.id}`} replace />
-  }
+  if (!participant) return <Navigate to="/td/reports" replace />
 
   return (
     <div className="min-h-screen">
       <header className="h-20 bg-white border-b border-[#e4e9f1] px-8 flex items-center justify-between print:hidden">
         <div className="flex items-center gap-4">
-          <Link to={`/td/participants/${participant.id}`} className="w-9 h-9 rounded-lg border border-[#e2e8f0] flex items-center justify-center text-gray-500">
+          <Link to={`/td/reports/participant/${participant.id}`} className="w-9 h-9 rounded-lg border border-[#e2e8f0] flex items-center justify-center text-gray-500">
             <ArrowLeft size={17} />
           </Link>
           <div>

@@ -1,15 +1,8 @@
-import { Download, FileText, Search, TrendingUp, Users } from 'lucide-react'
+import { ArrowUpRight, Download, FileText, Search, TrendingUp, Users } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { api } from '../../lib/api'
-import { downloadBuhr360Pptx } from '../../lib/reportDownload'
 import { useUser } from '../../context/UserContext'
-
-const statusTone = {
-  waiting: 'border-slate-200 bg-slate-50 text-slate-600',
-  ready: 'border-amber-200 bg-amber-50 text-amber-700',
-  generated: 'border-blue-200 bg-blue-50 text-blue-700',
-  released: 'border-emerald-200 bg-emerald-50 text-emerald-700',
-}
 
 function Metric({ label, value, icon: Icon, sub }) {
   return (
@@ -41,7 +34,6 @@ export default function BUHRDashboard({ view = 'dashboard' }) {
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [downloadError, setDownloadError] = useState('')
 
   useEffect(() => {
     if (!user?.id) return
@@ -75,15 +67,6 @@ export default function BUHRDashboard({ view = 'dashboard' }) {
     )
   }, [participants, query, view])
 
-  async function handleDownload(participant) {
-    setDownloadError('')
-    try {
-      await downloadBuhr360Pptx(user.id, participant.id, participant.name)
-    } catch (err) {
-      setDownloadError(err.message || 'Unable to download the published report.')
-    }
-  }
-
   const summary = payload?.summary || { total: 0, inProgress: 0, completed: 0, releasedReports: 0 }
   const copy = viewCopy[view] || viewCopy.dashboard
 
@@ -99,7 +82,6 @@ export default function BUHRDashboard({ view = 'dashboard' }) {
 
       <div className="p-8 max-w-[1360px] mx-auto">
         {error && <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
-        {downloadError && <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{downloadError}</div>}
 
         {view === 'dashboard' && <section className="grid gap-4 md:grid-cols-4">
           <Metric label="People Mapped" value={summary.total} icon={Users} sub="participants in your business unit" />
@@ -135,8 +117,8 @@ export default function BUHRDashboard({ view = 'dashboard' }) {
             <table className="w-full border-collapse bg-white text-left text-[13px]">
               <thead className="bg-[#ebf2fa]">
                 <tr>
-                  {['Employee', 'Cohort', 'Current State', '360 Progress', 'Report', 'Actions'].map((label) => (
-                    <th key={label} className="border-b border-[#d5dce5] px-5 py-3 text-[11px] font-bold uppercase tracking-wide text-slate-600">{label}</th>
+                  {['Employee', 'Cohort', '360 Progress', '360 Report', 'DC Report', 'Actions'].map((label) => (
+                    <th key={label} className={`border-b border-[#d5dce5] px-5 py-3 text-[11px] font-bold uppercase tracking-wide text-slate-600 ${['360 Report', 'DC Report', 'Actions'].includes(label) ? 'w-40 text-center' : ''}`}>{label}</th>
                   ))}
                 </tr>
               </thead>
@@ -157,31 +139,22 @@ export default function BUHRDashboard({ view = 'dashboard' }) {
                       <p className="mt-0.5 text-[11px] text-slate-500">{participant.cohort?.programme || 'Development Centre'}</p>
                     </td>
                     <td className="border-b border-[#e8edf4] px-5 py-4">
-                      <p className="font-semibold text-slate-800">{participant.stage}</p>
-                      <div className="mt-2 h-1.5 w-28 rounded-full bg-slate-100">
-                        <div className="h-1.5 rounded-full bg-[#1e5fba]" style={{ width: `${participant.progress}%` }} />
-                      </div>
-                    </td>
-                    <td className="border-b border-[#e8edf4] px-5 py-4">
                       <p className="font-semibold text-slate-800">{participant.responses}/{participant.totalResponses}</p>
                       <p className="mt-0.5 text-[11px] text-slate-500">{percent(participant)}% respondent completion</p>
                     </td>
-                    <td className="border-b border-[#e8edf4] px-5 py-4">
-                      <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${statusTone[participant.reportStatus] || statusTone.waiting}`}>
-                        {participant.reportStatus}
-                      </span>
-                      {participant.report?.releasedAt && <p className="mt-1 text-[11px] text-slate-500">Published {new Date(participant.report.releasedAt).toLocaleDateString('en-GB')}</p>}
-                    </td>
-                    <td className="border-b border-[#e8edf4] px-5 py-4">
-                      <button
-                        type="button"
-                        onClick={() => handleDownload(participant)}
-                        disabled={participant.reportStatus !== 'released'}
-                        className="inline-flex items-center gap-2 rounded-lg bg-[#1e5fba] px-3 py-2 text-xs font-semibold text-white hover:bg-[#0e3f87] disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
-                      >
-                        <Download size={14} />
-                        Download report
-                      </button>
+                    {['360', 'dc'].map((type) => {
+                      const report = participant.reports?.find((item) => item.type === type)
+                      return <td key={type} className="w-40 border-b border-[#e8edf4] px-5 py-4 text-center">
+                        <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${report ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-700'}`}>
+                          {report ? 'Available' : 'Not available'}
+                        </span>
+                        {report?.releasedAt && <p className="mt-1 text-[11px] text-slate-500">Published {new Date(report.releasedAt).toLocaleDateString('en-GB')}</p>}
+                      </td>
+                    })}
+                    <td className="w-40 border-b border-[#e8edf4] px-5 py-4 text-center">
+                      <Link to={`/buhr/reports/participant/${participant.id}`} className="inline-flex items-center gap-2 rounded-lg bg-[#1e5fba] px-3 py-2 text-xs font-semibold text-white hover:bg-[#0e3f87]">
+                        View Reports <ArrowUpRight size={14} />
+                      </Link>
                     </td>
                   </tr>
                 ))}

@@ -8,7 +8,6 @@ const profile = {
   'Business Unit': 'Two-Wheeler',
   Level: 'EX',
   'Date of Joining': '12 Mar 2018',
-  Qualification: 'MBA – IIM Ahmedabad',
   Contact: 'rahul.kumar@bajaj.com | +91 98765 43210',
 }
 

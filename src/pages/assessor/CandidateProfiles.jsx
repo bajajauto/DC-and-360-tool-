@@ -1,7 +1,7 @@
-import { ArrowRight, BriefcaseBusiness, Camera, CheckCircle2, FileSpreadsheet, FileText, MessageSquareText, Search, Upload, User } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { ArrowRight, BriefcaseBusiness, Camera, FileText, MessageSquareText, Search, User } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { assessorProfiles } from '../../data/adminData'
+import { api } from '../../lib/api'
 
 function StatusPill({ children, tone = 'gray' }) {
   const tones = {
@@ -46,20 +46,30 @@ function PersonPlaceholder({ size = 'sm' }) {
 }
 
 export default function CandidateProfiles() {
-  const [selectedId, setSelectedId] = useState(assessorProfiles[0]?.id)
+  const [profiles, setProfiles] = useState([])
+  const [selectedId, setSelectedId] = useState(null)
   const [query, setQuery] = useState('')
-  const [analysisUploads, setAnalysisUploads] = useState({})
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    api.getAssessorCandidates()
+      .then((candidateResult) => {
+        const data = candidateResult.data || []
+        setProfiles(data)
+        setSelectedId((current) => current || data[0]?.id || null)
+      })
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false))
+  }, [])
 
   const filteredProfiles = useMemo(() => {
     const needle = query.trim().toLowerCase()
-    if (!needle) return assessorProfiles
-    return assessorProfiles.filter((profile) => `${profile.name} ${profile.employeeId} ${profile.designation} ${profile.bu}`.toLowerCase().includes(needle))
-  }, [query])
+    if (!needle) return profiles
+    return profiles.filter((profile) => `${profile.name} ${profile.employeeId} ${profile.designation} ${profile.bu}`.toLowerCase().includes(needle))
+  }, [profiles, query])
 
-  const selected = assessorProfiles.find((profile) => profile.id === selectedId) ?? filteredProfiles[0] ?? assessorProfiles[0]
-  const uploadedAnalysis = selected ? analysisUploads[selected.id] : null
-  const analysisConfirmed = uploadedAnalysis?.status === 'uploaded'
-  const analysisLocked = false
+  const selected = profiles.find((profile) => profile.id === selectedId) ?? filteredProfiles[0] ?? profiles[0]
 
   return (
     <div>
@@ -68,10 +78,11 @@ export default function CandidateProfiles() {
           <p className="text-xs text-gray-400 mb-1">Assessor / Candidate Profiles</p>
           <h1 className="text-xl font-bold text-[#172033]">Candidate evidence review</h1>
         </div>
-        <StatusPill tone="red">Assessor review blocked</StatusPill>
+        <StatusPill tone="blue">Evidence available</StatusPill>
       </header>
 
       <div className="p-8 max-w-[1500px] mx-auto grid xl:grid-cols-[340px_1fr] gap-6">
+        {error && <div className="xl:col-span-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
         <aside className="bg-white border border-[#e2e8f0] rounded-2xl overflow-hidden self-start">
           <div className="p-5 border-b border-[#e8edf4]">
             <h2 className="font-semibold text-[#172033]">Participants</h2>
@@ -87,6 +98,8 @@ export default function CandidateProfiles() {
             </div>
           </div>
           <div className="max-h-[calc(100vh-250px)] overflow-y-auto">
+            {loading && <p className="p-5 text-sm text-gray-500">Loading participants…</p>}
+            {!loading && !filteredProfiles.length && <p className="p-5 text-sm text-gray-500">No participants available.</p>}
             {filteredProfiles.map((profile) => {
               const active = profile.id === selected.id
               return (
@@ -105,7 +118,7 @@ export default function CandidateProfiles() {
                   </div>
                   <div className="mt-3 flex items-center justify-between">
                     <span className="text-[10px] text-gray-500 truncate">{profile.bu}</span>
-                    <StatusPill tone={profile.preWork.status === 'Submitted' ? 'green' : 'amber'}>{profile.preWork.status}</StatusPill>
+                    <StatusPill tone={profile.preWork.status === 'submitted' ? 'green' : 'amber'}>{profile.preWork.status}</StatusPill>
                   </div>
                 </button>
               )
@@ -130,21 +143,7 @@ export default function CandidateProfiles() {
                         <span className="font-medium text-cyan-700">{selected.bu}</span>
                       </p>
                     </div>
-                    <StatusPill tone="red">Review under development</StatusPill>
-                  </div>
-                  <div className="mt-5 grid sm:grid-cols-3 gap-3">
-                    <div className="rounded-xl bg-[#f8fafc] border border-[#edf1f5] p-4">
-                      <p className="text-[11px] text-gray-500">Current stage</p>
-                      <p className="text-sm font-semibold text-[#172033] mt-1">{selected.stage}</p>
-                    </div>
-                    <div className="rounded-xl bg-[#f8fafc] border border-[#edf1f5] p-4">
-                      <p className="text-[11px] text-gray-500">360 responses</p>
-                      <p className="text-sm font-semibold text-[#172033] mt-1">{selected.report360.completion}</p>
-                    </div>
-                    <div className="rounded-xl bg-[#f8fafc] border border-[#edf1f5] p-4">
-                      <p className="text-[11px] text-gray-500">Overall completion</p>
-                      <p className="text-sm font-semibold text-[#172033] mt-1">{selected.progress}%</p>
-                    </div>
+                    <StatusPill tone="blue">Ready for review</StatusPill>
                   </div>
                 </div>
               </div>
@@ -152,96 +151,11 @@ export default function CandidateProfiles() {
 
             <div className="grid lg:grid-cols-2 gap-5">
               <EvidenceCard icon={Camera} title="Participant Photograph" meta="Identity evidence" to={`/assessor/candidates/${selected.id}/photograph`} />
-              <EvidenceCard icon={MessageSquareText} title="Role Interview" meta="Interview submission" to={`/assessor/candidates/${selected.id}/role-interview`} />
+              <EvidenceCard icon={MessageSquareText} title="Role Interview" meta={selected.roleInterview.status} to={`/assessor/candidates/${selected.id}/role-interview`} />
               <EvidenceCard icon={FileText} title="360 Report" meta={selected.report360.status} to={`/assessor/candidates/${selected.id}/360-report`} />
               <EvidenceCard icon={BriefcaseBusiness} title="Pre-work" meta={selected.preWork.status} to={`/assessor/candidates/${selected.id}/pre-work`} />
             </div>
 
-            <section className="bg-white border border-[#e2e8f0] rounded-2xl overflow-hidden">
-              <div className="px-6 py-5 border-b border-[#e8edf4] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div>
-                  <h3 className="font-semibold text-[#172033]">Assessor analysis</h3>
-                  <p className="text-xs text-gray-400 mt-1">Upload the offline assessor analysis workbook maintained for this candidate.</p>
-                </div>
-                <StatusPill tone={analysisConfirmed ? 'green' : 'amber'}>{analysisConfirmed ? 'Uploaded' : uploadedAnalysis ? 'Pending confirmation' : 'Awaiting upload'}</StatusPill>
-              </div>
-              <div className="p-5">
-                {!uploadedAnalysis && (
-                  <label className="flex min-h-36 cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-[#bfd3ea] bg-[#f8fbff] px-5 py-8 text-center hover:border-[#1e4d8c] hover:bg-blue-50/60 transition-colors">
-                    <input
-                      type="file"
-                      accept=".xls,.xlsx,.csv"
-                      className="sr-only"
-                      onChange={(event) => {
-                        const file = event.target.files?.[0]
-                        if (!file || !selected) return
-                        setAnalysisUploads((current) => ({
-                          ...current,
-                          [selected.id]: {
-                            name: file.name,
-                            size: file.size,
-                            status: 'selected',
-                          },
-                        }))
-                        event.target.value = ''
-                      }}
-                    />
-                    <span className="w-12 h-12 rounded-xl bg-white text-[#1e4d8c] border border-blue-100 flex items-center justify-center">
-                      <Upload size={20} />
-                    </span>
-                    <span className="mt-4 text-sm font-semibold text-[#172033]">Upload assessor analysis Excel</span>
-                    <span className="mt-1 text-xs text-gray-500">Supports .xls, .xlsx, or .csv files</span>
-                  </label>
-                )}
-                {uploadedAnalysis && (
-                  <div className={`rounded-xl border px-4 py-3 flex flex-col gap-3 sm:flex-row sm:items-center ${analysisConfirmed ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}>
-                    <span className={`w-9 h-9 rounded-lg bg-white flex items-center justify-center shrink-0 ${analysisConfirmed ? 'text-emerald-700' : 'text-amber-700'}`}>
-                      <FileSpreadsheet size={17} />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-[#172033] truncate">{uploadedAnalysis.name}</p>
-                      <p className={`text-[11px] mt-0.5 ${analysisConfirmed ? 'text-emerald-700/70' : 'text-amber-700/70'}`}>
-                        {analysisConfirmed ? `Uploaded ${uploadedAnalysis.uploadedAt}` : 'Confirm to upload.'}
-                      </p>
-                    </div>
-                    <div className="flex shrink-0 flex-wrap gap-2">
-                      {!analysisConfirmed && (
-                        <button
-                          type="button"
-                          onClick={() => setAnalysisUploads((current) => ({
-                            ...current,
-                            [selected.id]: {
-                              ...current[selected.id],
-                              status: 'uploaded',
-                              uploadedAt: new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
-                            },
-                          }))}
-                          className="rounded-lg bg-[#1e4d8c] px-3 py-2 text-xs font-semibold text-white hover:bg-[#173f72]"
-                        >
-                          Confirm upload
-                        </button>
-                      )}
-                      {!analysisLocked && (
-                        <button
-                          type="button"
-                          onClick={() => setAnalysisUploads((current) => ({ ...current, [selected.id]: null }))}
-                          className={`rounded-lg border bg-white px-3 py-2 text-xs font-semibold ${analysisConfirmed ? 'border-emerald-200 text-emerald-700 hover:bg-emerald-50' : 'border-amber-200 text-amber-700 hover:bg-amber-50'}`}
-                        >
-                          Edit input
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </section>
-
-            <section className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex gap-3">
-              <CheckCircle2 size={17} className="text-[#1e4d8c] shrink-0 mt-0.5" />
-              <p className="text-xs text-blue-800 leading-5">
-                This page now keeps the submitted evidence visible while assessor scoring and analysis remain captured through the uploaded offline workbook.
-              </p>
-            </section>
           </main>
         )}
       </div>

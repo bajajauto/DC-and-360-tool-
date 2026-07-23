@@ -1,4 +1,4 @@
-import { ClipboardCheck, LayoutDashboard, LogOut, UsersRound } from 'lucide-react'
+import { LayoutDashboard, LogOut, UsersRound } from 'lucide-react'
 import { Link, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useUser } from '../context/UserContext'
 
@@ -62,12 +62,6 @@ export default function AssessorLayout() {
         </div>
       </aside>
       <main className="min-w-0 flex-1">
-        <div className="bg-amber-50 border-b border-amber-200 px-8 py-3 flex items-center gap-3">
-          <ClipboardCheck size={17} className="text-amber-600 shrink-0" />
-          <p className="text-xs text-amber-800">
-            Assessor review is under development. Candidate evidence is visible now; scoring and submission are blocked.
-          </p>
-        </div>
         <Outlet />
       </main>
     </div>

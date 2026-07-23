@@ -12,7 +12,6 @@ import {
 } from '../utils/magicLinks.js'
 import { toNomineeDto, toParticipantSummary } from '../utils/mappers.js'
 import { queueEmail } from '../notifications/service.js'
-import { logAudit } from '../utils/audit.js'
 import { getBehaviourIds, getSurveySections } from '../../../src/data/surveyConfig.js'
 
 export const participantsRouter = Router()
@@ -42,10 +41,21 @@ const participantWorkSchema = z.object({
   submit: z.boolean().optional().default(false),
 })
 
+const photoSchema = z.object({
+  dataUrl: z.string().max(7_500_000).refine((value) => /^data:image\/(jpeg|png);base64,/.test(value), 'Only JPG and PNG photographs are accepted'),
+})
+
 function formatCutoff(date) {
   return date
     ? date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
     : 'the cutoff date set for your cohort'
+}
+
+function hasCutoffPassed(cutoff, now = new Date()) {
+  if (!cutoff) return false
+  const endOfCutoffDay = new Date(cutoff)
+  endOfCutoffDay.setUTCHours(23, 59, 59, 999)
+  return now > endOfCutoffDay
 }
 
 function assertParticipantAccess(req, participant) {
@@ -74,22 +84,28 @@ participantsRouter.get('/:participantId', asyncHandler(async (req, res) => {
   const participant = await findParticipant(req.params.participantId)
   assertParticipantAccess(req, participant)
 
+  const allResponsesComplete = participant.feedbackTasks.length > 0 && participant.feedbackTasks.every((task) => {
+    if (task.status !== 'SUBMITTED') return false
+    const ratings = task.responses?.[0]?.ratings
+    if (!ratings || typeof ratings !== 'object' || Array.isArray(ratings)) return false
+    return getBehaviourIds(getSurveySections(task.relationship)).every((id) => Number.isFinite(ratings[id]) && ratings[id] >= 1 && ratings[id] <= 4)
+  })
+  const cutoffPassed = hasCutoffPassed(participant.cohort.threeSixtyCutoff)
+
   res.json({
     data: {
       ...toParticipantSummary(participant),
       masterData: participant.masterData || {},
-      reportReady: participant.feedbackTasks.length > 0 && participant.feedbackTasks.every((task) => {
-        if (task.status !== 'SUBMITTED') return false
-        const ratings = task.responses?.[0]?.ratings
-        if (!ratings || typeof ratings !== 'object' || Array.isArray(ratings)) return false
-        return getBehaviourIds(getSurveySections(task.relationship)).every((id) => Number.isFinite(ratings[id]) && ratings[id] >= 1 && ratings[id] <= 4)
-      }),
+      reportReady: participant.feedbackTasks.length > 0 && (allResponsesComplete || cutoffPassed),
+      allResponsesComplete,
+      threeSixtyCutoffPassed: cutoffPassed,
       cohort: {
         id: participant.cohort.id,
         name: participant.cohort.name,
         programme: participant.cohort.programme,
         eventStart: participant.cohort.eventStart?.toISOString() || null,
         eventEnd: participant.cohort.eventEnd?.toISOString() || null,
+        threeSixtyCutoff: participant.cohort.threeSixtyCutoff?.toISOString() || null,
         eventDate: participant.cohort.eventStart && participant.cohort.eventEnd
           ? `${participant.cohort.eventStart.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })} - ${participant.cohort.eventEnd.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}`
           : 'TBD',
@@ -104,7 +120,8 @@ participantsRouter.get('/:participantId/work/:type', asyncHandler(async (req, re
   const participant = await findParticipant(req.params.participantId)
   assertParticipantAccess(req, participant)
   const value = req.params.type === 'role-interview' ? participant.roleInterview : participant.preWork
-  res.json({ data: value || { answers: {}, status: 'draft', submittedAt: null } })
+  const cutoff = req.params.type === 'role-interview' ? participant.cohort.roleInterviewDeadline : participant.cohort.preWorkDeadline
+  res.json({ data: { ...(value || { answers: {}, status: 'draft', submittedAt: null }), cutoff: cutoff?.toISOString() || null, canEdit: !hasCutoffPassed(cutoff) } })
 }))
 
 participantsRouter.put('/:participantId/work/:type', asyncHandler(async (req, res) => {
@@ -114,16 +131,31 @@ participantsRouter.put('/:participantId/work/:type', asyncHandler(async (req, re
   assertParticipantAccess(req, participant)
   const field = req.params.type === 'role-interview' ? 'roleInterview' : 'preWork'
   const current = participant[field]
-  if (current?.status === 'submitted') throw httpError(409, 'This form has already been submitted and is locked')
-  const value = { answers: payload.answers, status: payload.submit ? 'submitted' : 'draft', submittedAt: payload.submit ? new Date().toISOString() : null, updatedAt: new Date().toISOString() }
+  const cutoff = req.params.type === 'role-interview' ? participant.cohort.roleInterviewDeadline : participant.cohort.preWorkDeadline
+  if (hasCutoffPassed(cutoff)) throw httpError(409, `The ${req.params.type === 'role-interview' ? 'Role Interview' : 'Pre-Work'} cutoff has passed. This submission can no longer be edited.`)
+  if (req.params.type === 'pre-work' && payload.submit) {
+    const missing = Array.from({ length: 10 }, (_, index) => `q${index + 1}`).filter((key) => !String(payload.answers[key] || '').trim())
+    if (missing.length) throw httpError(400, 'All Pre-Work questions are mandatory')
+  }
+  const submittedAt = payload.submit ? current?.submittedAt || new Date().toISOString() : null
+  const value = { answers: payload.answers, status: payload.submit ? 'submitted' : 'draft', submittedAt, updatedAt: new Date().toISOString() }
   await prisma.participant.update({ where: { id: participant.id }, data: { [field]: value, lastActivityAt: new Date() } })
   res.json({ data: value })
+}))
+
+participantsRouter.put('/:participantId/photo', asyncHandler(async (req, res) => {
+  const payload = photoSchema.parse(req.body)
+  const participant = await findParticipant(req.params.participantId)
+  assertParticipantAccess(req, participant)
+  await prisma.participant.update({ where: { id: participant.id }, data: { photoUrl: payload.dataUrl, lastActivityAt: new Date() } })
+  res.json({ data: { url: payload.dataUrl, status: 'submitted' } })
 }))
 
 participantsRouter.put('/:participantId/nominees', asyncHandler(async (req, res) => {
   const payload = nomineesPayloadSchema.parse(req.body)
   const participant = await findParticipant(req.params.participantId)
   assertParticipantAccess(req, participant)
+  if (participant.nominees.some((nominee) => nominee.status === 'SUBMITTED')) throw httpError(409, 'Submitted nominations are final and cannot be edited')
 
   const nominees = await prisma.$transaction(async (tx) => {
     await tx.nominee.deleteMany({
@@ -167,14 +199,38 @@ participantsRouter.put('/:participantId/nominees', asyncHandler(async (req, res)
   })
 }))
 
+participantsRouter.post('/:participantId/self-feedback-task', asyncHandler(async (req, res) => {
+  const participant = await findParticipant(req.params.participantId)
+  assertParticipantAccess(req, participant)
+  if (!participant.nominees.some((nominee) => nominee.status === 'SUBMITTED')) throw httpError(409, 'Submit your 360 nominations before starting the self survey')
+
+  const existing = await prisma.feedbackTask.findFirst({
+    where: { participantId: participant.id, respondentId: participant.userId, relationship: 'SELF' },
+  })
+  const task = existing || await prisma.feedbackTask.create({
+    data: {
+      participantId: participant.id,
+      respondentId: participant.userId,
+      relationship: 'SELF',
+      status: 'PENDING',
+      dueAt: participant.cohort.threeSixtyCutoff,
+    },
+  })
+  res.json({ data: { id: task.id, status: task.status.toLowerCase(), dueAt: task.dueAt?.toISOString() || null } })
+}))
+
 participantsRouter.post('/:participantId/nominees/submit', asyncHandler(async (req, res) => {
   const participant = await findParticipant(req.params.participantId)
   assertParticipantAccess(req, participant)
   const nominees = participant.nominees
+  if (nominees.some((nominee) => nominee.status === 'SUBMITTED')) throw httpError(409, 'These nominations have already been submitted and are final')
 
   if (!nominees.length) throw httpError(400, 'Add nominees before submitting')
   if (!nominees.some((nominee) => nominee.relationship === 'REPORTING_MANAGER')) {
     throw httpError(400, 'At least 1 reporting manager nominee is required')
+  }
+  if (nominees.filter((nominee) => nominee.relationship === 'SKIP_MANAGER').length !== 1) {
+    throw httpError(400, 'Exactly 1 skip manager nominee is required')
   }
   if (nominees.filter((nominee) => nominee.relationship === 'PEER').length < 4) {
     throw httpError(400, 'At least 4 peer nominees are required')
@@ -192,6 +248,17 @@ participantsRouter.post('/:participantId/nominees/submit', asyncHandler(async (r
     const generatedInvites = []
     const cutoffDate = participant.cohort.threeSixtyCutoff
     const cutoffLabel = formatCutoff(cutoffDate)
+
+    const existingSelfTask = await tx.feedbackTask.findFirst({
+      where: { participantId: participant.id, respondentId: participant.userId, relationship: 'SELF' },
+    })
+    if (existingSelfTask) {
+      await tx.feedbackTask.update({ where: { id: existingSelfTask.id }, data: { dueAt: cutoffDate } })
+    } else {
+      await tx.feedbackTask.create({
+        data: { participantId: participant.id, respondentId: participant.userId, relationship: 'SELF', status: 'PENDING', dueAt: cutoffDate },
+      })
+    }
 
     for (const nominee of nominees) {
       const existingUser = await tx.user.findUnique({
@@ -336,14 +403,6 @@ participantsRouter.post('/:participantId/nominees/submit', asyncHandler(async (r
     const submitted = await tx.nominee.findMany({
       where: { participantId: participant.id },
       orderBy: { createdAt: 'asc' },
-    })
-
-    await logAudit(tx, {
-      actorId: req.auth.userId,
-      action: 'Nominations submitted',
-      entity: 'Participant',
-      entityId: participant.id,
-      metadata: { participantName: participant.user.name, respondentCount: nominees.length },
     })
 
     return { submittedNominees: submitted, invites: generatedInvites }

@@ -5,7 +5,7 @@ import {
   ChevronDown,
   ClipboardList,
   FileText,
-  History,
+  FileSpreadsheet,
   LayoutDashboard,
   LogOut,
   Mail,
@@ -21,18 +21,18 @@ const navSections = [
     label: 'Workspace',
     items: [
       { to: '/td/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-      { to: '/td/cohorts', label: 'Current Cohort', icon: Users, badge: '8' },
-      { to: '/td/reports', label: 'Generate & Release', icon: FileText },
+      { to: '/td/cohorts', label: 'Current Cohort', icon: Users },
+      { to: '/td/reports', label: 'Report Repository', icon: FileText },
     ],
   },
   {
     label: 'Operations',
     items: [
       { to: '/td/exports', label: 'Trackers & Exports', icon: ClipboardList },
+      { to: '/td/assessor-analysis', label: 'Assessor Excel', icon: FileSpreadsheet },
       { to: '/td/outbox', label: 'Email Outbox', icon: Mail },
       { to: '/td/question-bank', label: 'Question Bank', icon: BookOpen },
       { to: '/td/templates', label: 'Templates', icon: Bell },
-      { to: '/td/audit', label: 'Audit Log', icon: History },
     ],
   },
 ]

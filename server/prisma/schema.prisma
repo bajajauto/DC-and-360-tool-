@@ -263,12 +263,3 @@ model EmailOutbox {
   updatedAt           DateTime              @updatedAt
 }
 
-model AuditLog {
-  id        String   @id @default(cuid())
-  actorId   String?
-  action    String
-  entity    String
-  entityId  String?
-  metadata  Json?
-  createdAt DateTime @default(now())
-}

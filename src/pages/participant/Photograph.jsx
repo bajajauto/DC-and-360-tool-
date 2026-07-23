@@ -1,5 +1,7 @@
 import { useState, useRef } from 'react'
 import { Link } from 'react-router-dom'
+import { api } from '../../lib/api'
+import { useUser } from '../../context/UserContext'
 
 const guidelines = [
   'Recent professional photograph',
@@ -11,9 +13,11 @@ const guidelines = [
 ]
 
 export default function Photograph() {
+  const { user } = useUser()
   const [preview, setPreview] = useState(null)
   const [error, setError] = useState(null)
   const [submitted, setSubmitted] = useState(false)
+  const [saving, setSaving] = useState(false)
   const inputRef = useRef(null)
 
   function handleFile(file) {
@@ -26,7 +30,24 @@ export default function Photograph() {
       setError('File must be smaller than 5 MB.')
       return
     }
-    setPreview(URL.createObjectURL(file))
+    const reader = new FileReader()
+    reader.onload = () => setPreview(String(reader.result || ''))
+    reader.onerror = () => setError('The photograph could not be read.')
+    reader.readAsDataURL(file)
+  }
+
+  async function submitPhoto() {
+    if (!preview || !user?.participantId) return
+    setSaving(true)
+    setError(null)
+    try {
+      await api.saveParticipantPhoto(user.participantId, preview)
+      setSubmitted(true)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -40,6 +61,7 @@ export default function Photograph() {
       <div className="mb-5">
         <h1 className="text-xl font-bold text-[#1a1f2e]">Photograph Upload</h1>
         <p className="text-sm text-gray-500 mt-0.5">Upload a recent, professional photograph for your DC artefact</p>
+        <p className="mt-2 text-sm font-semibold text-red-600">Deadline: 15 Jun 2025</p>
       </div>
 
       {submitted ? (
@@ -92,11 +114,11 @@ export default function Photograph() {
             <div className="flex justify-end gap-3">
               <Link to="/participant/dashboard" className="px-4 py-2 rounded-lg border border-[#e2e8f0] text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">Cancel</Link>
               <button
-                disabled={!preview}
-                onClick={() => preview && setSubmitted(true)}
+                disabled={!preview || saving}
+                onClick={submitPhoto}
                 className="px-5 py-2 rounded-lg bg-[#1e4d8c] text-white text-sm font-medium hover:bg-[#183f73] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                Submit & Lock
+                {saving ? 'Submitting…' : 'Submit & Lock'}
               </button>
             </div>
           </div>
@@ -104,12 +126,12 @@ export default function Photograph() {
           {/* Right sidebar */}
           <div className="space-y-4">
             {/* Guidelines */}
-            <div className="bg-[#f1f4f9] rounded-xl border border-[#e2e8f0] p-4">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Photo Guidelines</p>
-              <ul className="space-y-2">
+            <div className="rounded-xl border border-[#9fc2ec] border-l-4 border-l-[#1e5fba] bg-[#eaf3ff] p-5 shadow-sm">
+              <p className="mb-4 text-sm font-bold uppercase tracking-wide text-[#1e4d8c]">Photo Guidelines</p>
+              <ul className="space-y-2.5">
                 {guidelines.map((g) => (
-                  <li key={g} className="flex items-start gap-2 text-xs text-gray-600">
-                    <svg className="w-3.5 h-3.5 text-[#1e4d8c] mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <li key={g} className="flex items-start gap-2.5 text-[13px] font-semibold leading-5 text-[#29496f]">
+                    <svg className="mt-0.5 h-4 w-4 shrink-0 text-[#1e5fba]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.75}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                     </svg>
                     {g}
@@ -118,23 +140,6 @@ export default function Photograph() {
               </ul>
             </div>
 
-            {/* Why this matters */}
-            <div className="bg-white rounded-xl border border-[#e2e8f0] p-4">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Why It's Used</p>
-              <p className="text-xs text-gray-500 leading-relaxed">
-                Your photograph is included in the DC artefact pack shared with assessors to help them associate names with faces across group activities.
-              </p>
-              <p className="text-xs text-gray-500 leading-relaxed mt-2">
-                It is not used for evaluation purposes.
-              </p>
-            </div>
-
-            {/* Deadline */}
-            <div className="bg-white rounded-xl border border-[#e2e8f0] p-4">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Deadline</p>
-              <p className="text-sm font-semibold text-[#1a1f2e]">15 Jun 2025</p>
-              <p className="text-xs text-gray-400 mt-0.5">Submit before DC preparation begins</p>
-            </div>
           </div>
         </div>
       )}

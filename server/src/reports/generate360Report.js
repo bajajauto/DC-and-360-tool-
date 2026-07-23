@@ -9,6 +9,13 @@ const __dirname = path.dirname(__filename)
 const serverRoot = path.resolve(__dirname, '..', '..')
 const reportsDirectory = path.join(serverRoot, 'generated', 'reports')
 
+function hasCutoffPassed(cutoff, now = new Date()) {
+  if (!cutoff) return false
+  const endOfCutoffDay = new Date(cutoff)
+  endOfCutoffDay.setUTCHours(23, 59, 59, 999)
+  return now > endOfCutoffDay
+}
+
 const GROUP_KEYS = ['self', 'others', 'dr', 'rm', 'skip', 'peer', 'ic']
 
 const RELATIONSHIP_GROUPS = {
@@ -259,7 +266,7 @@ export async function getParticipantForReport(db, participantId) {
     const requiredIds = getBehaviourIds(getSurveySections(task.relationship))
     return requiredIds.some((id) => !Number.isFinite(ratings[id]) || ratings[id] < 1 || ratings[id] > 4)
   })
-  if (incompleteTasks.length) {
+  if (incompleteTasks.length && !hasCutoffPassed(participant.cohort?.threeSixtyCutoff)) {
     throw httpError(409, `360 report cannot be generated: ${incompleteTasks.length} respondent${incompleteTasks.length === 1 ? ' has' : 's have'} not submitted all required ratings`)
   }
 

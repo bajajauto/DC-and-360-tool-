@@ -1,4 +1,6 @@
 import { Link } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { api } from '../../lib/api'
 import { useUser } from '../../context/UserContext'
 
 const baseJourneySteps = [
@@ -6,8 +8,9 @@ const baseJourneySteps = [
   { id: 2, label: 'Photograph', to: '/participant/photograph', status: 'completed', deadline: '15 Jun' },
   { id: 3, label: 'Pre-Work', to: '/participant/pre-work', status: 'in-progress', deadline: '20 Jun' },
   { id: 4, label: '360 Nominees', to: '/participant/360-nominees', status: 'pending', deadline: '20 Jun' },
-  { id: 5, label: '360 Feedback', to: '/participant/360-status', status: 'locked', deadline: '30 Jun' },
-  { id: 6, label: 'DC Report', to: '/participant/reports', status: 'locked', deadline: 'TBD' },
+  { id: 5, label: 'Self 360 Survey', to: '/participant/self-360', status: 'locked', deadline: '30 Jun' },
+  { id: 6, label: '360 Feedback', to: '/participant/360-status', status: 'locked', deadline: '30 Jun' },
+  { id: 7, label: 'DC Report', to: '/participant/reports', status: 'locked', deadline: 'TBD' },
 ]
 
 const pendingTasks = [
@@ -76,14 +79,22 @@ function StepIcon({ status, step }) {
 
 export default function Dashboard() {
   const { user, participantData } = useUser()
+  const [selfTask, setSelfTask] = useState(null)
   const nominees = participantData?.nominees ?? []
   const nomineeStatus = nominees.some(n => n.status === 'submitted')
     ? 'completed'
     : nominees.length > 0
       ? 'saved'
       : 'pending'
+
+  useEffect(() => {
+    if (nomineeStatus !== 'completed' || !user?.participantId) return
+    api.ensureSelfFeedbackTask(user.participantId).then((result) => setSelfTask(result.data)).catch(() => {})
+  }, [nomineeStatus, user?.participantId])
+
+  const selfSurveyStatus = nomineeStatus !== 'completed' ? 'locked' : selfTask?.status === 'submitted' ? 'completed' : selfTask?.status === 'saved' ? 'saved' : 'pending'
   const journeySteps = baseJourneySteps.map((step) => (
-    step.label === '360 Nominees' ? { ...step, status: nomineeStatus } : step
+    step.label === '360 Nominees' ? { ...step, status: nomineeStatus } : step.label === 'Self 360 Survey' ? { ...step, status: selfSurveyStatus } : step
   ))
   const visiblePendingTasks = pendingTasks
     .map((task) => {
@@ -101,6 +112,16 @@ export default function Dashboard() {
       return task
     })
     .filter(Boolean)
+  if (nomineeStatus === 'completed' && selfSurveyStatus !== 'completed') {
+    visiblePendingTasks.unshift({
+      title: 'Complete your Self 360 Survey',
+      description: 'Your self-rating is a required part of the 360 feedback process.',
+      to: '/participant/self-360',
+      deadline: '30 Jun 2025',
+      urgency: 'high',
+      progress: selfSurveyStatus === 'saved' ? 50 : 0,
+    })
+  }
   const completedSteps = journeySteps.filter((s) => s.status === 'completed').length
   const totalSteps = journeySteps.length
   const progressPct = Math.round((completedSteps / totalSteps) * 100)

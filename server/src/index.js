@@ -10,7 +10,8 @@ import { notificationsRouter } from './routes/notifications.js'
 import { participantsRouter } from './routes/participants.js'
 import { reportsRouter } from './routes/reports.js'
 import { buhrRouter } from './routes/buhr.js'
-import { auditLogRouter } from './routes/auditLog.js'
+import { assessorRouter } from './routes/assessor.js'
+import { assessorAnalysisRouter } from './routes/assessorAnalysis.js'
 import { startNotificationScheduler } from './notifications/scheduler.js'
 import { disconnectPrisma } from './db.js'
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js'
@@ -46,7 +47,8 @@ app.use('/api/participants', requireAuth, participantsRouter)
 app.use('/api/feedback-tasks', requireAuth, feedbackTasksRouter)
 app.use('/api/reports', requireAuth, reportsRouter)
 app.use('/api/buhr', requireAuth, requireRole('buhr', 'td'), buhrRouter)
-app.use('/api/audit-log', requireAuth, requireRole('td'), auditLogRouter)
+app.use('/api/assessor', requireAuth, requireRole('assessor'), assessorRouter)
+app.use('/api/assessor-analysis', requireAuth, requireRole('assessor', 'td'), assessorAnalysisRouter)
 
 app.use(notFoundHandler)
 app.use(errorHandler)

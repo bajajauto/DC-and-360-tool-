@@ -1,176 +1,85 @@
 import { ArrowLeft, BriefcaseBusiness, Camera, FileText, MessageSquareText, User } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { Link, Navigate, useParams } from 'react-router-dom'
-import { getAssessorProfile } from '../../data/adminData'
+import { api } from '../../lib/api'
 
 const evidenceConfig = {
-  photograph: {
-    title: 'Participant Photograph',
-    label: 'Identity evidence',
-    icon: Camera,
-  },
-  'role-interview': {
-    title: 'Role Interview',
-    label: 'Interview submission',
-    icon: MessageSquareText,
-  },
-  '360-report': {
-    title: '360 Report',
-    label: 'Aggregated feedback',
-    icon: FileText,
-  },
-  'pre-work': {
-    title: 'Pre-work',
-    label: 'Participant submission',
-    icon: BriefcaseBusiness,
-  },
+  photograph: { title: 'Participant Photograph', label: 'Identity evidence', icon: Camera },
+  'role-interview': { title: 'Role Interview', label: 'Interview submission', icon: MessageSquareText },
+  '360-report': { title: '360 Report', label: 'Aggregated feedback', icon: FileText },
+  'pre-work': { title: 'Pre-work', label: 'Participant submission', icon: BriefcaseBusiness },
+}
+
+const preWorkQuestions = [
+  'What is the most important thing you have learned about yourself as a result of working in several positions as a leader?',
+  'Using three short phrases, indicate how your close friends might describe you.',
+  'Now describe yourself using three short phrases different from the above.',
+  'What do you think are your strongest points?',
+  'What three areas would you like to improve or change about yourself?',
+  'If we were to talk with your direct reports, what would their criticisms be of you?',
+  'If we were to talk with your peers or bosses, what would their criticisms be of you?',
+  'Sometimes people misinterpret our personality. How do others see you differently from how you really think you are?',
+  'If you picked a character from mythology, films, politics, sports or history who is closest to you psychologically, who would it be?',
+  'Reflecting deep down inside yourself, what pressures would you say are at work on you?',
+]
+
+const roleLabels = {
+  currentRole: 'Current role / designation', responsibilities: 'Summary of current role and responsibilities',
+  highlight1: 'Highlight 1', highlight2: 'Highlight 2', highlight3: 'Highlight 3',
+  challenge1: 'Challenge 1', challenge2: 'Challenge 2', challenge3: 'Challenge 3',
 }
 
 function InfoRow({ label, value }) {
-  return (
-    <div className="flex justify-between gap-4 py-3 border-b border-[#edf1f5] last:border-0">
-      <span className="text-xs text-gray-400">{label}</span>
-      <span className="text-xs font-semibold text-[#374151] text-right">{value}</span>
-    </div>
-  )
+  return <div className="flex justify-between gap-4 border-b border-[#edf1f5] py-3 last:border-0"><span className="text-xs text-gray-400">{label}</span><span className="text-right text-xs font-semibold text-[#374151]">{value || '—'}</span></div>
 }
 
 function PersonPlaceholder({ size = 'sm' }) {
   const classes = size === 'xl' ? 'w-full aspect-square rounded-xl' : 'w-14 h-14 rounded-lg'
+  return <div className={`${classes} flex shrink-0 flex-col items-center justify-center bg-[#e4eef9] text-[#1e4d8c]`}><User size={size === 'xl' ? 72 : 23} strokeWidth={1.7} />{size === 'xl' && <p className="mt-4 text-sm font-semibold">No photograph submitted</p>}</div>
+}
 
-  return (
-    <div className={`${classes} bg-[#e4eef9] text-[#1e4d8c] flex flex-col items-center justify-center shrink-0`}>
-      <User size={size === 'xl' ? 72 : 23} strokeWidth={1.7} />
-      {size === 'xl' && <p className="mt-4 text-sm font-semibold text-[#1e4d8c]">No photograph uploaded</p>}
-    </div>
-  )
+function SubmissionHeader({ submission }) {
+  return <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#edf1f5] bg-[#f8fafc] p-4"><div><p className="text-[11px] text-gray-500">Submission status</p><p className="mt-1 text-sm font-semibold capitalize text-[#172033]">{submission.status}</p></div><div className="text-right"><p className="text-[11px] text-gray-500">Submitted on</p><p className="mt-1 text-sm font-semibold text-[#172033]">{submission.submittedAt ? new Date(submission.submittedAt).toLocaleString('en-GB') : 'Not submitted'}</p></div></div>
+}
+
+function AnswerCard({ label, value }) {
+  return <article className="rounded-xl border border-[#e2e8f0] bg-white p-5"><p className="text-sm font-semibold leading-6 text-[#172033]">{label}</p><div className="mt-3 whitespace-pre-wrap rounded-lg bg-[#f8fafc] p-4 text-sm leading-6 text-gray-700">{String(value || '').trim() || 'No response provided.'}</div></article>
+}
+
+function RoleInterview({ submission }) {
+  const answers = submission.answers || {}
+  const transitions = [1, 2, 3].map((number) => ({
+    number,
+    values: [answers[`transition${number}_role`], answers[`transition${number}_roleDescription`] || answers[`transition${number}_designation`], answers[`transition${number}_bu`], answers[`transition${number}_duration`]],
+  })).filter((transition) => transition.values.some(Boolean))
+  return <div><SubmissionHeader submission={submission} />{transitions.length > 0 && <section className="mb-5 rounded-2xl border border-[#e2e8f0] bg-white p-6"><h2 className="mb-4 font-semibold text-[#172033]">Last three years’ career transitions</h2><div className="space-y-3">{transitions.map((transition) => <div key={transition.number} className="grid gap-3 rounded-xl bg-[#f8fafc] p-4 sm:grid-cols-4">{['Role', 'Role Description', 'BU', 'Duration'].map((label, index) => <div key={label}><p className="text-[11px] text-gray-400">{label}</p><p className="mt-1 text-sm font-semibold text-[#374151]">{transition.values[index] || '—'}</p></div>)}</div>)}</div></section>}<div className="space-y-4">{Object.entries(roleLabels).map(([key, label]) => <AnswerCard key={key} label={label} value={answers[key]} />)}</div></div>
+}
+
+function PreWork({ submission }) {
+  const answers = submission.answers || {}
+  return <div><SubmissionHeader submission={submission} /><div className="space-y-4">{preWorkQuestions.map((question, index) => <AnswerCard key={question} label={`${index + 1}. ${question}`} value={answers[`q${index + 1}`]} />)}</div></div>
 }
 
 function DetailBody({ type, profile }) {
-  if (type === 'photograph') {
-    return (
-      <div className="grid lg:grid-cols-[360px_1fr] gap-6">
-        <section className="bg-white border border-[#e2e8f0] rounded-2xl p-6">
-          <PersonPlaceholder size="xl" />
-        </section>
-        <section className="bg-white border border-[#e2e8f0] rounded-2xl p-6">
-          <h2 className="font-semibold text-[#172033]">Identity details</h2>
-          <div className="mt-4">
-            <InfoRow label="Participant" value={profile.name} />
-            <InfoRow label="Employee ID" value={profile.employeeId} />
-            <InfoRow label="Designation" value={profile.designation} />
-            <InfoRow label="Business unit" value={profile.bu} />
-          </div>
-        </section>
-      </div>
-    )
-  }
-
-  if (type === 'role-interview') {
-    return (
-      <section className="bg-white border border-[#e2e8f0] rounded-2xl p-6">
-        <div className="grid md:grid-cols-3 gap-4 mb-6">
-          <div className="rounded-xl bg-[#f8fafc] border border-[#edf1f5] p-4">
-            <p className="text-[11px] text-gray-500">Interview date</p>
-            <p className="text-sm font-semibold text-[#172033] mt-1">{profile.interview.date}</p>
-          </div>
-          <div className="rounded-xl bg-[#f8fafc] border border-[#edf1f5] p-4">
-            <p className="text-[11px] text-gray-500">Interviewer</p>
-            <p className="text-sm font-semibold text-[#172033] mt-1">{profile.interview.interviewer}</p>
-          </div>
-          <div className="rounded-xl bg-[#f8fafc] border border-[#edf1f5] p-4">
-            <p className="text-[11px] text-gray-500">Theme</p>
-            <p className="text-sm font-semibold text-[#172033] mt-1">{profile.interview.theme}</p>
-          </div>
-        </div>
-        <h2 className="font-semibold text-[#172033]">Interview notes</h2>
-        <p className="mt-3 text-sm leading-6 text-gray-600">{profile.interview.summary}</p>
-      </section>
-    )
-  }
-
-  if (type === '360-report') {
-    return (
-      <section className="bg-white border border-[#e2e8f0] rounded-2xl p-6">
-        <div className="grid md:grid-cols-2 gap-4 mb-6">
-          <div className="rounded-xl bg-[#f8fafc] border border-[#edf1f5] p-4">
-            <p className="text-[11px] text-gray-500">Report status</p>
-            <p className="text-sm font-semibold text-[#172033] mt-1">{profile.report360.status}</p>
-          </div>
-          <div className="rounded-xl bg-[#f8fafc] border border-[#edf1f5] p-4">
-            <p className="text-[11px] text-gray-500">Responses</p>
-            <p className="text-sm font-semibold text-[#172033] mt-1">{profile.report360.completion}</p>
-          </div>
-        </div>
-        <div className="grid lg:grid-cols-2 gap-4">
-          <div className="rounded-xl border-l-4 border-emerald-500 bg-emerald-50 p-5">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">Strength signal</p>
-            <p className="mt-3 text-sm leading-6 text-gray-700">{profile.report360.topStrength}</p>
-          </div>
-          <div className="rounded-xl border-l-4 border-amber-500 bg-amber-50 p-5">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-amber-700">Development watch</p>
-            <p className="mt-3 text-sm leading-6 text-gray-700">{profile.report360.developmentWatch}</p>
-          </div>
-        </div>
-      </section>
-    )
-  }
-
-  return (
-    <section className="bg-white border border-[#e2e8f0] rounded-2xl p-6">
-      <div className="grid md:grid-cols-2 gap-4 mb-6">
-        <div className="rounded-xl bg-[#f8fafc] border border-[#edf1f5] p-4">
-          <p className="text-[11px] text-gray-500">Submission status</p>
-          <p className="text-sm font-semibold text-[#172033] mt-1">{profile.preWork.status}</p>
-        </div>
-        <div className="rounded-xl bg-[#f8fafc] border border-[#edf1f5] p-4">
-          <p className="text-[11px] text-gray-500">Submitted on</p>
-          <p className="text-sm font-semibold text-[#172033] mt-1">{profile.preWork.submittedOn}</p>
-        </div>
-      </div>
-      <h2 className="font-semibold text-[#172033]">Pre-work response</h2>
-      <p className="mt-3 text-sm leading-6 text-gray-600">{profile.preWork.reflection}</p>
-    </section>
-  )
+  if (type === 'photograph') return <div className="grid gap-6 lg:grid-cols-[360px_1fr]"><section className="rounded-2xl border border-[#e2e8f0] bg-white p-6">{profile.photograph.url ? <img src={profile.photograph.url} alt={profile.name} className="aspect-square w-full rounded-xl object-cover" /> : <PersonPlaceholder size="xl" />}</section><section className="rounded-2xl border border-[#e2e8f0] bg-white p-6"><h2 className="font-semibold text-[#172033]">Identity details</h2><div className="mt-4"><InfoRow label="Participant" value={profile.name} /><InfoRow label="Employee ID" value={profile.employeeId} /><InfoRow label="Designation" value={profile.designation} /><InfoRow label="Business unit" value={profile.bu} /><InfoRow label="Photo status" value={profile.photograph.status} /></div></section></div>
+  if (type === 'role-interview') return <RoleInterview submission={profile.roleInterview} />
+  if (type === 'pre-work') return <PreWork submission={profile.preWork} />
+  return <section className="rounded-2xl border border-[#e2e8f0] bg-white p-6"><div className="grid gap-4 md:grid-cols-3"><InfoRow label="Report status" value={profile.report360.status} /><InfoRow label="Responses submitted" value={`${profile.report360.submittedResponses}/${profile.report360.totalResponses}`} /><InfoRow label="Generated on" value={profile.report360.generatedAt ? new Date(profile.report360.generatedAt).toLocaleString('en-GB') : 'Not generated'} /></div><p className="mt-6 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">The aggregated 360 report becomes available after all required responses are complete and TD generates the report.</p></section>
 }
 
 export default function EvidenceDetail() {
   const { participantId, evidenceType } = useParams()
-  const profile = getAssessorProfile(participantId)
+  const [profile, setProfile] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
   const config = evidenceConfig[evidenceType]
 
-  if (!profile || !config) return <Navigate to="/assessor/candidates" replace />
+  useEffect(() => {
+    if (!participantId) return
+    api.getAssessorCandidate(participantId).then(({ data }) => setProfile(data)).catch((err) => setError(err.message)).finally(() => setLoading(false))
+  }, [participantId])
 
+  if (!config) return <Navigate to="/assessor/candidates" replace />
   const Icon = config.icon
-
-  return (
-    <div>
-      <header className="h-20 bg-white border-b border-[#e4e9f1] px-8 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Link to="/assessor/candidates" className="w-9 h-9 rounded-lg border border-[#e2e8f0] flex items-center justify-center text-gray-500 hover:text-[#1e4d8c]">
-            <ArrowLeft size={17} />
-          </Link>
-          <div>
-            <p className="text-xs text-gray-400">{profile.name} / {config.label}</p>
-            <h1 className="text-xl font-bold text-[#172033]">{config.title}</h1>
-          </div>
-        </div>
-        <span className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-[10px] font-semibold text-blue-700">
-          <Icon size={13} />
-          Evidence view
-        </span>
-      </header>
-
-      <main className="p-8 max-w-[1180px] mx-auto">
-        <section className="bg-white border border-[#e2e8f0] rounded-2xl p-5 mb-6 flex items-center gap-4">
-          <PersonPlaceholder />
-          <div className="min-w-0">
-            <h2 className="text-lg font-bold text-[#172033]">{profile.name}</h2>
-            <p className="text-xs text-gray-500 mt-1">{profile.employeeId} - {profile.designation} - {profile.bu}</p>
-          </div>
-        </section>
-
-        <DetailBody type={evidenceType} profile={profile} />
-      </main>
-    </div>
-  )
+  return <div><header className="flex h-20 items-center justify-between border-b border-[#e4e9f1] bg-white px-8"><div className="flex items-center gap-4"><Link to="/assessor/candidates" className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#e2e8f0] text-gray-500 hover:text-[#1e4d8c]"><ArrowLeft size={17} /></Link><div><p className="text-xs text-gray-400">{profile?.name || 'Participant'} / {config.label}</p><h1 className="text-xl font-bold text-[#172033]">{config.title}</h1></div></div><span className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-[10px] font-semibold text-blue-700"><Icon size={13} />Read-only evidence</span></header><main className="mx-auto max-w-[1180px] p-8">{loading && <p className="text-sm text-gray-500">Loading participant response…</p>}{error && <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>}{profile && <><section className="mb-6 flex items-center gap-4 rounded-2xl border border-[#e2e8f0] bg-white p-5"><PersonPlaceholder /><div><h2 className="text-lg font-bold text-[#172033]">{profile.name}</h2><p className="mt-1 text-xs text-gray-500">{profile.employeeId} · {profile.designation} · {profile.bu} · {profile.cohort}</p></div></section><DetailBody type={evidenceType} profile={profile} /></>}</main></div>
 }

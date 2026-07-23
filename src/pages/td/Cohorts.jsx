@@ -1,4 +1,4 @@
-import { AlertCircle, Check, ChevronRight, Download, FileText, Pencil, Plus, Search, Send, Upload, X } from 'lucide-react'
+import { AlertCircle, Check, ChevronRight, Download, FileText, Pencil, Plus, Search, Send, Trash2, Upload, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../../lib/api'
@@ -6,9 +6,9 @@ import { exportCohortNomineeStatus, exportCohortProcessStatus } from '../../lib/
 
 const tabs = [
   { id: 'participants', label: 'Participants' },
-  { id: 'employees', label: 'Employee Upload' },
+  { id: 'manage', label: 'Manage Participants' },
   { id: 'threesixty', label: '360 Progress' },
-  { id: 'assessors', label: 'Assessor Excels' },
+  { id: 'assessors', label: 'Assessor Status' },
   { id: 'reports', label: 'Reports' },
 ]
 
@@ -32,7 +32,7 @@ function CardHeader({ title, subtitle, action }) {
   return (
     <div className="mb-4 flex items-start justify-between gap-4 border-b border-[#d5dce5] pb-3">
       <div>
-        <h3 className="text-[15px] font-semibold text-[#0f172a]">{title}</h3>
+        <h3 className="text-lg font-bold text-[#1e5fba]">{title}</h3>
         {subtitle && <p className="mt-1 text-xs text-slate-500">{subtitle}</p>}
       </div>
       {action}
@@ -52,9 +52,11 @@ function Metric({ label, value, sub, tone = 'text-[#0f172a]' }) {
 
 function RoleGuide() {
   const steps = [
-    'Create a cohort, download the Employee Details template, fill and upload it. The tool validates every row before creating anything.',
-    'Every notification lands in the Email Outbox with the generated magic link for testing and follow-up.',
-    'Generate reports only after response data is ready, then release 360 and DC reports separately.',
+    'Create a cohort, download the Employee Details template, fill and upload it.',
+    'Participants complete their Role Interview, Pre-Work, photograph and 360 nominations within the configured deadlines.',
+    'Launch and track 360 feedback. Respondents receive task-specific magic links, with reminders and delivery status available in the Email Outbox.',
+    'Assessors review participant evidence and upload the completed assessor-analysis workbook for each participant.',
+    'Generate, review and release the 360 Feedback Report and final Development Centre Report when all required inputs are ready.',
   ]
 
   return (
@@ -62,7 +64,7 @@ function RoleGuide() {
       <div className="flex items-start gap-4">
         <AlertCircle size={18} className="mt-0.5 text-[#1e5fba]" />
         <div className="flex-1">
-          <p className="text-sm font-semibold text-[#1e5fba]">Running the 360 end to end</p>
+          <p className="text-lg font-bold text-[#1e5fba]">Running the Development Centre process end to end</p>
           <div className="mt-2 space-y-1.5">
             {steps.map((step, index) => (
               <div key={step} className="flex items-start gap-2 text-[13px] leading-5 text-slate-600">
@@ -77,26 +79,18 @@ function RoleGuide() {
   )
 }
 
-function PageHead({ cohort, onExportProcess, onExportNominees, onCreateCohort }) {
+function PageHead({ onCreateCohort }) {
   return (
     <div className="mb-5 flex items-start justify-between gap-4">
       <div>
         <p className="mb-2 text-xs text-slate-500">Talent Development / Dashboard</p>
-        <h1 className="font-serif text-[30px] font-medium leading-tight text-[#0f172a]">TD Admin Dashboard</h1>
+        <h1 className="font-serif text-[34px] font-semibold leading-tight text-[#1e4d8c]">TD Admin Dashboard</h1>
         <p className="mt-1 text-sm text-slate-600">Run the 360 and DC end to end: create a cohort, track progress, follow up, and release reports.</p>
       </div>
       <div className="flex flex-wrap justify-end gap-2">
         <button onClick={onCreateCohort} className="inline-flex items-center gap-2 rounded-lg border border-[#c2ccda] bg-white px-4 py-2 text-[13px] font-medium text-slate-700 hover:border-[#1e5fba] hover:bg-[#ebf2fa] hover:text-[#1e5fba]">
           <Plus size={14} />
           Create Cohort
-        </button>
-        <button onClick={onExportProcess} className="inline-flex items-center gap-2 rounded-lg border border-[#c2ccda] bg-white px-4 py-2 text-[13px] font-medium text-slate-700 hover:border-[#1e5fba] hover:bg-[#ebf2fa] hover:text-[#1e5fba]">
-          <Download size={14} />
-          Master Tracker
-        </button>
-        <button onClick={onExportNominees} className="inline-flex items-center gap-2 rounded-lg bg-[#1e5fba] px-4 py-2 text-[13px] font-medium text-white hover:bg-[#0e3f87]">
-          <Download size={14} />
-          Nomination Tracker
         </button>
       </div>
     </div>
@@ -174,9 +168,13 @@ function CohortFormModal({ mode, initialCohort, onClose, onSubmit }) {
       }
 
       const text = (value) => String(value ?? '').trim()
-      const required = [1, 2, 4, 13, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]
+      const required = [1, 2, 4, 13, 15, 25, 26, 27]
       const emailColumns = [15, 18, 21, 24, 27]
-      const dataRows = values.slice(2).filter((row) => row.some((value) => text(value)))
+      // Some approved templates include a Field Type row below the headers and
+      // others begin employee data immediately. Detect the first real employee
+      // row from Ticket ID + participant email instead of always skipping row 2.
+      const firstCandidateIsEmployee = text(values[1]?.[2]) && EMAIL_RE.test(text(values[1]?.[15]))
+      const dataRows = values.slice(firstCandidateIsEmployee ? 1 : 2).filter((row) => row.some((value) => text(value)))
 
       if (!dataRows.length) throw new Error('The workbook contains no participant rows. Add data below the Field Type row.')
 
@@ -186,7 +184,7 @@ function CohortFormModal({ mode, initialCohort, onClose, onSubmit }) {
       const seenEmails = new Map()
 
       dataRows.forEach((row, index) => {
-        const rowNumber = index + 3
+        const rowNumber = index + (firstCandidateIsEmployee ? 2 : 3)
         const missing = required.filter((column) => !text(row[column]))
         missing.forEach((column) => rowErrors.push({ row: rowNumber, ticket: text(row[2]) || '-', field: headers[column], issue: 'Missing (mandatory)' }))
 
@@ -336,7 +334,7 @@ function CohortFormModal({ mode, initialCohort, onClose, onSubmit }) {
           {mode === 'create' && (
             <div className="border-t border-[#e2e8f0] pt-4">
               <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Participant master sheet</label>
-              <p className="mb-3 text-xs leading-5 text-slate-500">Upload the completed 28-column Excel template. Participant accounts, BUHR access, and locked Reporting/Skip Manager nominees will be created with the cohort.</p>
+              <p className="mb-3 text-xs leading-5 text-slate-500">Upload the completed 28-column Excel template. Participant accounts and BUHR access will be created with the cohort. Participants will enter all 360 nominees themselves.</p>
               <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-dashed border-[#c2ccda] bg-[#f8fafc] px-4 py-5 text-sm font-medium text-slate-600 hover:border-[#1e5fba] hover:bg-[#ebf2fa]">
                 <Upload size={18} />
                 {fileName || 'Choose master data workbook'}
@@ -403,19 +401,19 @@ function CohortFormModal({ mode, initialCohort, onClose, onSubmit }) {
   )
 }
 
-function ParticipantsTab({ rows, generated }) {
+function ParticipantsTab({ rows, generated, onManage }) {
   return (
     <Card>
       <CardHeader
         title={`Participants (${rows.length})`}
         subtitle="Live status across documents, nominations, 360 response collection and report readiness."
-        action={<Badge tone="info">Live cohort</Badge>}
+        action={<div className="flex items-center gap-2"><Badge tone="info">Live cohort</Badge><button onClick={onManage} className="inline-flex items-center gap-2 rounded-lg bg-[#1e5fba] px-3 py-2 text-xs font-semibold text-white hover:bg-[#0e3f87]"><Plus size={14}/>Manage Participants</button></div>}
       />
       <div className="overflow-hidden rounded-xl border border-[#d5dce5]">
         <table className="w-full border-collapse bg-white text-left text-[13px]">
           <thead className="bg-[#ebf2fa]">
             <tr>
-              {['Ticket ID', 'Name', 'BU', 'Details', 'Nominations', 'Pre-Work', 'Photo', '360', 'Report', ''].map((label) => (
+              {['Ticket ID', 'Name', 'BU', 'Nominations', 'Pre-Work', 'Photo', '360 Responses', '360 Report Status', 'DC Report Status', ''].map((label) => (
                 <th key={label} className="border-b border-[#d5dce5] px-3 py-2.5 text-[11px] font-bold uppercase tracking-wide text-slate-600">{label}</th>
               ))}
             </tr>
@@ -423,7 +421,9 @@ function ParticipantsTab({ rows, generated }) {
           <tbody>
             {rows.map((participant) => {
               const complete360 = participant.responses === participant.totalResponses && participant.totalResponses > 0
-              const reportTone = generated && participant.reportStatus === 'ready' ? 'success' : participant.reportStatus === 'generated' ? 'success' : participant.reportStatus === 'ready' ? 'warning' : 'neutral'
+              const reportTone = ['generated', 'released'].includes(participant.reportStatus) ? 'success' : participant.reportStatus === 'ready' ? 'info' : 'warning'
+              const reportLabel = participant.reportStatus === 'released' ? 'Released' : participant.reportStatus === 'generated' ? 'Generated' : participant.reportStatus === 'ready' ? 'Ready' : 'Waiting'
+              const dcReportGenerated = generated && participant.reportStatus === 'ready'
               return (
                 <tr key={participant.id} className="hover:bg-[#f4f7fb]">
                   <td className="border-b border-[#d5dce5] px-3 py-3 text-slate-500">{participant.employeeId}</td>
@@ -432,12 +432,12 @@ function ParticipantsTab({ rows, generated }) {
                     <p className="text-[11px] text-slate-500">{participant.designation}</p>
                   </td>
                   <td className="border-b border-[#d5dce5] px-3 py-3 text-slate-600">{participant.bu}</td>
-                  <td className="border-b border-[#d5dce5] px-3 py-3"><Badge tone={participant.progress > 38 ? 'success' : 'neutral'}>{participant.progress > 38 ? 'Done' : 'Pending'}</Badge></td>
-                  <td className="border-b border-[#d5dce5] px-3 py-3"><Badge tone={participant.nominees?.length ? 'success' : 'neutral'}>{participant.nominees?.length ? 'Submitted' : 'Not submitted'}</Badge></td>
-                  <td className="border-b border-[#d5dce5] px-3 py-3"><Badge tone={participant.progress >= 63 ? 'success' : 'neutral'}>{participant.progress >= 63 ? 'Submitted' : 'Pending'}</Badge></td>
-                  <td className="border-b border-[#d5dce5] px-3 py-3"><Badge tone={participant.progress >= 75 ? 'success' : 'neutral'}>{participant.progress >= 75 ? 'Uploaded' : 'Pending'}</Badge></td>
+                  <td className="border-b border-[#d5dce5] px-3 py-3"><Badge tone={participant.nominees?.length ? 'success' : 'warning'}>{participant.nominees?.length ? 'Submitted' : 'Not submitted'}</Badge></td>
+                  <td className="border-b border-[#d5dce5] px-3 py-3"><Badge tone={participant.progress >= 63 ? 'success' : 'warning'}>{participant.progress >= 63 ? 'Submitted' : 'Pending'}</Badge></td>
+                  <td className="border-b border-[#d5dce5] px-3 py-3"><Badge tone={participant.progress >= 75 ? 'success' : 'warning'}>{participant.progress >= 75 ? 'Uploaded' : 'Pending'}</Badge></td>
                   <td className="border-b border-[#d5dce5] px-3 py-3"><Badge tone={complete360 ? 'success' : participant.responses ? 'info' : 'neutral'}>{participant.responses}/{participant.totalResponses}</Badge></td>
-                  <td className="border-b border-[#d5dce5] px-3 py-3"><Badge tone={reportTone}>{generated && participant.reportStatus === 'ready' ? 'Generated' : participant.reportStatus === 'waiting' ? 'Waiting' : participant.reportStatus}</Badge></td>
+                  <td className="border-b border-[#d5dce5] px-3 py-3"><Badge tone={reportTone}>{reportLabel}</Badge></td>
+                  <td className="border-b border-[#d5dce5] px-3 py-3"><Badge tone={dcReportGenerated ? 'success' : 'warning'}>{dcReportGenerated ? 'Generated' : 'Not generated'}</Badge></td>
                   <td className="border-b border-[#d5dce5] px-3 py-3 text-right">
                     <Link to={`/td/participants/${participant.id}`} className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-[#ebf2fa] hover:text-[#1e5fba]" aria-label={`Open ${participant.name}`}>
                       <ChevronRight size={16} />
@@ -464,7 +464,7 @@ function EmployeeUploadTab() {
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-[#7ba6e0] bg-[#ebf2fa] p-4 text-sm text-[#123e77]">
-        <strong>This one upload powers everything.</strong> Participant logins are created from it, manager and skip names pre-fill nominations, and BUHR visibility is set up automatically.
+        <strong>This one upload powers cohort setup.</strong> Participant logins and BUHR visibility are created from it. Participants enter the name and email address for every 360 nominee themselves.
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
@@ -499,6 +499,57 @@ function EmployeeUploadTab() {
   )
 }
 
+function ManageParticipantsTab({ cohort, rows, onAdded, onDeleted }) {
+  const emptyRow = () => ({ name: '', employeeId: '', email: '', designation: '', businessUnit: '' })
+  const [forms, setForms] = useState([emptyRow()])
+  const [saving, setSaving] = useState(false)
+  const [deletingId, setDeletingId] = useState(null)
+  const [message, setMessage] = useState('')
+  const complete = forms.length > 0 && forms.every((form) => Object.values(form).every((value) => value.trim()))
+
+  function update(index, field, value) {
+    setForms((current) => current.map((form, formIndex) => formIndex === index ? { ...form, [field]: value } : form))
+  }
+
+  async function addParticipants() {
+    if (!complete) return
+    setSaving(true)
+    setMessage('')
+    try {
+      const added = []
+      for (const form of forms) {
+        const { data } = await api.addCohortParticipant(cohort.id, form)
+        added.push(data)
+        onAdded(data)
+      }
+      setForms([emptyRow()])
+      setMessage(`${added.length} participant${added.length === 1 ? '' : 's'} added to ${cohort.name}.`)
+    } catch (error) {
+      setMessage(error.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function removeParticipant(participant) {
+    const confirmed = window.confirm(`Permanently remove ${participant.name} from ${cohort.name}? Their submissions, nominations, feedback tasks and reports for this cohort will also be deleted.`)
+    if (!confirmed) return
+    setDeletingId(participant.id)
+    setMessage('')
+    try {
+      await api.deleteCohortParticipant(cohort.id, participant.id)
+      onDeleted(participant.id)
+      setMessage(`${participant.name} was removed from ${cohort.name}.`)
+    } catch (error) {
+      setMessage(error.message)
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
+  return <div className="space-y-5">{message && <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">{message}</div>}<Card><CardHeader title="Add Participants" subtitle="Add one or several participant accounts directly to this cohort."/><div className="space-y-3">{forms.map((form, index) => <div key={index} className="rounded-xl border border-[#d5dce5] bg-[#f8fbff] p-4"><div className="mb-3 flex items-center justify-between"><p className="text-xs font-bold uppercase tracking-wide text-[#1e5fba]">Participant {index + 1}</p>{forms.length > 1 && <button onClick={() => setForms((current) => current.filter((_, formIndex) => formIndex !== index))} className="text-xs font-semibold text-red-500">Remove row</button>}</div><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5"><input value={form.name} onChange={(event) => update(index, 'name', event.target.value)} placeholder="Full name" className="rounded-lg border border-[#c2ccda] px-3 py-2.5 text-sm"/><input value={form.employeeId} onChange={(event) => update(index, 'employeeId', event.target.value)} placeholder="Ticket ID" className="rounded-lg border border-[#c2ccda] px-3 py-2.5 text-sm"/><input type="email" value={form.email} onChange={(event) => update(index, 'email', event.target.value)} placeholder="Email address" className="rounded-lg border border-[#c2ccda] px-3 py-2.5 text-sm"/><input value={form.designation} onChange={(event) => update(index, 'designation', event.target.value)} placeholder="Designation" className="rounded-lg border border-[#c2ccda] px-3 py-2.5 text-sm"/><input value={form.businessUnit} onChange={(event) => update(index, 'businessUnit', event.target.value)} placeholder="Business unit" className="rounded-lg border border-[#c2ccda] px-3 py-2.5 text-sm"/></div></div>)}</div><div className="mt-4 flex flex-wrap justify-between gap-3"><button onClick={() => setForms((current) => [...current, emptyRow()])} className="inline-flex items-center gap-2 rounded-lg border border-[#1e5fba] px-4 py-2.5 text-sm font-semibold text-[#1e5fba] hover:bg-blue-50"><Plus size={15}/>Add Another</button><button onClick={addParticipants} disabled={!complete || saving} className="inline-flex items-center gap-2 rounded-lg bg-[#1e5fba] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40"><Plus size={15}/>{saving ? 'Adding…' : `Add ${forms.length} Participant${forms.length === 1 ? '' : 's'}`}</button></div></Card><Card><CardHeader title={`Participants (${rows.length})`} subtitle="Removing a participant permanently deletes their cohort work and access."/><div className="overflow-hidden rounded-xl border border-[#d5dce5]"><table className="w-full text-left text-sm"><thead className="bg-[#ebf2fa]"><tr>{['Ticket ID', 'Participant', 'Email', 'Business Unit', ''].map((label) => <th key={label} className="border-b px-3 py-2.5 text-[11px] font-bold uppercase text-slate-600">{label}</th>)}</tr></thead><tbody>{rows.map((participant) => <tr key={participant.id}><td className="border-b px-3 py-3 text-slate-500">{participant.employeeId}</td><td className="border-b px-3 py-3"><p className="font-semibold">{participant.name}</p><p className="text-xs text-slate-500">{participant.designation}</p></td><td className="border-b px-3 py-3 text-slate-600">{participant.email}</td><td className="border-b px-3 py-3 text-slate-600">{participant.bu}</td><td className="border-b px-3 py-3 text-right"><button onClick={() => removeParticipant(participant)} disabled={deletingId === participant.id} className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-40"><Trash2 size={13}/>{deletingId === participant.id ? 'Removing…' : 'Remove'}</button></td></tr>)}</tbody></table></div></Card></div>
+}
+
 function ThreeSixtyTab({ rows }) {
   const launched = rows.filter((participant) => participant.nominees?.length)
 
@@ -506,7 +557,7 @@ function ThreeSixtyTab({ rows }) {
     <Card>
       <CardHeader
         title="360 Progress"
-        subtitle="Response counts by respondent group. Scores and individual answers are never exposed here."
+        subtitle="Overall response counts. Scores and individual answers are never exposed here."
         action={(
           <div className="flex gap-2">
             <button className="inline-flex items-center gap-1.5 rounded-lg border border-[#c2ccda] px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-[#ebf2fa]"><Download size={13} />Response Tracker</button>
@@ -517,18 +568,11 @@ function ThreeSixtyTab({ rows }) {
       <div className="overflow-hidden rounded-xl border border-[#d5dce5]">
         <table className="w-full border-collapse bg-white text-left text-[13px]">
           <thead className="bg-[#ebf2fa]">
-            <tr>{['Ticket ID', 'Participant', 'Status', 'Nominated', 'Responded', 'Pending', 'By group'].map((label) => <th key={label} className="border-b border-[#d5dce5] px-3 py-2.5 text-[11px] font-bold uppercase tracking-wide text-slate-600">{label}</th>)}</tr>
+            <tr>{['Ticket ID', 'Participant', 'Status', 'Nominated', 'Responded', 'Pending'].map((label) => <th key={label} className="border-b border-[#d5dce5] px-3 py-2.5 text-[11px] font-bold uppercase tracking-wide text-slate-600">{label}</th>)}</tr>
           </thead>
           <tbody>
             {launched.map((participant) => {
               const pending = Math.max(0, participant.totalResponses - participant.responses)
-              const groups = ['Self', 'Reporting manager', 'Peer', 'Direct report'].map((group) => {
-                const nominees = participant.nominees.filter((nominee) => nominee.relationship === group)
-                if (!nominees.length) return null
-                const responded = nominees.filter((nominee) => nominee.status === 'responded').length
-                return `${group}: ${responded}/${nominees.length}`
-              }).filter(Boolean).join(' · ')
-
               return (
                 <tr key={participant.id} className="hover:bg-[#f4f7fb]">
                   <td className="border-b border-[#d5dce5] px-3 py-3 text-slate-500">{participant.employeeId}</td>
@@ -537,7 +581,6 @@ function ThreeSixtyTab({ rows }) {
                   <td className="border-b border-[#d5dce5] px-3 py-3">{participant.totalResponses}</td>
                   <td className="border-b border-[#d5dce5] px-3 py-3">{participant.responses}</td>
                   <td className="border-b border-[#d5dce5] px-3 py-3">{pending}</td>
-                  <td className="border-b border-[#d5dce5] px-3 py-3 text-xs text-slate-600">{groups || '-'}</td>
                 </tr>
               )
             })}
@@ -548,29 +591,48 @@ function ThreeSixtyTab({ rows }) {
   )
 }
 
-function AssessorTab() {
+function AssessorTab({ rows }) {
+  const [statuses, setStatuses] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    api.getAssessorAnalysis()
+      .then((result) => setStatuses(result.data || []))
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false))
+  }, [])
+
+  const statusByParticipant = new Map(statuses.map((status) => [status.participantId, status]))
+
   return (
-    <div className="space-y-4">
-      <div className="rounded-xl border border-[#7ba6e0] bg-[#ebf2fa] p-4 text-sm text-[#123e77]">
-        After 360s close, generate one pre-filled Excel per participant. The filled files come back into the tool for DC report generation.
+    <Card>
+      <CardHeader title="Assessor Status" subtitle="Track assessor analysis completion for each participant in this cohort." />
+      {error && <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+      <div className="overflow-hidden rounded-xl border border-[#d5dce5]">
+        <table className="w-full border-collapse bg-white text-left text-[13px]">
+          <thead className="bg-[#ebf2fa]">
+            <tr>{['Ticket ID', 'Participant', 'Business Unit', 'Status', 'Last Updated'].map((label) => <th key={label} className="border-b border-[#d5dce5] px-3 py-2.5 text-[11px] font-bold uppercase tracking-wide text-slate-600">{label}</th>)}</tr>
+          </thead>
+          <tbody>
+            {loading && <tr><td colSpan={5} className="px-3 py-6 text-center text-slate-500">Loading assessor statuses...</td></tr>}
+            {!loading && rows.map((participant) => {
+              const status = statusByParticipant.get(participant.id)
+              const completed = Boolean(status?.workbook)
+              return (
+                <tr key={participant.id} className="hover:bg-[#f4f7fb]">
+                  <td className="border-b border-[#d5dce5] px-3 py-3 text-slate-500">{participant.employeeId}</td>
+                  <td className="border-b border-[#d5dce5] px-3 py-3 font-semibold">{participant.name}</td>
+                  <td className="border-b border-[#d5dce5] px-3 py-3 text-slate-600">{participant.bu}</td>
+                  <td className="border-b border-[#d5dce5] px-3 py-3"><Badge tone={completed ? 'success' : 'warning'}>{completed ? 'Completed' : 'Pending'}</Badge></td>
+                  <td className="border-b border-[#d5dce5] px-3 py-3 text-slate-500">{completed ? new Date(status.workbook.uploadedAt).toLocaleString('en-GB') : '—'}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
       </div>
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader title="Step 1: Generate & Download" subtitle="Enabled once at least one participant's 360 is complete." />
-          <button className="inline-flex items-center gap-2 rounded-lg bg-[#1e5fba] px-4 py-2 text-sm font-semibold text-white hover:bg-[#0e3f87]">
-            <Download size={15} />
-            Generate Assessor Excels (zip)
-          </button>
-        </Card>
-        <Card>
-          <CardHeader title="Step 2: Upload Filled Excels" subtitle="Character limits and DC score ranges are validated on ingestion." />
-          <button className="flex w-full flex-col items-center justify-center rounded-xl border-2 border-dashed border-[#c2ccda] bg-[#f4f7fb] px-5 py-8 text-center hover:border-[#1e5fba] hover:bg-[#ebf2fa]">
-            <Upload size={30} className="mb-2 text-slate-500" />
-            <span className="font-medium text-[#0f172a]">Drop filled assessor Excels here</span>
-          </button>
-        </Card>
-      </div>
-    </div>
+    </Card>
   )
 }
 
@@ -604,7 +666,8 @@ function ReportsTab({ rows, generated, onGenerate }) {
   )
 }
 
-export default function Cohorts() {
+export default function Cohorts({ view = 'dashboard' }) {
+  const isCurrentView = view === 'current'
   const [cohorts, setCohorts] = useState([])
   const [cohortId, setCohortId] = useState(null)
   const [allParticipants, setAllParticipants] = useState([])
@@ -642,7 +705,7 @@ export default function Cohorts() {
       .then((result) => {
         const data = result.data || []
         setCohorts(data)
-        if (data.length > 0) setCohortId(data[0].id)
+        if (data.length > 0) setCohortId(data.at(-1).id)
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoadingCohorts(false))
@@ -686,12 +749,21 @@ export default function Cohorts() {
   return (
     <div className="px-9 py-8">
       <div className="mx-auto max-w-[1440px]">
-        <PageHead
-          cohort={cohort}
-          onExportProcess={() => exportCohortProcessStatus(cohort, allInCohort)}
-          onExportNominees={() => exportCohortNomineeStatus(cohort, allInCohort)}
+        {!isCurrentView && <PageHead
           onCreateCohort={() => setModalState({ mode: 'create' })}
-        />
+        />}
+        {isCurrentView && cohort && (
+          <div className="mb-5 flex flex-col gap-4 border-b border-[#d5dce5] pb-5 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <p className="mb-2 text-xs text-slate-500">Talent Development / Current Cohort</p>
+              <div className="flex flex-wrap items-center gap-3"><h1 className="font-serif text-[34px] font-semibold leading-tight text-[#1e4d8c]">{cohort.name}</h1><Badge tone="info">Live cohort</Badge></div>
+              <p className="mt-1 text-sm text-slate-600">{cohort.programme} · {cohort.eventDate} · {allInCohort.length} participant{allInCohort.length === 1 ? '' : 's'}</p>
+            </div>
+            <select value={cohortId} onChange={(event) => setCohortId(event.target.value)} className="min-w-80 rounded-lg border border-[#c2ccda] bg-white px-3 py-2.5 text-sm font-semibold text-slate-700">
+              {cohorts.map((item) => <option key={item.id} value={item.id}>{item.name} · {item.eventDate}</option>)}
+            </select>
+          </div>
+        )}
         {modalState && (
           <CohortFormModal
             mode={modalState.mode}
@@ -700,7 +772,7 @@ export default function Cohorts() {
             onSubmit={handleCohortSubmit}
           />
         )}
-        <RoleGuide />
+        {!isCurrentView && <RoleGuide />}
         {error && (
           <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {error}
@@ -714,14 +786,35 @@ export default function Cohorts() {
           </div>
         )}
 
-        <div className="mb-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {!isCurrentView && <div className="mb-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <Metric label="Active Cohorts" value={cohorts.length} sub={`${cohort.name} selected`} tone="text-[#1e5fba]" />
           <Metric label="Participants" value={allInCohort.length} sub="in current cohort" />
           <Metric label="Nominations In" value={nominationsIn} sub={`${Math.round((nominationsIn / Math.max(1, allInCohort.length)) * 100)}% submitted`} tone="text-[#15803d]" />
           <Metric label="360 Responses" value={`${responses}/${responseTotal}`} sub={`${Math.round((responses / Math.max(1, responseTotal)) * 100)}% received`} tone="text-[#6a4c93]" />
-        </div>
+        </div>}
 
-        <Card className="mb-5">
+        {!isCurrentView && cohort && (
+          <Card className="mb-5">
+            <CardHeader
+              title="Current Cohort"
+              subtitle={`${cohort.name} · ${cohort.programme} · ${cohort.eventDate}`}
+              action={<Badge tone="info">Live cohort</Badge>}
+            />
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-[#0f172a]">{allInCohort.length} participant{allInCohort.length === 1 ? '' : 's'}</p>
+                <p className="mt-1 text-xs text-slate-500">Open the cohort workspace or download its two operational trackers.</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button onClick={() => exportCohortProcessStatus(cohort, allInCohort)} className="inline-flex items-center gap-2 rounded-lg border border-[#c2ccda] bg-white px-4 py-2 text-[13px] font-medium text-slate-700 hover:border-[#1e5fba] hover:bg-[#ebf2fa] hover:text-[#1e5fba]"><Download size={14} />Cohort Master Tracker</button>
+                <button onClick={() => exportCohortNomineeStatus(cohort, allInCohort)} className="inline-flex items-center gap-2 rounded-lg border border-[#c2ccda] bg-white px-4 py-2 text-[13px] font-medium text-slate-700 hover:border-[#1e5fba] hover:bg-[#ebf2fa] hover:text-[#1e5fba]"><Download size={14} />360 Response Tracker</button>
+                <Link to="/td/cohorts" className="inline-flex items-center gap-2 rounded-lg bg-[#1e5fba] px-4 py-2 text-[13px] font-medium text-white hover:bg-[#0e3f87]">Open Current Cohort <ChevronRight size={14} /></Link>
+              </div>
+            </div>
+          </Card>
+        )}
+
+        {!isCurrentView && <Card className="mb-5">
           <CardHeader
             title="Your Cohorts"
             subtitle="Each cohort is one DC batch with its own participants, timeline and reports."
@@ -760,9 +853,9 @@ export default function Cohorts() {
               </tbody>
             </table>
           </div>
-        </Card>
+        </Card>}
 
-        <div className="mb-5">
+        {isCurrentView && <div className="mb-5">
           <div className="mb-4 flex flex-col gap-3 border-b border-[#d5dce5] md:flex-row md:items-center md:justify-between">
             <div className="flex flex-wrap gap-1">
               {tabs.map((tab) => (
@@ -784,12 +877,12 @@ export default function Cohorts() {
           </div>
 
           {loadingParticipants && <Card><p className="text-sm text-slate-500">Loading participants...</p></Card>}
-          {!loadingParticipants && activeTab === 'participants' && <ParticipantsTab rows={filteredRows} generated={generated} />}
-          {activeTab === 'employees' && <EmployeeUploadTab />}
+          {!loadingParticipants && activeTab === 'participants' && <ParticipantsTab rows={filteredRows} generated={generated} onManage={() => setActiveTab('manage')} />}
+          {activeTab === 'manage' && <ManageParticipantsTab cohort={cohort} rows={allInCohort} onAdded={(participant) => { setAllParticipants((current) => [...current, participant].sort((a, b) => a.name.localeCompare(b.name))); setCohorts((current) => current.map((item) => item.id === cohort.id ? { ...item, participantCount: (item.participantCount || 0) + 1 } : item)) }} onDeleted={(participantId) => { setAllParticipants((current) => current.filter((participant) => participant.id !== participantId)); setCohorts((current) => current.map((item) => item.id === cohort.id ? { ...item, participantCount: Math.max(0, (item.participantCount || 0) - 1) } : item)) }} />}
           {activeTab === 'threesixty' && <ThreeSixtyTab rows={allInCohort} />}
-          {activeTab === 'assessors' && <AssessorTab />}
+          {activeTab === 'assessors' && <AssessorTab rows={allInCohort} />}
           {activeTab === 'reports' && <ReportsTab rows={allInCohort} generated={generated} onGenerate={() => setGenerated(true)} />}
-        </div>
+        </div>}
       </div>
     </div>
   )

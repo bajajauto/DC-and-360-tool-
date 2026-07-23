@@ -23,6 +23,7 @@ export const SENIOR_LEADER_RELATIONSHIPS = new Set([
 ])
 
 export const RELATIONSHIP_LABELS = {
+  SELF: 'Self',
   REPORTING_MANAGER: 'Reporting Manager',
   SKIP_MANAGER: 'Skip Manager',
   BU_HEAD: 'BU Head',

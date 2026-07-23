@@ -1,12 +1,11 @@
-import { FileText, LayoutDashboard, LogOut, Users } from 'lucide-react'
+import { FileText, LayoutDashboard, LogOut } from 'lucide-react'
 import { Link, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useUser } from '../context/UserContext'
 import bajajBrandLockup from '../assets/bajaj-brand-lockup.png'
 
 const navItems = [
   { to: '/buhr/dashboard', label: 'BU Dashboard', icon: LayoutDashboard },
-  { to: '/buhr/people', label: 'People Status', icon: Users },
-  { to: '/buhr/reports', label: 'Published Reports', icon: FileText },
+  { to: '/buhr/reports', label: 'Report Repository', icon: FileText },
 ]
 
 export default function BUHRLayout() {

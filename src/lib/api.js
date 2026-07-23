@@ -74,6 +74,12 @@ export const api = {
 
   getCohortParticipants: (cohortId) => apiFetch(`/api/cohorts/${cohortId}/participants`),
 
+  addCohortParticipant: (cohortId, payload) =>
+    apiFetch(`/api/cohorts/${cohortId}/participants`, { method: 'POST', body: JSON.stringify(payload) }),
+
+  deleteCohortParticipant: (cohortId, participantId) =>
+    apiFetch(`/api/cohorts/${cohortId}/participants/${participantId}`, { method: 'DELETE' }),
+
   getParticipant: (participantId) => apiFetch(`/api/participants/${participantId}`),
 
   getParticipantWork: (participantId, type) => apiFetch(`/api/participants/${participantId}/work/${type}`),
@@ -83,14 +89,29 @@ export const api = {
 
   getBuhrParticipants: (userId) => apiFetch(`/api/buhr/${userId}/participants`),
 
+  getAssessorCandidates: () => apiFetch('/api/assessor/candidates'),
+
+  getAssessorCandidate: (participantId) => apiFetch(`/api/assessor/candidates/${participantId}`),
+
+  getAssessorAnalysis: () => apiFetch('/api/assessor-analysis'),
+
+  uploadAssessorAnalysis: (participantId, payload) =>
+    apiFetch(`/api/assessor-analysis/${participantId}`, { method: 'PUT', body: JSON.stringify(payload) }),
+
   saveNominees: (participantId, nominees) =>
     apiFetch(`/api/participants/${participantId}/nominees`, {
       method: 'PUT',
       body: JSON.stringify({ nominees }),
     }),
 
+  saveParticipantPhoto: (participantId, dataUrl) =>
+    apiFetch(`/api/participants/${participantId}/photo`, { method: 'PUT', body: JSON.stringify({ dataUrl }) }),
+
   submitNominees: (participantId) =>
     apiFetch(`/api/participants/${participantId}/nominees/submit`, { method: 'POST' }),
+
+  ensureSelfFeedbackTask: (participantId) =>
+    apiFetch(`/api/participants/${participantId}/self-feedback-task`, { method: 'POST' }),
 
   getFeedbackTask: (taskId) => apiFetch(`/api/feedback-tasks/${taskId}`),
 
@@ -112,6 +133,8 @@ export const api = {
   generate360Report: (participantId) =>
     apiFetch(`/api/reports/${participantId}/360/generate`, { method: 'POST' }),
 
+  getReportRepository: () => apiFetch('/api/reports/repository'),
+
   getOutbox: () => apiFetch('/api/notifications/outbox'),
 
   sendOutboxEmail: (emailId) =>
@@ -119,7 +142,10 @@ export const api = {
 
   getNotificationTemplates: () => apiFetch('/api/notifications/templates'),
 
-  getAuditLog: () => apiFetch('/api/audit-log'),
+  getNotificationRecipients: (templateId) => apiFetch(`/api/notifications/recipients?templateId=${encodeURIComponent(templateId || '')}`),
+
+  sendNotification: (payload) =>
+    apiFetch('/api/notifications/send', { method: 'POST', body: JSON.stringify(payload) }),
 
   setToken,
   getToken,
