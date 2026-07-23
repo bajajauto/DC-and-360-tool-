@@ -7,8 +7,8 @@ const baseJourneySteps = [
   { id: 1, label: 'Role Interview', to: '/participant/role-interview', status: 'completed', deadline: '15 Jun' },
   { id: 2, label: 'Photograph', to: '/participant/photograph', status: 'completed', deadline: '15 Jun' },
   { id: 3, label: 'Pre-Work', to: '/participant/pre-work', status: 'in-progress', deadline: '20 Jun' },
-  { id: 4, label: '360 Nominees', to: '/participant/360-nominees', status: 'pending', deadline: '20 Jun' },
-  { id: 5, label: 'Self 360 Survey', to: '/participant/self-360', status: 'locked', deadline: '30 Jun' },
+  { id: 4, label: 'Self 360 Survey', to: '/participant/self-360', status: 'locked', deadline: '30 Jun' },
+  { id: 5, label: '360 Nominees', to: '/participant/360-nominees', status: 'pending', deadline: '20 Jun' },
   { id: 6, label: '360 Feedback', to: '/participant/360-status', status: 'locked', deadline: '30 Jun' },
   { id: 7, label: 'DC Report', to: '/participant/reports', status: 'locked', deadline: 'TBD' },
 ]

@@ -24,24 +24,6 @@ const reports = [
     bgColor: 'bg-indigo-100',
     textColor: 'text-indigo-700',
   },
-  {
-    id: 'sdp',
-    title: 'SDP Report',
-    subtitle: 'Annual · FY 2024–25',
-    status: 'available',
-    releasedOn: '15 Apr 2025',
-    description: 'Your self-development plan report drawn from the SDP tool — includes self-reflection, goals, and manager inputs.',
-    icon: 'SDP',
-    bgColor: 'bg-teal-100',
-    textColor: 'text-teal-700',
-  },
-]
-
-const timeline = [
-  { label: 'Pre-Work Deadline', date: '20 Jun 2025', done: true },
-  { label: '360 Feedback Cutoff', date: '30 Jun 2025', done: false },
-  { label: 'DC Event', date: '25–26 Jul 2025', done: false },
-  { label: 'DC Report Released', date: 'Aug 2025', done: false },
 ]
 
 export default function Reports() {
@@ -113,35 +95,11 @@ export default function Reports() {
 
         {/* Right sidebar */}
         <div className="space-y-4">
-          {/* DC Timeline */}
-          <div className="bg-white rounded-xl border border-[#e2e8f0] p-4">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">DC Timeline</p>
-            <div className="space-y-3">
-              {timeline.map((item, idx) => (
-                <div key={item.label} className="flex items-start gap-3">
-                  <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${item.done ? 'bg-[#1e4d8c]' : 'bg-gray-100'}`}>
-                    {item.done
-                      ? <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                      : <span className="text-[9px] text-gray-400 font-medium">{idx + 1}</span>
-                    }
-                  </div>
-                  <div>
-                    <p className={`text-xs font-medium ${item.done ? 'text-gray-400 line-through' : 'text-[#1a1f2e]'}`}>{item.label}</p>
-                    <p className="text-[10px] text-gray-400">{item.date}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
           {/* Confidentiality */}
           <div className="bg-[#f1f4f9] rounded-xl border border-[#e2e8f0] p-4">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Confidentiality</p>
             <p className="text-xs text-gray-500 leading-relaxed">
-              Reports are accessible only to you, your Reporting Manager (DC report only, post-release), your BUHR, and the TD team.
-            </p>
-            <p className="text-xs text-gray-500 leading-relaxed mt-2">
-              Assessor inputs are presented in aggregated form and individual scores are not disclosed.
+              Reports are accessible only to you, your Reporting Manager, your BUHR, and the TD team.
             </p>
           </div>
 
