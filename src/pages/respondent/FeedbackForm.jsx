@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { Check, ChevronLeft, ChevronRight, Info, Lock, MessageSquare, X } from 'lucide-react'
 import { useUser } from '../../context/UserContext'
 import {
   getBehaviourIds,
@@ -24,17 +25,14 @@ function RatingButton({ value, selected, onChange }) {
       type="button"
       onClick={() => onChange(value)}
       aria-label={`${value}: ${label}`}
-      className={`group relative w-10 h-8 rounded-md text-xs font-semibold transition-all border ${
+      className={`flex h-[72px] w-[72px] flex-col items-center justify-center rounded-[10px] border text-sm font-semibold transition-all sm:h-[72px] sm:w-[84px] ${
         selected
-          ? 'bg-[#1e4d8c] text-white border-[#1e4d8c]'
-          : 'bg-white text-gray-500 border-[#e2e8f0] hover:border-[#1e4d8c] hover:text-[#1e4d8c]'
+          ? 'border-[#1e5fba] bg-[#1e5fba] text-white shadow-sm'
+          : 'border-[#cfd8e5] bg-white text-[#172033] hover:border-[#1e5fba] hover:bg-[#f3f7fc]'
       }`}
     >
-      {value}
-      <span
-        role="tooltip"
-        className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 w-max -translate-x-1/2 rounded-md bg-[#1a1f2e] px-2.5 py-1.5 text-[11px] font-medium leading-none text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
-      >
+      <span>{value}</span>
+      <span className={`mt-1 text-center text-[9px] font-medium uppercase leading-3 ${selected ? 'text-blue-100' : 'text-slate-500'}`}>
         {label}
       </span>
     </button>
@@ -43,9 +41,21 @@ function RatingButton({ value, selected, onChange }) {
 
 function BehaviourRow({ behaviour, rating, onRate, index }) {
   return (
-    <div className={`flex items-center gap-4 py-3 ${index > 0 ? 'border-t border-[#f1f4f9]' : ''}`}>
-      <p className="flex-1 text-sm text-[#1a1f2e] leading-snug pr-2">{behaviour.text}</p>
-      <div className="flex items-center gap-1.5 shrink-0">
+    <div className={`grid gap-5 py-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center ${index > 0 ? 'border-t border-[#dfe5ee]' : ''}`}>
+      <div className="min-w-0 pr-3">
+        <p className="text-sm font-semibold leading-snug text-[#111827]">{behaviour.text}</p>
+        {!!behaviour.indicators?.length && (
+          <ul className="mt-2 space-y-1 text-xs leading-5 text-slate-500">
+            {behaviour.indicators.map((indicator) => (
+              <li key={indicator} className="flex gap-2">
+                <span className="text-[#9bb4d2]">•</span>
+                <span>{indicator}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      <div className="grid grid-cols-4 gap-2 shrink-0">
         {[1, 2, 3, 4].map((v) => (
           <RatingButton key={v} value={v} selected={rating === v} onChange={onRate} />
         ))}
@@ -55,19 +65,12 @@ function BehaviourRow({ behaviour, rating, onRate, index }) {
 }
 
 function CompetencyBlock({ competency, ratings, onRate }) {
-  const answered = competency.behaviours.filter((b) => ratings[b.id] !== undefined).length
-
   return (
-    <div className="rounded-lg border border-[#e2e8f0] bg-white overflow-hidden">
-      <div className="px-4 py-3 border-b border-[#e2e8f0] bg-[#fbfcfe] flex items-center justify-between gap-3">
-        <h4 className="text-sm font-semibold text-[#1a1f2e]">
-          {competency.title} <span className="text-gray-400 font-normal">({competency.shortCode})</span>
-        </h4>
-        <span className="text-[10px] text-gray-400 shrink-0">
-          {answered} of {competency.behaviours.length}
-        </span>
-      </div>
-      <div className="px-4">
+    <div>
+      <h4 className="border-b border-[#dfe5ee] pb-2 text-xs font-bold uppercase tracking-[0.08em] text-[#59708f]">
+        {competency.title}
+      </h4>
+      <div>
         {competency.behaviours.map((b, i) => (
           <BehaviourRow
             key={b.id}
@@ -111,7 +114,7 @@ function SectionCommentBox({ label, value, onChange, participantName, colour }) 
   )
 }
 
-function SurveySection({ section, ratings, comments, participantName, onRate, onCommentChange }) {
+function SurveySection({ section, sectionNumber, ratings, comments, participantName, onRate, onCommentChange }) {
   const behaviours = section.competencies.flatMap((competency) => competency.behaviours)
   const answered = behaviours.filter((b) => ratings[b.id] !== undefined).length
   const commentKeys = ['start', 'stop', 'continue']
@@ -119,31 +122,34 @@ function SurveySection({ section, ratings, comments, participantName, onRate, on
   const allDone = answered === behaviours.length && completedComments === commentKeys.length
 
   return (
-    <div className="bg-white rounded-xl border border-[#e2e8f0] overflow-hidden">
-      <div className="px-5 py-4 border-b border-[#e2e8f0] flex items-center justify-between gap-4">
+    <div className="overflow-hidden rounded-[14px] border border-[#d5dce5] bg-white shadow-[0_2px_12px_rgba(31,41,55,.04)]">
+      <div className="flex items-center justify-between gap-4 border-b border-[#d5dce5] px-6 py-5">
         <div>
-          <h3 className="text-sm font-semibold text-[#1a1f2e]">{section.title}</h3>
-          <p className="text-[10px] text-gray-400 mt-0.5">
+          <h3 className="text-base font-semibold text-[#111827]">Section {sectionNumber}: {section.title}</h3>
+          <p className="mt-1 text-[10px] text-gray-400">
             {answered} of {behaviours.length} ratings, {completedComments} of 3 comments complete
           </p>
         </div>
-        {allDone && (
+        <div className="flex items-center gap-2">
+          <span className="rounded-full border border-[#d5dce5] bg-[#f4f7fb] px-3 py-1.5 text-xs font-medium text-[#415a77]">{section.fourA}</span>
+          {allDone && (
           <div className="flex items-center gap-1 text-green-600 shrink-0">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
             </svg>
             <span className="text-xs font-medium">Complete</span>
           </div>
-        )}
+          )}
+        </div>
       </div>
 
-      <div className="px-5 py-5 space-y-4">
+      <div className="space-y-7 px-6 py-5">
         {section.competencies.map((competency) => (
           <CompetencyBlock key={competency.id} competency={competency} ratings={ratings} onRate={onRate} />
         ))}
       </div>
 
-      <div className="px-5 py-5 border-t border-[#e2e8f0] bg-[#f8f9fc]">
+      <div className="border-t border-[#d5dce5] bg-[#f8fafc] px-6 py-6">
         <div className="flex items-start justify-between gap-3 mb-4">
           <div>
             <p className="text-xs font-semibold text-[#1a1f2e]">Start, Stop and Continue</p>
@@ -191,6 +197,89 @@ function getCompletedCommentCount(sectionSsc, sections) {
   )
 }
 
+function WelcomeModal({ task, onClose }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-[2px]">
+      <div className="w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+          <h2 className="text-lg font-semibold text-[#172033]">Before you begin</h2>
+          <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Close">
+            <X size={18} />
+          </button>
+        </div>
+        <div className="p-6">
+          <div className="rounded-xl bg-[#f0f6ff] p-5 text-center">
+            <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-[#1e5fba] text-white"><MessageSquare size={20} /></div>
+            <h3 className="mt-3 text-lg font-semibold text-[#172033]">Welcome</h3>
+            <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-slate-600">
+              Thank you for taking the time to share your feedback for <strong>{task.participantName}</strong> as their <strong>{task.relationship}</strong>. Your perspective will help the Participant understand how others experience their strengths, contributions, and areas for growth.
+            </p>
+          </div>
+          <div className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 p-5">
+            <p className="flex items-center gap-2 text-sm font-semibold text-emerald-800"><Lock size={16} />Your confidentiality is protected</p>
+            <div className="mt-3 space-y-2.5 text-xs leading-5 text-emerald-900">
+              <p className="flex gap-2"><Check size={15} className="mt-0.5 shrink-0" />Individual responses are never shown to anyone, including the Participant.</p>
+              <p className="flex gap-2"><Check size={15} className="mt-0.5 shrink-0" />Feedback appears in the report only as aggregates per respondent group.</p>
+              <p className="flex gap-2"><Check size={15} className="mt-0.5 shrink-0" />A group score is displayed only when at least two respondents are in that group. Self, Reporting Manager, and Skip Manager / BU Head are exceptions.</p>
+            </div>
+          </div>
+        </div>
+        <div className="border-t border-slate-200 p-4">
+          <button type="button" onClick={onClose} className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#1e5fba] px-4 py-3 text-sm font-semibold text-white hover:bg-[#174a92]">
+            Continue to Instructions <ChevronRight size={16} />
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function SurveyInstructions({ surveyVariant, totalRatings, onShowWelcome }) {
+  return (
+    <div className="max-w-[900px] rounded-[14px] border border-[#d5dce5] bg-white p-7 shadow-[0_2px_12px_rgba(31,41,55,.04)]">
+      <h2 className="text-xl font-semibold text-[#172033]">Instructions</h2>
+      <p className="mt-1 text-sm text-slate-500">Please read these before you begin. The form takes approximately 20–30 minutes.</p>
+
+      <div className="mt-6">
+        <section className="border-t border-[#cfd8e5] py-5">
+          <h3 className="text-xs font-bold uppercase tracking-[0.08em] text-[#0757bd]">The Rating Scale</h3>
+          <p className="mt-3 text-sm leading-6 text-[#324a68]">Please rate each behaviour based on how often you observe the Participant demonstrating it. Behavioural indicators appear in grey below each statement to guide your thinking.</p>
+          <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+            {Object.entries(RATING_LABELS).map(([value, label]) => (
+              <div key={value} className="rounded-[10px] border border-[#c8d5e6] bg-[#edf3fa] px-3 py-3 text-center">
+                <p className="text-lg font-semibold text-[#0757bd]">{value}</p>
+                <p className="mt-0.5 text-[11px] text-[#324a68]">{label}</p>
+              </div>
+            ))}
+          </div>
+          {surveyVariant === SURVEY_VARIANTS.SENIOR_LEADER && <p className="mt-3 text-xs text-[#1e5fba]">Your role uses the shorter senior-leader subset of {totalRatings} behaviours.</p>}
+        </section>
+
+        <section className="border-t border-[#cfd8e5] py-5">
+          <h3 className="text-xs font-bold uppercase tracking-[0.08em] text-[#0757bd]">Start, Stop, Continue</h3>
+          <p className="mt-3 text-sm leading-6 text-[#324a68]">At the end of each section, you will be asked to share Start, Stop, and Continue feedback:</p>
+          <dl className="mt-2.5 grid gap-2 text-sm leading-6 text-[#324a68]">
+            <div className="grid grid-cols-[100px_1fr] gap-4"><dt className="font-semibold text-[#111827]">Start</dt><dd>Suggest behaviours, actions, or practices the individual should begin adopting to enhance their effectiveness.</dd></div>
+            <div className="grid grid-cols-[100px_1fr] gap-4"><dt className="font-semibold text-[#111827]">Stop</dt><dd>Highlight behaviours or actions that may be limiting their impact and should be reduced or discontinued.</dd></div>
+            <div className="grid grid-cols-[100px_1fr] gap-4"><dt className="font-semibold text-[#111827]">Continue</dt><dd>Reinforce strengths and positive behaviours that are working well and should be sustained.</dd></div>
+          </dl>
+        </section>
+
+        <section className="border-t border-[#cfd8e5] pt-5">
+          <h3 className="text-xs font-bold uppercase tracking-[0.08em] text-[#0757bd]">Please Note</h3>
+          <p className="mt-3 text-sm leading-6 text-[#324a68]">
+            Each response must be a minimum of {MIN_COMMENT_LENGTH} characters. Wherever possible, please use specific examples or instances, as this significantly enhances the quality and usefulness of the feedback. <strong className="font-semibold text-[#172033]">All rating fields and comments sections are mandatory.</strong>
+          </p>
+        </section>
+      </div>
+
+      <button type="button" onClick={onShowWelcome} className="mt-6 inline-flex items-center gap-2 rounded-lg border border-[#c2ccda] px-3.5 py-2 text-xs font-semibold text-[#1e5fba] hover:bg-[#ebf2fa]">
+        <Info size={15} /> Welcome & confidentiality
+      </button>
+    </div>
+  )
+}
+
 export default function FeedbackForm({ returnTo = '/respondent/dashboard', taskIdOverride = null }) {
   const { taskId: routeTaskId } = useParams()
   const taskId = taskIdOverride || routeTaskId
@@ -214,6 +303,8 @@ export default function FeedbackForm({ returnTo = '/respondent/dashboard', taskI
   const [saveStatus, setSaveStatus] = useState('idle')
   const [submitted, setSubmitted] = useState(task?.status === 'submitted')
   const [draftLoaded, setDraftLoaded] = useState(false)
+  const [currentStep, setCurrentStep] = useState(0)
+  const [showWelcome, setShowWelcome] = useState(!useWideParticipantLayout)
 
   // Load existing draft/response from API on mount
   useEffect(() => {
@@ -312,151 +403,104 @@ export default function FeedbackForm({ returnTo = '/respondent/dashboard', taskI
     return <SubmissionConfirmation task={task} onBack={() => navigate(returnTo)} />
   }
 
+  const currentSection = currentStep > 0 ? surveySections[currentStep - 1] : null
+  const sectionLabels = ['I', 'II', 'III', 'IV']
+
   return (
-    <div className="pb-32">
-      <div className="sticky top-0 z-10 bg-white border-b border-[#e2e8f0] px-6 py-3">
-        <div className={`${useWideParticipantLayout ? 'w-full' : 'mx-auto max-w-3xl'} flex items-center gap-4`}>
+    <div className="pb-28">
+      {showWelcome && <WelcomeModal task={task} onClose={() => setShowWelcome(false)} />}
+
+      <div className="sticky top-0 z-20 border-b border-[#d5dce5] bg-white px-6 py-3">
+        <div className="mx-auto flex max-w-[1180px] items-center gap-4">
           <button
             onClick={() => navigate(returnTo)}
-            className="text-gray-400 hover:text-gray-600 transition-colors shrink-0"
+            className="shrink-0 text-gray-400 transition-colors hover:text-gray-600"
             aria-label="Back to dashboard"
           >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-            </svg>
+            <ChevronLeft size={20} />
           </button>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between mb-1">
-              <p className="text-xs font-medium text-[#1a1f2e] truncate">
+          <div className="min-w-0 flex-1">
+            <div className="mb-1 flex items-center justify-between">
+              <p className="truncate text-xs font-medium text-[#1a1f2e]">
                 Feedback for <span className="text-[#1e4d8c]">{task.participantName}</span>
                 <span className="text-gray-400 ml-1.5 font-normal">- {task.relationship}</span>
               </p>
-              <span className="text-xs text-gray-400 shrink-0 ml-2">{requiredAnsweredCount}/{requiredTotal}</span>
+              <span className="ml-2 shrink-0 text-xs text-gray-400">{requiredAnsweredCount}/{requiredTotal}</span>
             </div>
-            <div className="w-full bg-gray-100 rounded-full h-1.5">
-              <div
-                className="bg-[#1e4d8c] rounded-full h-1.5 transition-all duration-300"
-                style={{ width: `${progressPct}%` }}
-              />
+            <div className="h-1.5 w-full rounded-full bg-gray-100">
+              <div className="h-1.5 rounded-full bg-[#1e4d8c] transition-all duration-300" style={{ width: `${progressPct}%` }} />
             </div>
           </div>
-          {saveStatus === 'saving' && <span className="text-[10px] text-gray-400 shrink-0">Saving...</span>}
+          <span className="hidden rounded-full border border-[#d5dce5] bg-[#f4f7fb] px-3 py-1 text-[10px] font-semibold text-slate-600 sm:inline-flex">
+            {surveyVariant === SURVEY_VARIANTS.SENIOR_LEADER ? `Senior leader · ${totalRatings} statements` : `Standard · ${totalRatings} statements`}
+          </span>
+          {saveStatus === 'saving' && <span className="shrink-0 text-[10px] text-gray-400">Saving...</span>}
           {saveStatus === 'saved' && (
-            <span className="text-[10px] text-green-600 shrink-0 flex items-center gap-1">
-              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-              </svg>
-              Saved
-            </span>
+            <span className="flex shrink-0 items-center gap-1 text-[10px] text-green-600"><Check size={12} />Saved</span>
           )}
         </div>
       </div>
 
-      <div className={`${useWideParticipantLayout ? 'w-full' : 'mx-auto max-w-3xl'} space-y-6 px-6 pt-6`}>
-        <div className="bg-[#f0f6ff] border border-[#bfdbfe] rounded-xl p-5">
-          <div className="flex items-start gap-3">
-            <div className="w-10 h-10 rounded-full bg-[#1e4d8c] flex items-center justify-center text-white font-semibold text-sm shrink-0">
-              {task.participantInitials}
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-[#1a1f2e]">Feedback for {task.participantName}</p>
-              <p className="text-xs text-gray-500">{task.designation} - {task.bu}</p>
-              <p className="text-xs text-[#1e4d8c] mt-2 leading-relaxed">
-                You have been nominated to provide 360 feedback as a <span className="font-medium">{task.relationship}</span>. Your responses are confidential and will be aggregated with feedback from others before being shared.
-              </p>
-              {surveyVariant === SURVEY_VARIANTS.SENIOR_LEADER && (
-                <p className="text-[10px] text-[#1e4d8c] mt-2 leading-relaxed">
-                  This version includes the shorter BU Head / Skip Manager behaviour subset selected for senior-leader visibility.
-                </p>
-              )}
-            </div>
+      <main className="mx-auto max-w-[1180px] space-y-4 px-5 pt-6 sm:px-6">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-xs text-slate-400">360 Degree Feedback</p>
+            <h1 className="mt-1 text-2xl font-semibold text-[#172033]">
+              {currentStep === 0 ? 'Instructions' : `Section ${sectionLabels[currentStep - 1]}: ${currentSection.title}`}
+            </h1>
+            <p className="mt-1 text-sm text-slate-500">Rate {task.participantName} only on behaviour you have personally observed.</p>
           </div>
+          <p className="text-xs text-slate-400">{currentStep === 0 ? 'Read before beginning' : `Section ${currentStep} of ${surveySections.length}`}</p>
         </div>
 
-        <div className="bg-white rounded-xl border border-[#e2e8f0] px-5 py-4">
-          <p className="text-xs font-semibold text-[#1a1f2e] mb-3">Rating Scale</p>
-          <div className="flex items-center gap-4 flex-wrap">
-            {Object.entries(RATING_LABELS).map(([val, label]) => (
-              <div key={val} className="flex items-center gap-1.5">
-                <div className="w-7 h-6 rounded-md bg-[#1e4d8c] text-white text-[10px] font-semibold flex items-center justify-center">
-                  {val}
-                </div>
-                <span className="text-xs text-gray-500">{label}</span>
-              </div>
-            ))}
+        {currentStep > 0 && (
+          <div className="rounded-xl border border-[#d5dce5] bg-white px-4 py-3">
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-slate-600">
+              {Object.entries(RATING_LABELS).map(([value, label]) => <span key={value}><strong className="text-[#172033]">{value}</strong> {label}</span>)}
+              <span className="ml-auto text-slate-500">All ratings and comments are mandatory</span>
+            </div>
           </div>
-        </div>
+        )}
 
-        {surveySections.map((section) => (
+        {currentStep === 0 ? (
+          <SurveyInstructions surveyVariant={surveyVariant} totalRatings={totalRatings} onShowWelcome={() => setShowWelcome(true)} />
+        ) : (
           <SurveySection
-            key={section.id}
-            section={section}
+            key={currentSection.id}
+            section={currentSection}
+            sectionNumber={sectionLabels[currentStep - 1]}
             ratings={ratings}
-            comments={sectionSsc[section.id]}
+            comments={sectionSsc[currentSection.id]}
             participantName={feedbackSubject}
             onRate={handleRate}
-            onCommentChange={(key, value) => handleSectionSsc(section.id, key, value)}
+            onCommentChange={(key, value) => handleSectionSsc(currentSection.id, key, value)}
           />
-        ))}
+        )}
+      </main>
 
-        <div className="bg-white rounded-xl border border-[#e2e8f0] overflow-hidden">
-          <div className="px-5 py-4 border-b border-[#e2e8f0]">
-            <h3 className="text-sm font-semibold text-[#1a1f2e]">
-              Overall Feedback <span className="font-normal text-gray-400">(optional)</span>
-            </h3>
-            <p className="text-[10px] text-gray-400 mt-0.5">Add a final summary across all sections if helpful.</p>
-          </div>
-          <div className="px-5 py-5 space-y-5">
-            {[
-              { key: 'start', label: 'Start', prompt: `What should ${feedbackSubject} start doing?`, colour: 'text-green-600' },
-              { key: 'stop', label: 'Stop', prompt: `What should ${feedbackSubject} stop doing?`, colour: 'text-red-500' },
-              { key: 'continue', label: 'Continue', prompt: `What should ${feedbackSubject} continue doing?`, colour: 'text-blue-600' },
-            ].map(({ key, label, prompt, colour }) => (
-              <div key={key}>
-                <label className="block text-xs font-semibold mb-1.5">
-                  <span className={colour}>{label}:</span>
-                  <span className="text-gray-500 font-normal ml-1.5">{prompt}</span>
-                </label>
-                <textarea
-                  rows={3}
-                  value={ssc[key]}
-                  onChange={(e) => setSsc((prev) => ({ ...prev, [key]: e.target.value }))}
-                  placeholder="Type your response here..."
-                  className="w-full px-3.5 py-2.5 rounded-lg border border-[#e2e8f0] text-sm text-[#1a1f2e] placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-[#1e4d8c] focus:border-transparent resize-none"
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="fixed bottom-0 left-60 right-0 bg-white border-t border-[#e2e8f0] px-6 py-3 z-10">
-        <div className={`${useWideParticipantLayout ? 'w-full' : 'mx-auto max-w-3xl'} flex items-center justify-between gap-4`}>
+      <div className={`fixed bottom-0 right-0 z-20 border-t border-[#e2e8f0] bg-white px-6 py-3 ${useWideParticipantLayout ? 'left-60' : 'left-60'}`}>
+        <div className="mx-auto flex max-w-[1180px] items-center justify-between gap-4">
           <p className="text-xs text-gray-400">
-            {allRated
+            {currentStep === 0
+              ? 'Your responses save automatically as you work.'
+              : allRated
               ? reflectionsComplete
                 ? 'All required fields complete - ready to submit.'
                 : `${totalCommentFields - sectionReflectionAnsweredCount} section comment${totalCommentFields - sectionReflectionAnsweredCount > 1 ? 's' : ''} remaining before you can submit.`
               : `${totalRatings - answeredCount} rating${totalRatings - answeredCount > 1 ? 's' : ''} remaining before you can submit.`}
           </p>
           <div className="flex items-center gap-3">
-            <button
-              onClick={handleSaveDraft}
-              className="px-4 py-2 text-sm font-medium text-[#1a1f2e] border border-[#e2e8f0] rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              Save Draft
-            </button>
-            <button
-              onClick={handleSubmit}
-              disabled={!canSubmit}
-              className={`px-5 py-2 text-sm font-medium rounded-lg transition-colors ${
-                canSubmit
-                  ? 'bg-[#1e4d8c] text-white hover:bg-[#183f73]'
-                  : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-              }`}
-            >
-              Submit Final
-            </button>
+            {currentStep > 0 && <button onClick={() => { setCurrentStep((step) => step - 1); window.scrollTo({ top: 0, behavior: 'smooth' }) }} className="inline-flex items-center gap-1 rounded-lg border border-[#c2ccda] px-4 py-2 text-sm font-medium text-[#1a1f2e] hover:bg-gray-50"><ChevronLeft size={15} />Back</button>}
+            {currentStep < surveySections.length ? (
+              <button onClick={() => { setCurrentStep((step) => step + 1); window.scrollTo({ top: 0, behavior: 'smooth' }) }} className="inline-flex items-center gap-1 rounded-lg bg-[#1e5fba] px-5 py-2 text-sm font-medium text-white hover:bg-[#174a92]">
+                {currentStep === 0 ? `Begin: ${surveySections[0].title}` : `Next: ${surveySections[currentStep].title}`} <ChevronRight size={15} />
+              </button>
+            ) : (
+              <>
+                <button onClick={handleSaveDraft} className="rounded-lg border border-[#c2ccda] px-4 py-2 text-sm font-medium text-[#1a1f2e] hover:bg-gray-50">Save Draft</button>
+                <button onClick={handleSubmit} disabled={!canSubmit} className={`rounded-lg px-5 py-2 text-sm font-medium ${canSubmit ? 'bg-[#1e5fba] text-white hover:bg-[#174a92]' : 'cursor-not-allowed bg-gray-100 text-gray-400'}`}>Submit Feedback</button>
+              </>
+            )}
           </div>
         </div>
       </div>
