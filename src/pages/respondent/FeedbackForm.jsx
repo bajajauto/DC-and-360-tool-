@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useMemo } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useOutletContext, useParams, useNavigate } from 'react-router-dom'
 import { Check, ChevronLeft, ChevronRight, Info, Lock, MessageSquare, X } from 'lucide-react'
 import { useUser } from '../../context/UserContext'
 import {
@@ -284,6 +284,8 @@ export default function FeedbackForm({ returnTo = '/respondent/dashboard', taskI
   const { taskId: routeTaskId } = useParams()
   const taskId = taskIdOverride || routeTaskId
   const navigate = useNavigate()
+  const outletContext = useOutletContext()
+  const setSurveyNavigation = outletContext?.setSurveyNavigation
   const { user } = useUser()
   const [loadedTask, setLoadedTask] = useState(null)
 
@@ -304,6 +306,7 @@ export default function FeedbackForm({ returnTo = '/respondent/dashboard', taskI
   const [submitted, setSubmitted] = useState(task?.status === 'submitted')
   const [draftLoaded, setDraftLoaded] = useState(false)
   const [currentStep, setCurrentStep] = useState(0)
+  const [instructionsVisited, setInstructionsVisited] = useState(false)
   const [showWelcome, setShowWelcome] = useState(!useWideParticipantLayout)
 
   // Load existing draft/response from API on mount
@@ -343,6 +346,35 @@ export default function FeedbackForm({ returnTo = '/respondent/dashboard', taskI
   const reflectionsComplete = sectionReflectionAnsweredCount === totalCommentFields
   const canSubmit = allRated && reflectionsComplete
   const draftPayload = useMemo(() => ({ ratings, sectionSsc, ssc }), [ratings, sectionSsc, ssc])
+
+  const sidebarItems = useMemo(() => [
+    { step: 0, label: 'Instructions', complete: instructionsVisited },
+    ...surveySections.map((section, index) => {
+      const behaviours = section.competencies.flatMap((competency) => competency.behaviours)
+      const ratingsComplete = behaviours.every((behaviour) => ratings[behaviour.id] !== undefined)
+      const commentsComplete = ['start', 'stop', 'continue'].every((key) => hasMinimumComment(sectionSsc[section.id]?.[key]))
+      return {
+        step: index + 1,
+        label: `Section ${index + 1}: ${section.title}`,
+        complete: ratingsComplete && commentsComplete,
+      }
+    }),
+  ], [instructionsVisited, ratings, sectionSsc, surveySections])
+
+  const goToStep = useCallback((step) => {
+    if (step > 0) setInstructionsVisited(true)
+    setCurrentStep(step)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [])
+
+  useEffect(() => {
+    if (!setSurveyNavigation || useWideParticipantLayout) return
+    setSurveyNavigation({ currentStep, items: sidebarItems, onSelect: goToStep })
+  }, [currentStep, goToStep, setSurveyNavigation, sidebarItems, useWideParticipantLayout])
+
+  useEffect(() => () => {
+    if (setSurveyNavigation) setSurveyNavigation(null)
+  }, [setSurveyNavigation])
 
   useEffect(() => {
     if (!taskId || submitted || !draftLoaded) return
@@ -490,9 +522,9 @@ export default function FeedbackForm({ returnTo = '/respondent/dashboard', taskI
               : `${totalRatings - answeredCount} rating${totalRatings - answeredCount > 1 ? 's' : ''} remaining before you can submit.`}
           </p>
           <div className="flex items-center gap-3">
-            {currentStep > 0 && <button onClick={() => { setCurrentStep((step) => step - 1); window.scrollTo({ top: 0, behavior: 'smooth' }) }} className="inline-flex items-center gap-1 rounded-lg border border-[#c2ccda] px-4 py-2 text-sm font-medium text-[#1a1f2e] hover:bg-gray-50"><ChevronLeft size={15} />Back</button>}
+            {currentStep > 0 && <button onClick={() => goToStep(currentStep - 1)} className="inline-flex items-center gap-1 rounded-lg border border-[#c2ccda] px-4 py-2 text-sm font-medium text-[#1a1f2e] hover:bg-gray-50"><ChevronLeft size={15} />Back</button>}
             {currentStep < surveySections.length ? (
-              <button onClick={() => { setCurrentStep((step) => step + 1); window.scrollTo({ top: 0, behavior: 'smooth' }) }} className="inline-flex items-center gap-1 rounded-lg bg-[#1e5fba] px-5 py-2 text-sm font-medium text-white hover:bg-[#174a92]">
+              <button onClick={() => goToStep(currentStep + 1)} className="inline-flex items-center gap-1 rounded-lg bg-[#1e5fba] px-5 py-2 text-sm font-medium text-white hover:bg-[#174a92]">
                 {currentStep === 0 ? `Begin: ${surveySections[0].title}` : `Next: ${surveySections[currentStep].title}`} <ChevronRight size={15} />
               </button>
             ) : (

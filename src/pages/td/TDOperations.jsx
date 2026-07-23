@@ -156,8 +156,8 @@ export function TrackersExports() {
 
 function outboxStatusTone(status) {
   if (status === 'sent') return 'success'
-  if (status === 'queued') return 'info'
   if (status === 'failed') return 'danger'
+  if (status === 'not_sent') return 'warning'
   return 'neutral'
 }
 
@@ -166,7 +166,6 @@ export function EmailOutbox() {
   const [selected, setSelected] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [sendingId, setSendingId] = useState(null)
 
   function load() {
     setLoading(true)
@@ -183,36 +182,24 @@ export function EmailOutbox() {
 
   useEffect(load, [])
 
-  async function handleSend(email) {
-    setSendingId(email.id)
-    try {
-      await api.sendOutboxEmail(email.id)
-      load()
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setSendingId(null)
-    }
-  }
-
   return (
     <Page
       eyebrow="Talent Development / Operations"
-      title="Email Outbox"
-      subtitle="Every email the tool sends, in order. Review and send from here; nothing auto-dispatches."
+      title="Email Delivery History"
+      subtitle="Every notification is sent immediately. Review successful and failed delivery attempts here."
     >
       {error && <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
       <div className="grid gap-5 xl:grid-cols-[1fr_420px]">
         <Card>
-          <CardHeader title="Sent notifications" subtitle="Welcome emails, 360 invitations, reminders, and report-release notifications." />
+          <CardHeader title="Delivery history" subtitle="Welcome emails, 360 invitations, reminders, and report-release notifications." />
           <div className="overflow-hidden rounded-xl border border-[#d5dce5]">
             <table className="w-full border-collapse bg-white text-left text-[13px]">
               <thead className="bg-[#ebf2fa]">
-                <tr>{['Queued', 'To', 'Recipient Role', 'Subject', 'Status', ''].map((label) => <th key={label} className="border-b border-[#d5dce5] px-3 py-2.5 text-[11px] font-bold uppercase tracking-wide text-slate-600">{label}</th>)}</tr>
+                <tr>{['Created', 'To', 'Recipient Role', 'Subject', 'Status', ''].map((label) => <th key={label} className="border-b border-[#d5dce5] px-3 py-2.5 text-[11px] font-bold uppercase tracking-wide text-slate-600">{label}</th>)}</tr>
               </thead>
               <tbody>
                 {!loading && !outbox.length && (
-                  <tr><td colSpan={6} className="px-3 py-6 text-center text-sm text-slate-500">No emails queued yet.</td></tr>
+                  <tr><td colSpan={6} className="px-3 py-6 text-center text-sm text-slate-500">No email delivery attempts yet.</td></tr>
                 )}
                 {outbox.map((email) => (
                   <tr key={email.id} className="hover:bg-[#f4f7fb]">
@@ -220,15 +207,10 @@ export function EmailOutbox() {
                     <td className="border-b border-[#d5dce5] px-3 py-3"><p className="font-semibold">{email.toName || email.toEmail}</p><p className="text-xs text-slate-500">{email.toEmail}</p></td>
                     <td className="border-b border-[#d5dce5] px-3 py-3"><span className="rounded-full border border-[#d5dce5] bg-[#f1f5fa] px-3 py-1 text-xs text-slate-600">{email.recipientRole}</span></td>
                     <td className="border-b border-[#d5dce5] px-3 py-3 text-slate-600">{email.subject}</td>
-                    <td className="border-b border-[#d5dce5] px-3 py-3"><Badge tone={outboxStatusTone(email.status)}>{email.status}</Badge></td>
+                    <td className="border-b border-[#d5dce5] px-3 py-3"><Badge tone={outboxStatusTone(email.status)}>{email.status === 'not_sent' ? 'Not sent' : email.status}</Badge></td>
                     <td className="border-b border-[#d5dce5] px-3 py-3 text-right">
                       <div className="flex items-center justify-end gap-1">
                         <button onClick={() => setSelected(email)} className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-[#1e5fba] hover:bg-[#ebf2fa]"><Eye size={13} />View</button>
-                        {email.status === 'queued' && (
-                          <button onClick={() => handleSend(email)} disabled={sendingId === email.id} className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-[#15803d] hover:bg-[#e8f5ee] disabled:opacity-50">
-                            <Send size={13} />{sendingId === email.id ? 'Sending...' : 'Send'}
-                          </button>
-                        )}
                       </div>
                     </td>
                   </tr>
@@ -404,7 +386,7 @@ export function NotificationTemplates() {
     try {
       const result = await api.sendNotification({ templateId: selected.templateId, subject, body, recipients: composedRecipients })
       const summary = result.data
-      setNotice(`${summary.sent} email${summary.sent === 1 ? '' : 's'} sent${summary.failed ? `; ${summary.failed} failed. Check Email Outbox for details.` : '.'}`)
+      setNotice(`${summary.sent} email${summary.sent === 1 ? '' : 's'} sent${summary.failed ? `; ${summary.failed} failed. Check Email History for details.` : '.'}`)
       setSent(summary.sent > 0 && summary.failed === 0)
     } catch (err) {
       setError(err.message)
@@ -415,12 +397,12 @@ export function NotificationTemplates() {
 
   return (
     <Page
-      eyebrow="Talent Development / Configuration"
-      title="Notification Templates"
-      subtitle="Every automated email the tool sends, with placeholders filled by the tool at send time."
+      eyebrow="Talent Development / Communications"
+      title="Email Centre"
+      subtitle="Choose an approved system email, select recipients, review the message, and send it immediately."
     >
       {error && <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
-      {!loading && !templates.length && !error && <Card><p className="text-sm text-slate-500">No templates configured yet.</p></Card>}
+      {!loading && !templates.length && !error && <Card><p className="text-sm text-slate-500">No system emails configured yet.</p></Card>}
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_500px]">
         <div className="space-y-4">
           {phases.map((phase) => (
@@ -446,7 +428,7 @@ export function NotificationTemplates() {
         </div>
         {selected && (
           <Card className="h-fit xl:sticky xl:top-5">
-            <CardHeader title="Compose & send" subtitle={`${selected.trigger} · ${selected.recipient}`} action={<Bell size={16} className="text-[#1e5fba]" />} />
+            <CardHeader title="Review & send email" subtitle={`${selected.trigger} · ${selected.recipient}`} action={<Bell size={16} className="text-[#1e5fba]" />} />
             {notice && <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700">{notice}</div>}
 
             <label className="mb-1 block text-xs font-semibold text-slate-700">Select recipients</label>
@@ -470,7 +452,7 @@ export function NotificationTemplates() {
             <input value={subject} onChange={(event) => { setSubject(event.target.value); setSent(false) }} className="mb-3 w-full rounded-lg border border-[#c2ccda] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#d6e4f7]" />
             <label className="mb-1 block text-xs font-semibold text-slate-700">Email body</label>
             <textarea value={body} onChange={(event) => { setBody(event.target.value); setSent(false) }} rows={14} className="w-full rounded-lg border border-[#c2ccda] px-3 py-2 text-sm leading-6 focus:outline-none focus:ring-2 focus:ring-[#d6e4f7]" />
-            <p className="mt-2 text-[11px] text-slate-500">You can change any template text. Replace or remove placeholders such as {'{{Participant Name}}'} before sending a manual email.</p>
+            <p className="mt-2 text-[11px] text-slate-500">Placeholders such as {'{{Participant Name}}'} are filled by the Tool using the selected recipient's data.</p>
             <button onClick={handleSend} disabled={sending || sent || !composedRecipients.length} className={`mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed ${sent ? 'bg-emerald-600' : 'bg-[#1e5fba] hover:bg-[#0e3f87] disabled:opacity-50'}`}><Send size={15} />{sending ? 'Sending…' : sent ? 'Sent ✓' : `Send to ${composedRecipients.length || 0} recipient${composedRecipients.length === 1 ? '' : 's'}`}</button>
           </Card>
         )}

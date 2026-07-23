@@ -4,6 +4,7 @@ import { prisma } from '../db.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
 import { httpError } from '../utils/httpError.js'
 import { generate360ReportForParticipant } from '../reports/generate360Report.js'
+import { queueEmail } from '../notifications/service.js'
 
 export const feedbackTasksRouter = Router()
 
@@ -120,14 +121,33 @@ feedbackTasksRouter.post('/:taskId/submit', asyncHandler(async (req, res) => {
         submittedAt: new Date(),
       },
       include: {
+        nominee: true,
+        respondent: true,
         participant: {
           include: {
+            user: true,
             feedbackTasks: true,
           },
         },
       },
     })
   })
+
+  const respondentEmail = task.nominee?.email || task.respondent?.email
+  const respondentName = task.nominee?.name || task.respondent?.name
+  if (respondentEmail) {
+    await queueEmail({
+      templateId: 'respondent-thank-you',
+      toEmail: respondentEmail,
+      toName: respondentName,
+      context: {
+        'Respondent Name': respondentName || respondentEmail,
+        'Participant Name': task.participant.user.name,
+      },
+      entity: 'FeedbackTask',
+      entityId: task.id,
+    })
+  }
 
   const allSubmitted = task.participant.feedbackTasks.every((item) => item.status === 'SUBMITTED')
   let generatedReport = null

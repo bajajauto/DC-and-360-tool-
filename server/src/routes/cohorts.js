@@ -58,6 +58,13 @@ function slugify(name) {
     .replace(/^-+|-+$/g, '') || 'cohort'
 }
 
+function financialYear(value) {
+  if (!value) return ''
+  const year = value.getFullYear()
+  const startYear = value.getMonth() >= 3 ? year : year - 1
+  return `FY ${startYear}-${String(startYear + 1).slice(-2)}`
+}
+
 async function uniqueSlug(base) {
   let slug = base
   let suffix = 1
@@ -129,7 +136,7 @@ cohortsRouter.post('/', asyncHandler(async (req, res) => {
         update: { name: row.buhr.name, employeeId: row.buhr.employeeId, businessUnit: row.businessUnit, roles: ['BUHR'] },
         create: { name: row.buhr.name, email: row.buhr.email.toLowerCase(), employeeId: row.buhr.employeeId, businessUnit: row.businessUnit, passwordHash, roles: ['BUHR'] },
       })
-      await queueEmail({ templateId: 'welcome', toEmail: user.email, toName: user.name, context: { 'Participant Name': user.name, Cohort: created.name, 'Password Link': process.env.APP_URL || '', 'Nomination Deadline': created.nominationDeadline?.toISOString() || 'TBD' }, entity: 'Participant', entityId: participant.id }, tx)
+      await queueEmail({ templateId: 'welcome', toEmail: user.email, toName: user.name, context: { 'Participant Name': user.name, 'Participant Email': user.email, 'Participant Password': process.env.MOCK_USER_PASSWORD || 'Welcome@123', 'Login Link': process.env.APP_URL || 'http://localhost:5173', Cohort: created.name, 'Financial Year': financialYear(created.eventStart), 'Prework Deadline': created.preWorkDeadline?.toLocaleDateString('en-GB') || 'TBD' }, entity: 'Participant', entityId: participant.id }, tx)
     }
     return tx.cohort.findUnique({ where: { id: created.id }, include: { _count: { select: { participants: true } } } })
   })
@@ -197,7 +204,7 @@ cohortsRouter.post('/:cohortId/participants', asyncHandler(async (req, res) => {
       data: { userId: user.id, cohortId: cohort.id, masterData: {}, stage: 'APPLICATION_PROFILE', progress: 0, reportStatus: 'WAITING', lastActivityAt: new Date() },
       include: { user: true, nominees: true, feedbackTasks: true },
     })
-    await queueEmail({ templateId: 'welcome', toEmail: user.email, toName: user.name, context: { 'Participant Name': user.name, Cohort: cohort.name, 'Password Link': process.env.APP_URL || '', 'Nomination Deadline': cohort.nominationDeadline?.toISOString() || 'TBD' }, entity: 'Participant', entityId: created.id }, tx)
+    await queueEmail({ templateId: 'welcome', toEmail: user.email, toName: user.name, context: { 'Participant Name': user.name, 'Participant Email': user.email, 'Participant Password': process.env.MOCK_USER_PASSWORD || 'Welcome@123', 'Login Link': process.env.APP_URL || 'http://localhost:5173', Cohort: cohort.name, 'Financial Year': financialYear(cohort.eventStart), 'Prework Deadline': cohort.preWorkDeadline?.toLocaleDateString('en-GB') || 'TBD' }, entity: 'Participant', entityId: created.id }, tx)
     return created
   })
 

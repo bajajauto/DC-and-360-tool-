@@ -19,12 +19,14 @@ export default function RespondentLayout() {
   const navigate = useNavigate()
   const { user, logout, switchRole, pendingParticipantCount } = useUser()
   const [dropdownOpen, setDropdownOpen] = useState(false)
+  const [surveyNavigation, setSurveyNavigation] = useState(null)
 
   if (!user) {
     return <Navigate to="/" replace />
   }
 
   const isParticipantToo = user.roles.includes('participant')
+  const isFeedbackForm = pathname.startsWith('/respondent/feedback/')
 
   function handleSwitchToParticipant() {
     setDropdownOpen(false)
@@ -108,8 +110,57 @@ export default function RespondentLayout() {
         )}
 
         {/* Nav */}
-        <nav className="flex-1 min-h-0 overflow-y-auto px-3 py-3 space-y-0.5">
-          {navItems.map((item) => {
+        <nav className="flex-1 min-h-0 overflow-y-auto px-3 py-3 space-y-1">
+          {isFeedbackForm && surveyNavigation ? (
+            <>
+              {surveyNavigation.items.map((item) => {
+                const active = surveyNavigation.currentStep === item.step
+                return (
+                  <button
+                    key={item.step}
+                    type="button"
+                    onClick={() => surveyNavigation.onSelect(item.step)}
+                    className={`flex w-full items-center gap-3 rounded-[10px] border px-3 py-2.5 text-left text-xs transition-colors ${
+                      active
+                        ? 'border-[#c7daf2] bg-[#edf4fc] font-semibold text-[#1e5fba]'
+                        : item.complete
+                          ? 'border-transparent text-slate-700 hover:bg-emerald-50'
+                          : 'border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-800'
+                    }`}
+                  >
+                    <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border ${
+                      item.complete
+                        ? 'border-emerald-300 bg-emerald-100 text-emerald-700 shadow-[0_0_0_3px_rgba(16,185,129,.08)]'
+                        : active
+                          ? 'border-blue-300 bg-blue-100 text-[#1e5fba]'
+                          : 'border-slate-200 bg-white text-slate-400'
+                    }`}>
+                      {item.complete ? (
+                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.8}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                      ) : item.step === 0 ? (
+                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 16h.01M12 8v5m9-1a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      ) : (
+                        <span className="text-[10px] font-bold">{item.step}</span>
+                      )}
+                    </span>
+                    <span className="min-w-0 flex-1 leading-4">{item.label}</span>
+                  </button>
+                )
+              })}
+              <div className="mx-3 my-4 border-t border-[#e2e8f0]" />
+              <p className="px-3 text-[9px] font-bold uppercase tracking-[0.12em] text-slate-400">Need to pause?</p>
+              <Link to="/respondent/dashboard" className="mt-1 flex items-center gap-2 rounded-lg px-3 py-2 text-xs leading-4 text-slate-600 hover:bg-slate-50 hover:text-[#1e5fba]">
+                <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                </svg>
+                Back to your feedback list
+              </Link>
+            </>
+          ) : navItems.map((item) => {
             const Icon = item.icon
             const isActive = pathname.startsWith(item.to)
             return (
@@ -172,7 +223,7 @@ export default function RespondentLayout() {
             </button>
           </div>
         )}
-        <Outlet />
+        <Outlet context={{ setSurveyNavigation }} />
       </main>
     </div>
   )

@@ -54,7 +54,7 @@ function RoleGuide() {
   const steps = [
     'Create a cohort, download the Employee Details template, fill and upload it.',
     'Participants complete their Role Interview, Pre-Work, photograph and 360 nominations within the configured deadlines.',
-    'Launch and track 360 feedback. Respondents receive task-specific magic links, with reminders and delivery status available in the Email Outbox.',
+    'Launch and track 360 feedback. Respondents receive task-specific magic links immediately, with reminders and delivery status available in Email History.',
     'Assessors review participant evidence and upload the completed assessor-analysis workbook for each participant.',
     'Generate, review and release the 360 Feedback Report and final Development Centre Report when all required inputs are ready.',
   ]

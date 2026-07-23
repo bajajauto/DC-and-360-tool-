@@ -3,20 +3,9 @@ import { z } from 'zod'
 import { prisma } from '../db.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
 import { httpError } from '../utils/httpError.js'
-import { ensureNotificationTemplates, queueEmail, renderTemplate, sendEmail } from '../notifications/service.js'
+import { ensureNotificationTemplates, renderTemplate, sendEmail } from '../notifications/service.js'
 
 export const notificationsRouter = Router()
-
-const queueEmailSchema = z.object({
-  templateId: z.string().trim().min(1),
-  toEmail: z.string().trim().email(),
-  toName: z.string().trim().optional().nullable(),
-  context: z.record(z.string()).default({}),
-  magicLinkId: z.string().optional().nullable(),
-  entity: z.string().optional().nullable(),
-  entityId: z.string().optional().nullable(),
-  metadata: z.record(z.unknown()).default({}),
-})
 
 const bulkSendSchema = z.object({
   templateId: z.string().trim().min(1),
@@ -30,11 +19,23 @@ const bulkSendSchema = z.object({
   })).min(1).max(500),
 })
 
-const MAGIC_LINK_TEMPLATES = new Set(['resp-invite', 'resp-reminder'])
+const MAGIC_LINK_TEMPLATES = new Set(['resp-invite', 'resp-reminder', 'resp-recurring-reminder'])
 const PLACEHOLDER_RE = /\{\{[^}]+\}\}/g
 
 function dateLabel(value) {
   return value ? value.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'TBD'
+}
+
+function financialYear(value) {
+  if (!value) return ''
+  const year = value.getFullYear()
+  const startYear = value.getMonth() >= 3 ? year : year - 1
+  return `FY ${startYear}-${String(startYear + 1).slice(-2)}`
+}
+
+function daysRemaining(value) {
+  if (!value) return ''
+  return String(Math.max(0, Math.ceil((value.getTime() - Date.now()) / 86400000)))
 }
 
 function metadataContext(email) {
@@ -58,7 +59,10 @@ async function resolveRecipient(recipient) {
     return {
       email: magicLink.email.toLowerCase(),
       name: recipient.name || sourceEmail.toName || null,
-      context: metadataContext(sourceEmail),
+      context: {
+        ...metadataContext(sourceEmail),
+        'Days Remaining': metadataContext(sourceEmail)['Days Remaining'] || '',
+      },
       magicLinkId: magicLink.id,
     }
   }
@@ -67,20 +71,72 @@ async function resolveRecipient(recipient) {
     if (!recipient.sourceId) throw httpError(400, `Missing account source for ${recipient.email}`)
     const user = await prisma.user.findUnique({
       where: { id: recipient.sourceId },
-      include: { participant: { include: { cohort: true } } },
+      include: {
+        participant: {
+          include: {
+            cohort: true,
+            nominees: true,
+            feedbackTasks: true,
+          },
+        },
+      },
     })
     if (!user || user.email.toLowerCase() !== recipient.email.toLowerCase()) throw httpError(400, `Account not found for ${recipient.email}`)
     const cohort = user.participant?.cohort
+    const participant = user.participant
+    const tasks = participant?.feedbackTasks || []
+    const nominees = participant?.nominees || []
+    const responded = tasks.filter((task) => task.status === 'SUBMITTED')
+    const relationshipStats = (relationship) => {
+      const group = tasks.filter((task) => task.relationship === relationship)
+      return { count: group.length, responded: group.filter((task) => task.status === 'SUBMITTED').length }
+    }
+    const self = relationshipStats('SELF')
+    const rm = relationshipStats('REPORTING_MANAGER')
+    const skip = relationshipStats('SKIP_MANAGER')
+    const dr = relationshipStats('DIRECT_REPORT')
+    const peer = relationshipStats('PEER')
+    const status = (count, minimum) => count >= minimum ? 'Minimum met' : 'Below minimum'
+    const pendingNames = nominees
+      .filter((nominee) => nominee.status !== 'RESPONDED')
+      .map((nominee) => nominee.name)
+      .join(', ')
     return {
       email: user.email.toLowerCase(),
       name: user.name,
       context: {
         'Recipient Name': user.name,
         'Participant Name': user.name,
+        'Participant Email': user.email,
+        'Participant Password': process.env.MOCK_USER_PASSWORD || 'Welcome@123',
+        'Login Link': process.env.APP_URL || 'http://localhost:5173',
         'BUHR Name': user.name,
         Cohort: cohort?.name || '',
+        'Financial Year': financialYear(cohort?.eventStart),
+        'DC Dates': cohort?.eventStart && cohort?.eventEnd ? `${dateLabel(cohort.eventStart)} - ${dateLabel(cohort.eventEnd)}` : dateLabel(cohort?.eventStart),
         'Nomination Deadline': dateLabel(cohort?.nominationDeadline),
+        'Prework Deadline': dateLabel(cohort?.preWorkDeadline),
+        'Pending Items': 'Role Interview Form, Photograph, Pre-work Form',
         '360 Cutoff': dateLabel(cohort?.threeSixtyCutoff),
+        'Days Remaining': daysRemaining(cohort?.threeSixtyCutoff),
+        'Respondent Count': String(tasks.length),
+        'Responded Count': String(responded.length),
+        'Groups Below Threshold': '',
+        'Pending Respondent Names': pendingNames || 'None',
+        'Self Responded': String(self.responded),
+        'Self Status': status(self.responded, 1),
+        'RM Count': String(rm.count),
+        'RM Responded': String(rm.responded),
+        'RM Status': status(rm.responded, 1),
+        'Skip Count': String(skip.count),
+        'Skip Responded': String(skip.responded),
+        'Skip Status': status(skip.responded, 1),
+        'DR Count': String(dr.count),
+        'DR Responded': String(dr.responded),
+        'DR Status': status(dr.responded, 2),
+        'Peer Count': String(peer.count),
+        'Peer Responded': String(peer.responded),
+        'Peer Status': status(peer.responded, 2),
         'Item Name': '',
         Deadline: '',
       },
@@ -106,6 +162,7 @@ function toTemplateDto(template) {
 }
 
 function toEmailDto(email) {
+  const legacyUnsent = email.status === 'QUEUED' || email.status === 'SKIPPED'
   return {
     id: email.id,
     templateId: email.templateId,
@@ -114,9 +171,9 @@ function toEmailDto(email) {
     recipientRole: email.recipientRole,
     subject: email.subject,
     body: email.body,
-    status: email.status.toLowerCase(),
+    status: legacyUnsent ? 'not_sent' : email.status.toLowerCase(),
     providerMessageId: email.providerMessageId,
-    error: email.error,
+    error: legacyUnsent ? (email.error || 'Created before immediate email delivery was enabled') : email.error,
     magicLinkId: email.magicLinkId,
     entity: email.entity,
     entityId: email.entityId,
@@ -212,7 +269,7 @@ notificationsRouter.post('/send', asyncHandler(async (req, res) => {
 
   const results = []
   for (const recipient of personalized) {
-    const queued = await prisma.emailOutbox.create({
+    const deliveryRecord = await prisma.emailOutbox.create({
       data: {
         templateId: template.templateId,
         toEmail: recipient.email,
@@ -225,7 +282,7 @@ notificationsRouter.post('/send', asyncHandler(async (req, res) => {
         metadata: { source: 'template-compose', templateTrigger: template.trigger, context: recipient.context },
       },
     })
-    const sent = await sendEmail(queued.id)
+    const sent = await sendEmail(deliveryRecord.id)
     results.push(toEmailDto(sent))
   }
 
@@ -246,22 +303,4 @@ notificationsRouter.get('/outbox', asyncHandler(async (req, res) => {
   })
 
   res.json({ data: emails.map(toEmailDto) })
-}))
-
-notificationsRouter.post('/outbox', asyncHandler(async (req, res) => {
-  const payload = queueEmailSchema.parse(req.body)
-  const email = await queueEmail(payload)
-  res.status(201).json({ data: toEmailDto(email) })
-}))
-
-notificationsRouter.post('/outbox/:emailId/send', asyncHandler(async (req, res) => {
-  const existing = await prisma.emailOutbox.findUnique({
-    where: { id: req.params.emailId },
-  })
-
-  if (!existing) throw httpError(404, 'Email not found')
-  if (existing.status === 'SENT') throw httpError(409, 'Email already sent')
-
-  const email = await sendEmail(existing.id)
-  res.json({ data: toEmailDto(email) })
 }))

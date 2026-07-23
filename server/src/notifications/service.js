@@ -25,66 +25,14 @@ export async function ensureNotificationTemplates(db = prisma) {
   }
 }
 
-export async function queueEmail({
-  templateId,
-  toEmail,
-  toName,
-  context = {},
-  magicLinkId = null,
-  entity = null,
-  entityId = null,
-  actorId = null,
-  metadata = {},
-}, db = prisma) {
-  let template = await db.notificationTemplate.findUnique({ where: { templateId } })
-
-  if (!template) {
-    const defaultTemplate = notificationTemplates.find((item) => item.templateId === templateId)
-    if (!defaultTemplate) throw new Error(`Notification template not found: ${templateId}`)
-    template = await db.notificationTemplate.create({ data: defaultTemplate })
-  }
-
-  return db.emailOutbox.create({
-    data: {
-      templateId,
-      toEmail,
-      toName,
-      recipientRole: template.recipient,
-      subject: renderTemplate(template.subject, context),
-      body: renderTemplate(template.body, context),
-      magicLinkId,
-      entity,
-      entityId,
-      actorId,
-      metadata: {
-        ...metadata,
-        context,
-      },
-    },
-  })
-}
-
-export async function sendEmail(outboxId) {
-  const email = await prisma.emailOutbox.findUnique({ where: { id: outboxId } })
-  if (!email) throw new Error('Email not found')
-
-  const mode = process.env.EMAIL_MODE || 'outbox'
-  if (mode === 'outbox') {
-    return prisma.emailOutbox.update({
-      where: { id: outboxId },
-      data: {
-        status: 'SKIPPED',
-        error: 'EMAIL_MODE=outbox; email saved but not sent',
-      },
-    })
-  }
-
+async function deliverEmail(email, db = prisma) {
+  const mode = process.env.EMAIL_MODE || 'smtp'
   if (mode !== 'smtp') {
-    return prisma.emailOutbox.update({
-      where: { id: outboxId },
+    return db.emailOutbox.update({
+      where: { id: email.id },
       data: {
         status: 'FAILED',
-        error: `Unsupported EMAIL_MODE: ${mode}`,
+        error: `Immediate delivery requires EMAIL_MODE=smtp; received ${mode}`,
       },
     })
   }
@@ -108,8 +56,8 @@ export async function sendEmail(outboxId) {
       text: email.body,
     })
 
-    return prisma.emailOutbox.update({
-      where: { id: outboxId },
+    return db.emailOutbox.update({
+      where: { id: email.id },
       data: {
         status: 'SENT',
         providerMessageId: result.messageId || null,
@@ -118,12 +66,59 @@ export async function sendEmail(outboxId) {
       },
     })
   } catch (error) {
-    return prisma.emailOutbox.update({
-      where: { id: outboxId },
+    return db.emailOutbox.update({
+      where: { id: email.id },
       data: {
         status: 'FAILED',
         error: error.message,
       },
     })
   }
+}
+
+export async function queueEmail({
+  templateId,
+  toEmail,
+  toName,
+  context = {},
+  magicLinkId = null,
+  entity = null,
+  entityId = null,
+  actorId = null,
+  metadata = {},
+}, db = prisma) {
+  let template = await db.notificationTemplate.findUnique({ where: { templateId } })
+
+  if (!template) {
+    const defaultTemplate = notificationTemplates.find((item) => item.templateId === templateId)
+    if (!defaultTemplate) throw new Error(`Notification template not found: ${templateId}`)
+    template = await db.notificationTemplate.create({ data: defaultTemplate })
+  }
+
+  const email = await db.emailOutbox.create({
+    data: {
+      templateId,
+      toEmail,
+      toName,
+      recipientRole: template.recipient,
+      subject: renderTemplate(template.subject, context),
+      body: renderTemplate(template.body, context),
+      magicLinkId,
+      entity,
+      entityId,
+      actorId,
+      metadata: {
+        ...metadata,
+        context,
+      },
+    },
+  })
+
+  return deliverEmail(email, db)
+}
+
+export async function sendEmail(outboxId) {
+  const email = await prisma.emailOutbox.findUnique({ where: { id: outboxId } })
+  if (!email) throw new Error('Email not found')
+  return deliverEmail(email)
 }

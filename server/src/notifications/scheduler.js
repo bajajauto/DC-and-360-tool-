@@ -77,8 +77,12 @@ async function sendStageDeadlineReminders(db) {
         toName: participant.user.name,
         context: {
           'Participant Name': participant.user.name,
-          'Item Name': item.label,
-          Deadline: formatDate(deadline),
+          Cohort: participant.cohort.name,
+          'DC Dates': participant.cohort.eventStart && participant.cohort.eventEnd
+            ? `${formatDate(participant.cohort.eventStart)} - ${formatDate(participant.cohort.eventEnd)}`
+            : formatDate(participant.cohort.eventStart),
+          'Pending Items': item.label,
+          'Prework Deadline': formatDate(deadline),
         },
         entity: 'Participant',
         entityId: participant.id,
@@ -88,7 +92,7 @@ async function sendStageDeadlineReminders(db) {
   }
 }
 
-// Tiered 360 respondent reminders: every 3 days for week 1, then daily, until submission or cutoff
+// Recurring 360 respondent reminders: every two days until submission or cutoff
 async function sendRespondentReminders(db) {
   const tasks = await db.feedbackTask.findMany({
     where: { status: 'PENDING' },
@@ -107,10 +111,9 @@ async function sendRespondentReminders(db) {
     const daysSinceLaunch = Math.floor((now - task.createdAt) / 86400000)
     if (daysSinceLaunch < 1) continue
 
-    const dueForReminder = daysSinceLaunch <= 7 ? daysSinceLaunch % 3 === 0 : true
-    if (!dueForReminder) continue
+    if (daysSinceLaunch % 2 !== 0) continue
 
-    if (await alreadyQueuedToday(db, 'resp-reminder', 'FeedbackTask', task.id)) continue
+    if (await alreadyQueuedToday(db, 'resp-recurring-reminder', 'FeedbackTask', task.id)) continue
 
     const toEmail = task.nominee?.email || task.respondent?.email
     const toName = task.nominee?.name || task.respondent?.name
@@ -138,7 +141,7 @@ async function sendRespondentReminders(db) {
     })
 
     await queueEmail({
-      templateId: 'resp-reminder',
+      templateId: 'resp-recurring-reminder',
       toEmail,
       toName,
       context: {
@@ -146,6 +149,7 @@ async function sendRespondentReminders(db) {
         'Participant Name': task.participant.user.name,
         'Estimated Time': '20 minutes',
         '360 Cutoff': formatDate(task.dueAt),
+        'Days Remaining': task.dueAt ? String(Math.max(0, daysUntil(task.dueAt))) : '',
         'Magic Link': inviteUrl,
       },
       magicLinkId: magicLink.id,

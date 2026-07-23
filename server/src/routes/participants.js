@@ -327,6 +327,7 @@ participantsRouter.post('/:participantId/nominees/submit', asyncHandler(async (r
           'Respondent Name': nominee.name,
           'Participant Name': participant.user.name,
           Relationship: nominee.relationship.toLowerCase().replaceAll('_', ' '),
+          Cohort: participant.cohort.name,
           'Estimated Time': '20 minutes',
           'Magic Link': inviteUrl,
           '360 Cutoff': cutoffLabel,

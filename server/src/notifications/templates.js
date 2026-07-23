@@ -1,182 +1,342 @@
+const signature = `Warm Regards,
+Talent Development
+Bajaj Auto`
+
+const support = `If you have any questions, please write to your Business HR, Palak Shukla (pshukla1@bajajauto.co.in), or Arshia Kriplani (learn@bajajauto.co.in).`
+
 export const notificationTemplates = [
   {
     templateId: 'welcome',
     phase: 'Setup',
-    trigger: 'Employee upload imported, participant account created',
+    trigger: 'Employee details uploaded, participant account created',
     recipient: 'Participant',
-    subject: 'Welcome to {{Cohort}}: your 360 & DC journey begins',
+    subject: 'Welcome to the {{Cohort}} Development Centre | Your Tool credentials',
     body: `Dear {{Participant Name}},
 
-Congratulations on being nominated for the {{Cohort}} Development Centre. You have been recognised as a strong performer with the potential to grow further, and this journey is designed to support exactly that.
+Congratulations on being nominated for the {{Cohort}} Development Centre (DC) for {{Financial Year}}.
 
-Your account on the 360 & DC Tool is ready. Use the link below to set your password and sign in.
+This is a carefully chosen step, and your nomination reflects the confidence your leaders have in your potential. Only a select group of individuals across the organization are nominated for this process, and you are among them.
 
-Set your password: {{Password Link}}
+We truly believe in your potential, and this is a step forward in enabling you to grow.
 
-Once signed in, please complete these steps:
-1. Confirm your details
-2. Submit your 360 nominations by {{Nomination Deadline}}. Submitting launches your confidential 360 feedback automatically.
-3. Complete your Pre-Work and upload your photograph
+What is a Development Centre?
 
-Your DC dates will be shared by the TD team. For any questions, write to learn@bajajauto.co.in.
+The Development Centre is a structured and rigorous process designed to help you gain deeper awareness of your strengths, development areas, and leadership potential.
+
+As part of the process, you will participate in a series of simulations and exercises that mirror workplace situations and leadership challenges. To ensure objectivity and quality, trained external assessors will observe participants across these exercises and provide inputs based on demonstrated behaviours.
+
+In addition to the Development Centre exercises, the process will also include a 360 Degree Feedback assessment to build a holistic understanding of your strengths and development opportunities.
+
+The intent of the DC is developmental, not evaluative. The focus is on helping you build self-awareness and providing you with meaningful insights that can support your growth journey.
+
+We see this as an investment in your future with us. While the process will require commitment and effort from your side, the insights and support you'll receive through it will benefit you immediately in your current role and in the long term as you prepare for larger responsibilities.
+
+Getting Started
+
+Your account on the Bajaj Auto 360/DC Tool is now active. Please save this email for future reference.
+
+Login Details
+Login Link: {{Login Link}}
+Email ID: {{Participant Email}}
+Password: {{Participant Password}}
+
+Immediate Next Steps
+1. Upload Photograph
+2. Complete the Role Interview Form
+3. Submit your 360 Degree Feedback nominations
+4. Complete the Pre-work Form
+
+Deadline: {{Prework Deadline}} EOD
+
+${support}
 
 We wish you the very best for this development journey.
 
-Regards,
-Talent Development, Bajaj Auto`,
+${signature}`,
+  },
+  {
+    templateId: 'nom-reminder',
+    phase: '360 Cycle',
+    trigger: 'Nomination deadline approaching, list not yet submitted',
+    recipient: 'Participant',
+    subject: 'Reminder | Submit your 360 nominations by {{Nomination Deadline}}',
+    body: `Dear {{Participant Name}},
+
+As you move forward in your Development Centre journey, this is a reminder that your 360 nominations are yet to be submitted on the Bajaj Auto 360/DC Tool.
+
+Please complete this by {{Nomination Deadline}} EOD.
+
+Please note the following while nominating:
+
+Self
+- Description: Self-assessment completed by the participant
+- Minimum nominees: 1
+- Minimum responses required for reporting: 1
+
+Reporting Manager
+- Description: Immediate reporting manager
+- Minimum nominees: 1 or more
+- Minimum responses required for reporting: 1
+
+Skip / BU Head
+- Description: Skip-level manager or relevant BU Head
+- Minimum nominees: 1 or more
+- Minimum responses required for reporting: 1
+
+Direct Reports
+- Description: Team members reporting directly to the participant, if applicable
+- Minimum nominees: Optional
+- Minimum responses required for reporting: 2
+
+Peers / Internal Customers / External Stakeholders
+- Description: People who regularly interact with the participant
+- Minimum nominees: 4 or more
+- Minimum responses required for reporting: 2
+
+Please ensure you fill all nominations before submitting. Changes cannot be made later.
+
+Please note that the timelines given are sacrosanct and will not be extended.
+
+Submitting your list launches your 360 immediately, so the earlier you submit, the more time your respondents have to respond.
+
+${support}
+
+${signature}`,
+  },
+  {
+    templateId: 'nominations-confirmed',
+    phase: '360 Cycle',
+    trigger: 'Participant submits nominations, 360 launched',
+    recipient: 'Participant',
+    subject: 'Your 360 Degree Feedback is now live | {{Respondent Count}} respondents invited',
+    body: `Dear {{Participant Name}},
+
+Thank you for submitting your nominations. Your 360 Degree Feedback process has now been initiated.
+
+Invitations have been sent to all {{Respondent Count}} respondents on your list, including your self-assessment. Respondents are to complete the form on or before {{360 Cutoff}}.
+
+Please note:
+- Your nominee list is now locked and cannot be changed.
+- You can track response progress on the Tool at any time.
+- You will not be able to see who has said what. Feedback is shown only as group aggregates.
+
+Your 360 Degree Feedback report is confidential and shall be shared and used with utmost discretion by Managers, HR, and Assessors.
+
+${support}
+
+${signature}`,
+  },
+  {
+    templateId: 'resp-invite',
+    phase: '360 Cycle',
+    trigger: '360 launched, one invitation per nominated respondent',
+    recipient: 'Respondent',
+    subject: 'Request for your feedback | 360 Degree Feedback for {{Participant Name}}',
+    body: `Dear {{Respondent Name}},
+
+You have been nominated to provide 360 Degree Feedback for {{Participant Name}} as their {{Relationship}}, as part of the {{Cohort}} Development Centre.
+
+Your perspective will help them understand how others experience their strengths and contributions, and the areas where they can grow further. Your honest and considered inputs will support their development.
+
+Feedback Link: {{Magic Link}}
+
+This is a secure link personal to you and does not require a login or password. Please complete the form on or before {{360 Cutoff}}.
+
+Confidentiality: Your individual responses will remain confidential and will not be shared with the participant or any other individual. Feedback from Peers, Direct Reports, and Stakeholders is combined and presented in aggregate form. Only Reporting Manager and Skip-Level Manager / BU Head feedback may be reported separately.
+
+${support}
+
+Thank you for your time and inputs.
+
+${signature}`,
+  },
+  {
+    templateId: 'resp-reminder',
+    phase: '360 Cycle',
+    trigger: 'Scheduled or manual reminder to respondents yet to submit',
+    recipient: 'Respondent',
+    subject: 'Reminder | 360 Degree Feedback for {{Participant Name}} is pending',
+    body: `Dear {{Respondent Name}},
+
+This is a gentle reminder that your 360 Degree Feedback for {{Participant Name}} is yet to be submitted.
+
+Feedback Link: {{Magic Link}}
+Time required: 15-20 minutes
+
+The form closes on {{360 Cutoff}}. Please note that this timeline is sacrosanct and will not be extended.
+
+Your inputs make a meaningful difference to this individual's development journey.
+
+${support}
+
+${signature}`,
   },
   {
     templateId: 'stage-deadline-reminder',
     phase: 'Documents',
-    trigger: 'Role Interview / Photograph / Pre-Work deadline approaching (T-3, T-1)',
+    trigger: 'Pre-work deadline approaching, one or more items pending',
     recipient: 'Participant',
-    subject: 'Reminder: complete your {{Item Name}} by {{Deadline}}',
+    subject: 'Reminder | Complete your DC pre-work by {{Prework Deadline}}',
     body: `Dear {{Participant Name}},
 
-A quick reminder that your {{Item Name}} is still pending. Please sign in to the 360 & DC Tool and complete it by {{Deadline}}.
+As you prepare for the {{Cohort}} Development Centre scheduled for {{DC Dates}}, the following items are still pending on the Bajaj Auto 360/DC Tool:
 
-Regards,
-Talent Development, Bajaj Auto`,
+{{Pending Items}}
+
+Please complete these by {{Prework Deadline}} EOD.
+
+The Role Interview Form, Photograph, and Pre-work Form are read by your assessors before the DC and help them understand your context. Please complete them with sincerity. The timelines are sacrosanct and will not be extended.
+
+${support}
+
+${signature}`,
   },
   {
-    templateId: 'nom-reminder',
-    phase: '360 cycle',
-    trigger: 'Nomination deadline approaching, list not yet submitted',
+    templateId: 'report-360-released',
+    phase: 'Reports',
+    trigger: 'TD Admin switches on 360 report visibility for a participant',
     recipient: 'Participant',
-    subject: 'Reminder: submit your 360 nominations by {{Nomination Deadline}}',
+    subject: 'Your 360 Degree Feedback Report is now available',
     body: `Dear {{Participant Name}},
 
-A quick reminder that your 360 nominations are still pending. Please sign in to the 360 & DC Tool and submit your nominee list by {{Nomination Deadline}}.
+Thank you for participating in the 360 Degree Feedback process.
 
-Submitting your list launches your confidential 360 feedback immediately, so the earlier you submit, the more time your respondents have.
+Your 360 Degree Feedback Report is now available to view and download on the Bajaj Auto 360/DC Tool under My Reports.
 
-Please ensure all nominations are complete before submitting; the list locks on submission.
+As you read the report:
+1. Please go through the How to Read This Report pages first.
+2. Look for patterns and themes across respondent groups rather than individual scores.
+3. Assume positive intent and view the feedback as an opportunity to learn.
 
-Regards,
-Talent Development, Bajaj Auto`,
+Your report is confidential and shall be shared and used with utmost discretion by Managers, HR, and Assessors. Your Reporting Manager and BUHR have been copied for their awareness and support.
+
+${support}
+
+${signature}`,
   },
   {
-    templateId: 'nominations-confirmed',
-    phase: '360 cycle',
-    trigger: 'Nominations submitted, 360 launched',
+    templateId: 'report-dc-released',
+    phase: 'Reports',
+    trigger: 'TD Admin switches on DC report visibility for a participant',
     recipient: 'Participant',
-    subject: 'Your 360 is live: invitations sent to {{Respondent Count}} respondents',
+    subject: 'Your Development Centre Report is now available',
     body: `Dear {{Participant Name}},
 
-Thank you for submitting your nominations. Your confidential 360 degree feedback is now live.
+In continuation with your DC, we are glad to share your DC Report. This report provides a balanced view of your strengths and development opportunities.
 
-Invitations have been emailed to all {{Respondent Count}} respondents on your list, including your self assessment link. Responses are due by {{360 Cutoff}}.
+You can view and download it on the Bajaj Auto 360/DC Tool under My Reports.
 
-Your nominee list is now locked. You can track response progress from your dashboard, but individual responses are never visible to anyone; feedback is only ever shown as group aggregates in your report.
+Please go through the report thoroughly, as it will be useful for creating your Individual Development Plan (IDP). Your Reporting Manager and BUHR have been copied so that you can plan a development conversation together.
 
-Regards,
-Talent Development, Bajaj Auto`,
+${support}
+
+${signature}`,
+  },
+  {
+    templateId: 'respondent-thank-you',
+    phase: '360 Cycle',
+    trigger: 'Respondent submits their 360 feedback',
+    recipient: 'Respondent',
+    subject: 'Thank you | Your feedback for {{Participant Name}} has been recorded',
+    body: `Dear {{Respondent Name}},
+
+Thank you for completing the 360 Degree Feedback for {{Participant Name}}. Your response has been recorded successfully.
+
+Your inputs will be combined with feedback from other respondents and presented in aggregate form. No further action is required from you.
+
+${signature}`,
+  },
+  {
+    templateId: 'low-response-alert',
+    phase: '360 Cycle',
+    trigger: 'Three days before cutoff, minimum response requirements are not met',
+    recipient: 'Participant',
+    subject: 'Action needed | Your 360 may not generate a complete report',
+    body: `Dear {{Participant Name}},
+
+Your 360 window closes on {{360 Cutoff}}, and some respondent groups have not yet met the minimum responses required for reporting.
+
+Responses received: {{Responded Count}} of {{Respondent Count}}
+Groups below the minimum: {{Groups Below Threshold}}
+
+Where a group does not meet the minimum, that group's scores cannot be shown in your report to protect respondent confidentiality. Please follow up personally with your pending respondents.
+
+${support}
+
+${signature}`,
+  },
+  {
+    templateId: 'resp-recurring-reminder',
+    phase: '360 Cycle',
+    trigger: 'Automatic every two days until respondent submits or the window closes',
+    recipient: 'Respondent',
+    subject: 'Reminder | 360 Degree Feedback for {{Participant Name}} | {{Days Remaining}} days left',
+    body: `Dear {{Respondent Name}},
+
+Your 360 Degree Feedback for {{Participant Name}} is still pending. This reminder will stop as soon as you submit.
+
+Feedback Link: {{Magic Link}}
+Time required: 15-20 minutes
+Closes on: {{360 Cutoff}} ({{Days Remaining}} days remaining)
+
+If a respondent group does not receive the minimum responses, that group's feedback cannot be shown in the report. Your input genuinely affects whether this individual receives a complete picture.
+
+${support}
+
+${signature}`,
+  },
+  {
+    templateId: 'daily-360-status',
+    phase: '360 Cycle',
+    trigger: 'Daily from launch until the window closes while responses are outstanding',
+    recipient: 'Participant',
+    subject: 'Your 360 status | {{Responded Count}} of {{Respondent Count}} responses received',
+    body: `Dear {{Participant Name}},
+
+Here is the daily status of your 360 Degree Feedback. The window closes on {{360 Cutoff}} ({{Days Remaining}} days remaining).
+
+Responses received: {{Responded Count}} of {{Respondent Count}}
+
+Self: {{Self Responded}} / 1 — {{Self Status}}
+Reporting Manager: {{RM Responded}} / {{RM Count}} — {{RM Status}}
+Skip / BU Head: {{Skip Responded}} / {{Skip Count}} — {{Skip Status}}
+Direct Reports: {{DR Responded}} / {{DR Count}} — {{DR Status}}
+Peers / Internal Customers / External Stakeholders: {{Peer Responded}} / {{Peer Count}} — {{Peer Status}}
+
+Awaiting a response from: {{Pending Respondent Names}}
+
+Where a group does not meet the minimum responses, that group's feedback cannot be shown in your report. Please follow up personally with those still pending. This email stops automatically once all respondents have submitted.
+
+${support}
+
+${signature}`,
   },
   {
     templateId: 'nominees-submitted-buhr',
-    phase: '360 cycle',
+    phase: 'Operational',
     trigger: '360 nominees submitted by participant',
     recipient: 'BUHR',
     subject: '{{Participant Name}} has submitted 360 nominations',
     body: `Dear {{BUHR Name}},
 
-{{Participant Name}} ({{Cohort}}) has submitted their 360 nominee list and their confidential 360 feedback has been launched to {{Respondent Count}} respondents.
+{{Participant Name}} ({{Cohort}}) has submitted their 360 nominee list and invitations have been sent to {{Respondent Count}} respondents.
 
-This is for your information; no action is required. You can view the nominee list and progress from your BUHR dashboard.
+This is for your information; no action is required.
 
-360 & DC Tool`,
-  },
-  {
-    templateId: 'resp-invite',
-    phase: '360 cycle',
-    trigger: '360 launched, invitation to each respondent',
-    recipient: 'Respondent',
-    subject: 'Confidential: 360 feedback for {{Participant Name}}',
-    body: `Dear {{Respondent Name}},
-
-You have been invited to share confidential 360 degree feedback for {{Participant Name}} as their {{Relationship}}.
-
-Your perspective will help them gain a fuller understanding of how others experience their strengths and contributions, and the areas where they can grow further. The form takes about {{Estimated Time}}.
-
-Open your feedback form: {{Magic Link}}
-
-This is a secure link personal to you. No login or password is needed. If you have been asked to give feedback for more than one participant, the same link shows all of them in one place with their status.
-
-Individual responses are never shown. Feedback is consolidated and presented as aggregates per respondent group in the report.
-
-Please complete the form by {{360 Cutoff}}.
-
-Thank you for your time and considered inputs.
-
-Regards,
-Talent Development, Bajaj Auto`,
-  },
-  {
-    templateId: 'resp-reminder',
-    phase: '360 cycle',
-    trigger: 'Manual or scheduled reminder to pending respondents',
-    recipient: 'Respondent',
-    subject: 'Reminder: your 360 feedback for {{Participant Name}} is pending',
-    body: `Dear {{Respondent Name}},
-
-A gentle reminder that your 360 feedback for {{Participant Name}} is still pending.
-
-Open your feedback form: {{Magic Link}}
-
-The form takes about {{Estimated Time}} and closes on {{360 Cutoff}}. Your considered, honest inputs make a real difference to their development.
-
-Regards,
-Talent Development, Bajaj Auto`,
+${signature}`,
   },
   {
     templateId: 'threesixty-closed',
-    phase: '360 cycle',
+    phase: 'Operational',
     trigger: '360 window closed for the cohort',
     recipient: 'TD Admin',
-    subject: '360 window closed for {{Cohort}}: response summary',
+    subject: '360 window closed for {{Cohort}} | Response summary',
     body: `The 360 feedback window for {{Cohort}} has closed.
 
-Summary: {{Response Summary}}
+{{Response Summary}}
 
-You can now generate 360 reports from Generate & Release. Reports are generated directly from the tool's template; review each draft before switching on visibility.
+Reports can now be generated and reviewed in the Report Repository.
 
 360 & DC Tool`,
-  },
-  {
-    templateId: 'report-360-released',
-    phase: 'Reports',
-    trigger: 'TD switches on 360 report visibility for a participant',
-    recipient: 'Participant',
-    subject: 'Your 360 Feedback Report is now available',
-    body: `Dear {{Participant Name}},
-
-Your 360 Feedback Report has been released and is available under My Reports in the 360 & DC Tool.
-
-A few suggestions as you read it:
-1. Read the How to Read pages first; they explain the rating scale and how group aggregates work.
-2. Look for patterns across respondent groups rather than individual numbers.
-3. Use the Reflection Workbook at the end, and consider discussing your takeaways with your manager or a coach.
-
-Your report is a confidential document. Please use and share it with discretion.
-
-Regards,
-Talent Development, Bajaj Auto`,
-  },
-  {
-    templateId: 'report-dc-released',
-    phase: 'Reports',
-    trigger: 'TD switches on DC report visibility for a participant',
-    recipient: 'Participant + Manager',
-    subject: 'Your Development Centre Report is now available',
-    body: `Dear {{Participant Name}},
-
-Your Development Centre Report has been released and is available under My Reports in the 360 & DC Tool.
-
-The report brings together your assessor observations from the DC and your 360 feedback. Please go through the Guide pages first, then review each competency page and the Owning Your Development section.
-
-Your Reporting Manager has also been notified so you can plan a development conversation together.
-
-Regards,
-Talent Development, Bajaj Auto`,
   },
 ]

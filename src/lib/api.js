@@ -137,8 +137,6 @@ export const api = {
 
   getOutbox: () => apiFetch('/api/notifications/outbox'),
 
-  sendOutboxEmail: (emailId) =>
-    apiFetch(`/api/notifications/outbox/${emailId}/send`, { method: 'POST' }),
 
   getNotificationTemplates: () => apiFetch('/api/notifications/templates'),
 
