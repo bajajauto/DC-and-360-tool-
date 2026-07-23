@@ -41,6 +41,29 @@ const participantWorkSchema = z.object({
   submit: z.boolean().optional().default(false),
 })
 
+const placeholderPattern = /^(?:n\/?a|none|nil|[^\p{L}\p{N}]+)$/iu
+
+function validResponse(value, minimum = 1) {
+  const text = String(value || '').trim()
+  return text.length >= minimum && !placeholderPattern.test(text)
+}
+
+function validateParticipantWork(type, answers) {
+  if (type === 'pre-work') {
+    const invalid = Array.from({ length: 10 }, (_, index) => `q${index + 1}`)
+      .filter((key) => !validResponse(answers[key], 15))
+    if (invalid.length) throw httpError(400, 'Please answer every Pre-Work question with at least 15 characters. Placeholder responses such as NA, None, hyphens, or dots are not accepted.')
+    return
+  }
+
+  const transitionKeys = [1, 2, 3].flatMap((number) => ['role', 'roleDescription', 'bu', 'duration'].map((key) => `transition${number}_${key}`))
+  const shortFields = ['currentRole', ...transitionKeys]
+  const reflectionFields = ['responsibilities', 'highlight1', 'highlight2', 'highlight3', 'challenge1', 'challenge2', 'challenge3']
+  if (shortFields.some((key) => !validResponse(answers[key])) || reflectionFields.some((key) => !validResponse(answers[key], 15))) {
+    throw httpError(400, 'Please complete every Role Interview field. Detailed responses require at least 15 characters, and placeholder responses are not accepted.')
+  }
+}
+
 const photoSchema = z.object({
   dataUrl: z.string().max(7_500_000).refine((value) => /^data:image\/(jpeg|png);base64,/.test(value), 'Only JPG and PNG photographs are accepted'),
 })
@@ -133,12 +156,11 @@ participantsRouter.put('/:participantId/work/:type', asyncHandler(async (req, re
   const current = participant[field]
   const cutoff = req.params.type === 'role-interview' ? participant.cohort.roleInterviewDeadline : participant.cohort.preWorkDeadline
   if (hasCutoffPassed(cutoff)) throw httpError(409, `The ${req.params.type === 'role-interview' ? 'Role Interview' : 'Pre-Work'} cutoff has passed. This submission can no longer be edited.`)
-  if (req.params.type === 'pre-work' && payload.submit) {
-    const missing = Array.from({ length: 10 }, (_, index) => `q${index + 1}`).filter((key) => !String(payload.answers[key] || '').trim())
-    if (missing.length) throw httpError(400, 'All Pre-Work questions are mandatory')
-  }
-  const submittedAt = payload.submit ? current?.submittedAt || new Date().toISOString() : null
-  const value = { answers: payload.answers, status: payload.submit ? 'submitted' : 'draft', submittedAt, updatedAt: new Date().toISOString() }
+  if (payload.submit) validateParticipantWork(req.params.type, payload.answers)
+  const remainsSubmitted = current?.status === 'submitted'
+  const submitted = payload.submit || remainsSubmitted
+  const submittedAt = submitted ? current?.submittedAt || new Date().toISOString() : null
+  const value = { answers: payload.answers, status: submitted ? 'submitted' : 'draft', submittedAt, updatedAt: new Date().toISOString() }
   await prisma.participant.update({ where: { id: participant.id }, data: { [field]: value, lastActivityAt: new Date() } })
   res.json({ data: value })
 }))
