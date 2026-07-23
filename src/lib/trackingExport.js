@@ -128,6 +128,33 @@ export function exportCohortProcessStatus(cohort, participants) {
   ])
 }
 
+export function exportBuhrProcessStatus(businessUnit, participants) {
+  const processRows = [
+    ['Participant', 'Employee ID', 'Designation', 'Business unit', 'Cohort', 'Current stage', 'Progress', 'Nominations', 'Responses', 'Total responses', 'Pending responses', 'Report status', 'Last activity', ...processSteps.map((step) => step.label)],
+    ...participants.map((participant) => [
+      participant.name,
+      participant.employeeId,
+      participant.designation,
+      participant.bu,
+      participant.cohort?.name || 'Unassigned',
+      participant.stage,
+      `${participant.progress}%`,
+      participant.nominees?.length || 0,
+      participant.responses,
+      participant.totalResponses,
+      Math.max(0, participant.totalResponses - participant.responses),
+      participant.reportStatus,
+      participant.lastActivity,
+      ...processSteps.map((_, index) => doneOrNotDone(participant, index)),
+    ]),
+  ]
+
+  const safeBusinessUnit = String(businessUnit || 'business-unit').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase()
+  downloadWorkbook(`${safeBusinessUnit}-master-tracker.xls`, [
+    rowsToWorksheet('Master tracker', processRows),
+  ])
+}
+
 export function exportCohortNomineeStatus(cohort, participants) {
   const nomineeRows = [
     ['Participant', 'Employee ID', 'Participant designation', 'Business unit', 'Relationship', 'Nominee name', 'Nominee email', '360 form status', 'Nominated on', 'Responded on'],

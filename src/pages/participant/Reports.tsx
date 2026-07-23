@@ -63,8 +63,8 @@ export default function Reports() {
                   <p className="text-xs text-gray-400">{r.subtitle}</p>
                 </div>
                 {r.status === 'available'
-                  ? <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700 shrink-0">Available</span>
-                  : <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-400 shrink-0">Pending Release</span>
+                  ? <span className="text-xs font-semibold px-2.5 py-1 rounded-full border border-green-300 bg-green-100 text-green-700 shrink-0">Available</span>
+                  : <span className="text-xs font-semibold px-2.5 py-1 rounded-full border border-amber-300 bg-amber-100 text-amber-800 shrink-0">Pending Release</span>
                 }
               </div>
               <p className="text-xs text-gray-500 mb-4 leading-relaxed">{r.description}</p>
@@ -75,17 +75,15 @@ export default function Reports() {
                     ↓ Download PDF
                   </button>
                 </div>
-              ) : (
-                <p className="text-xs text-gray-400 flex items-center gap-1.5">🔒 You will be notified when this report is released by TD</p>
-              )}
+              ) : null}
             </div>
           </div>
         ))}
       </div>
 
-      <div className="mt-8 bg-[#f1f4f9] rounded-xl border border-[#e2e8f0] p-5">
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Confidentiality</p>
-        <p className="text-xs text-gray-500 leading-relaxed">
+      <div className="mt-8 bg-blue-50 rounded-xl border border-blue-200 p-5">
+        <p className="text-xs font-bold text-[#1e4d8c] uppercase tracking-wide mb-2">Confidentiality</p>
+        <p className="text-xs font-medium text-blue-800 leading-relaxed">
           Your reports are confidential and accessible only to you, your Reporting Manager (DC report only, post-release), your BUHR, and the TD team. Assessor inputs are presented in aggregated form and individual assessor scores are not disclosed.
         </p>
       </div>

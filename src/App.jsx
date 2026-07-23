@@ -40,6 +40,7 @@ import EvidenceDetail from './pages/assessor/EvidenceDetail'
 // BUHR
 import BUHRLayout from './layouts/BUHRLayout'
 import BUHRDashboard from './pages/buhr/Dashboard'
+import BUHRMasterTracker from './pages/buhr/MasterTracker'
 import BUHRReportRepository from './pages/buhr/ReportRepository'
 import BUHRParticipantReports from './pages/buhr/ParticipantReports'
 
@@ -109,6 +110,7 @@ export default function App() {
           <Route index element={<Navigate to="/buhr/dashboard" replace />} />
           <Route path="dashboard" element={<BUHRDashboard view="dashboard" />} />
           <Route path="people" element={<Navigate to="/buhr/dashboard" replace />} />
+          <Route path="tracker" element={<BUHRMasterTracker />} />
           <Route path="reports" element={<BUHRReportRepository />} />
           <Route path="reports/participant/:participantId" element={<BUHRParticipantReports />} />
         </Route>
