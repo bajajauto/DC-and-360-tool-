@@ -5,33 +5,97 @@ import { api } from '../../lib/api'
 
 const REL_LABELS = {
   'reporting-manager': 'Reporting Manager',
-  'skip-manager': 'Skip Manager',
-  peer: 'Peer / Internal Customer',
-  'direct-report': 'Direct Reportee',
+  'skip-manager': 'Skip / BU Head',
+  peer: 'Peers / Internal Customers / External Stakeholders',
+  'direct-report': 'Direct Reports',
 }
 
 const REL_REQUIREMENTS = {
   'reporting-manager': '1 or more',
-  'skip-manager': 'Required',
+  'skip-manager': '1 or more',
   peer: 'Minimum 4',
-  'direct-report': 'Optional, no cap',
+  'direct-report': 'Optional',
 }
 
 const addableRelationships = ['reporting-manager', 'skip-manager', 'peer', 'direct-report']
 
-const emptyExternalDrafts = {
-  'reporting-manager': { name: '', email: '' },
-  'skip-manager': { name: '', email: '' },
-  peer: { name: '', email: '' },
-  'direct-report': { name: '', email: '' },
+const NOMINATION_CATEGORIES = [
+  ['Self', 'Self-assessment completed by you.', '1', '1'],
+  ['Reporting Manager', 'Your immediate reporting manager.', '1 or more', '1'],
+  ['Skip / BU Head', 'Your skip-level manager or relevant BU Head.', '1 or more', '1'],
+  ['Direct Reports', 'Team members (on-roll or off-roll) reporting directly to you, if applicable.', 'Optional', '2'],
+  ['Peers / Internal Customers / External Stakeholders', 'Peers, internal customers, cross-functional partners, and external stakeholders who regularly interact with you.', '4 or more', '2'],
+]
+
+function RequirementsTable({ compact = false }) {
+  const columnWidths = compact ? ['w-[25%]', 'w-[31%]', 'w-[20%]', 'w-[24%]'] : ['', '', '', '']
+  return (
+    <div className="overflow-x-auto rounded-xl border border-slate-300">
+      <table className={`w-full text-left ${compact ? 'table-fixed text-[8px]' : 'min-w-[760px] text-xs'}`}>
+        <thead className="bg-[#a9c5f7] text-slate-900">
+          <tr>{['Respondent Category', 'Description', 'Minimum Nominees Required', 'Minimum Responses Required for Reporting'].map((label, index) => <th key={label} className={`border-b border-r border-white font-bold last:border-r-0 ${columnWidths[index]} ${compact ? 'px-1.5 py-2 leading-[11px]' : 'px-3 py-2.5'}`}>{label}</th>)}</tr>
+        </thead>
+        <tbody className="bg-white">
+          {NOMINATION_CATEGORIES.map((row) => <tr key={row[0]} className="border-b border-slate-200 last:border-0">{row.map((cell, index) => <td key={index} className={`border-r border-slate-200 align-top last:border-r-0 ${compact ? 'px-1.5 py-1.5 leading-[11px]' : 'px-3 py-2.5 leading-4'} ${index === 0 ? 'font-semibold text-slate-900' : 'text-slate-600'}`}>{cell}</td>)}</tr>)}
+        </tbody>
+      </table>
+    </div>
+  )
 }
+
+const emptyDraft = () => ({ name: '', email: '', employeeId: '', isExternal: false })
+const createInitialDrafts = () => ({
+  'reporting-manager': [emptyDraft()],
+  'skip-manager': [emptyDraft()],
+  peer: [emptyDraft(), emptyDraft(), emptyDraft(), emptyDraft()],
+  'direct-report': [emptyDraft()],
+})
 
 function validate(nominees) {
   const errors = []
   if (nominees.filter((n) => n.relationship === 'reporting-manager').length < 1) errors.push('At least 1 Reporting Manager required.')
-  if (nominees.filter((n) => n.relationship === 'skip-manager').length !== 1) errors.push('Exactly 1 Skip Manager required.')
+  if (nominees.filter((n) => n.relationship === 'skip-manager').length < 1) errors.push('At least 1 Skip / BU Head required.')
   if (nominees.filter((n) => n.relationship === 'peer').length < 4) errors.push(`At least 4 Peers required (${nominees.filter((n) => n.relationship === 'peer').length} added).`)
+  const emails = nominees.map((n) => n.email.trim().toLowerCase()).filter(Boolean)
+  if (new Set(emails).size !== emails.length) errors.push('Duplicate email addresses are not allowed.')
+  if (nominees.some((n) => !n.isExternal && !n.employeeId?.trim())) errors.push('Ticket ID is required for every internal respondent.')
   return errors
+}
+
+function formatDate(value) {
+  return value ? new Date(value).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'the date configured for your cohort'
+}
+
+function NominationInstructions({ nominationDeadline, feedbackCutoff, onAccept }) {
+  const [accepted, setAccepted] = useState(false)
+  return (
+    <div className="mx-auto max-w-5xl p-6">
+      <div className="mb-5 flex items-center gap-2 text-xs text-gray-400"><Link to="/participant/dashboard">Dashboard</Link><span>/</span><span>360 Degree Nominations</span></div>
+      <section className="overflow-hidden rounded-2xl border border-blue-200 bg-white">
+        <div className="bg-[#1e4d8c] px-6 py-6 text-white">
+          <p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-100">Before you begin</p>
+          <h1 className="mt-1 text-2xl font-bold">360 Degree Nominations</h1>
+          <p className="mt-3 text-sm font-semibold text-blue-50">Mandatory · Complete by {formatDate(nominationDeadline)} EOD</p>
+        </div>
+        <div className="space-y-7 p-6 text-sm leading-6 text-slate-700">
+          <div><p className="font-semibold text-slate-900">Dear Participant,</p><p className="mt-2">As the next step in your development journey, please nominate the people who will provide your 360 Degree Feedback.</p><p className="mt-2">Your 360 feedback is one of the most valuable inputs in this entire process. It shapes your report, informs your assessors before the Development Centre, and forms the basis of your development conversations afterwards. The quality of that feedback depends entirely on who you nominate.</p></div>
+          <div className="border-t pt-6"><h2 className="text-base font-bold text-[#1e4d8c]">Choosing the right respondents</h2><p className="mt-2">Nominate the people who see you work, not the people you get along with best. Choose stakeholders who observe your day-to-day behaviour, depend on your work, and can comment honestly on how you operate.</p><ul className="mt-3 space-y-2">
+            <li><strong>Relevance over comfort.</strong> Include people who will give you a candid and balanced view, including those you find challenging to work with.</li>
+            <li><strong>Range of perspectives.</strong> Cover different parts of your working world so your report reflects how you operate across the organisation.</li>
+            <li><strong>Sufficient exposure.</strong> Nominate people who have worked with you closely enough, and recently enough, to comment meaningfully.</li>
+            <li><strong>External stakeholders count.</strong> Vendors, dealers, partners and customers outside Bajaj Auto can be nominated.</li>
+          </ul></div>
+          <div className="border-t pt-6"><h2 className="text-base font-bold text-[#1e4d8c]">Respondent categories and minimums</h2><p className="mt-2">The minimum response threshold protects individual respondent confidentiality.</p><div className="mt-4"><RequirementsTable /></div>
+            <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-900"><strong>Please read the last column carefully.</strong> If a group does not receive its minimum number of responses, that group’s feedback cannot be shown in your report. For example, if only one Direct Report responds, the entire Direct Reports section will be blank.</div>
+          </div>
+          <div className="border-t pt-6"><h2 className="text-base font-bold text-[#1e4d8c]">Getting responses</h2><p className="mt-2">The onus of getting responses rests with you. Automated reminders may not be enough, so please tell your nominees why their input matters and follow up personally as the deadline approaches.</p><ul className="mt-3 list-disc space-y-1 pl-5"><li>You will receive a daily status email showing received and pending responses.</li><li>You can track the same progress on the Tool at any time.</li><li>Respondents receive an automated reminder every two days until they submit.</li></ul><p className="mt-3 font-semibold text-red-700">Feedback not completed by {formatDate(feedbackCutoff)} will not be included. Timelines are sacrosanct and will not be extended.</p></div>
+          <div className="border-t pt-6"><h2 className="text-base font-bold text-[#1e4d8c]">Confidentiality</h2><p className="mt-2">Your respondents’ individual responses will remain confidential and will not be shared with you or any other individual. Feedback from Peers, Direct Reports and Stakeholders is combined and presented in aggregate form. Only feedback from the Reporting Manager and Skip-Level Manager / BU Head may be reported separately.</p><p className="mt-2">You will be able to see who has and has not responded so that you can follow up. You will not be able to see what any individual has said.</p></div>
+          <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 p-4"><input checked={accepted} onChange={(event) => setAccepted(event.target.checked)} type="checkbox" className="mt-1 h-4 w-4 accent-[#1e4d8c]" /><span><strong className="text-slate-900">I have read and understood these instructions.</strong><br /><span className="text-xs text-slate-600">I understand the category minimums, confidentiality thresholds, deadlines, and that final submission locks my nominee list.</span></span></label>
+          <button disabled={!accepted} onClick={onAccept} className="w-full rounded-lg bg-[#1e4d8c] px-5 py-3 font-semibold text-white hover:bg-[#183f73] disabled:cursor-not-allowed disabled:opacity-40">Accept and continue to nominations</button>
+        </div>
+      </section>
+    </div>
+  )
 }
 
 function initials(name) {
@@ -45,12 +109,15 @@ export default function Nominees360() {
   const [nominees, setNominees] = useState([])
   const [inviteLinks, setInviteLinks] = useState([])
   const [selectedInvite, setSelectedInvite] = useState(null)
-  const [externalDrafts, setExternalDrafts] = useState(emptyExternalDrafts)
+  const [externalDrafts, setExternalDrafts] = useState(createInitialDrafts)
   const [mode, setMode] = useState('edit')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const [cohort, setCohort] = useState({})
+  const acceptanceKey = participantId ? `nomination-instructions-accepted:${participantId}` : ''
+  const [instructionsAccepted, setInstructionsAccepted] = useState(() => participantId ? window.localStorage.getItem(`nomination-instructions-accepted:${participantId}`) === 'true' : false)
 
   const isEditing = mode === 'edit'
   const isReviewing = mode === 'review'
@@ -62,8 +129,10 @@ export default function Nominees360() {
       .then((result) => {
         const loaded = result.data.nominees || []
         setNominees(loaded)
+        setCohort(result.data.cohort || {})
         if (loaded.some(n => n.status === 'submitted')) {
           setMode('submitted')
+          setInstructionsAccepted(true)
         } else if (loaded.length > 0) {
           setMode('review')
         } else {
@@ -74,6 +143,11 @@ export default function Nominees360() {
       .finally(() => setLoading(false))
   }, [participantId])
 
+  function acceptInstructions() {
+    if (acceptanceKey) window.localStorage.setItem(acceptanceKey, 'true')
+    setInstructionsAccepted(true)
+  }
+
   const errors = validate(nominees)
   const grouped = {
     'reporting-manager': nominees.filter((n) => n.relationship === 'reporting-manager'),
@@ -82,17 +156,23 @@ export default function Nominees360() {
     'direct-report': nominees.filter((n) => n.relationship === 'direct-report'),
   }
 
-  function updateExternalDraft(relationship, field, value) {
-    setExternalDrafts((prev) => ({ ...prev, [relationship]: { ...prev[relationship], [field]: value } }))
+  function updateExternalDraft(relationship, index, field, value) {
+    setExternalDrafts((prev) => ({
+      ...prev,
+      [relationship]: prev[relationship].map((draft, draftIndex) => draftIndex === index ? { ...draft, [field]: value } : draft),
+    }))
   }
 
-  function addExternalNominee(relationship) {
-    const draft = externalDrafts[relationship]
+  function addExternalNominee(relationship, index) {
+    const draft = externalDrafts[relationship][index]
     setNominees((prev) => [
       ...prev,
-      { id: `ext-${relationship}-${Date.now()}`, name: draft.name, email: draft.email, relationship, source: 'external' },
+      { id: `nominee-${relationship}-${Date.now()}`, name: draft.name.trim(), email: draft.email.trim(), employeeId: draft.isExternal ? '' : draft.employeeId.trim(), isExternal: draft.isExternal, relationship, source: draft.isExternal ? 'external' : 'manual' },
     ])
-    setExternalDrafts((prev) => ({ ...prev, [relationship]: { name: '', email: '' } }))
+    setExternalDrafts((prev) => ({
+      ...prev,
+      [relationship]: prev[relationship].filter((_, draftIndex) => draftIndex !== index),
+    }))
   }
 
   function renderNominee(n) {
@@ -102,7 +182,7 @@ export default function Nominees360() {
         <div className="w-7 h-7 rounded-full bg-[#dbeafe] flex items-center justify-center text-[#1e4d8c] text-xs font-semibold shrink-0">{initials(n.name)}</div>
         <div className="flex-1 min-w-0">
           <p className="text-xs font-medium text-[#1a1f2e] truncate">{n.name}</p>
-          <p className="text-[10px] text-gray-400 truncate">{n.designation ?? n.email}</p>
+          <p className="text-[10px] text-gray-400 truncate">{n.email}{n.employeeId ? ` · Ticket ID: ${n.employeeId}` : ''}{n.isExternal ? ' · External' : ''}</p>
         </div>
         {isEditing && !isLocked && (
           <button onClick={() => setNominees((prev) => prev.filter((x) => (x.id ?? x.email) !== (n.id ?? n.email)))} className="text-gray-300 hover:text-red-400 ml-1">x</button>
@@ -114,46 +194,64 @@ export default function Nominees360() {
   function renderAddControls(relationship) {
     if (!isEditing) return null
     if (!addableRelationships.includes(relationship)) return null
-    const draft = externalDrafts[relationship]
-    const relationshipAtLimit = relationship === 'skip-manager' && grouped[relationship].length >= 1
-    const canAdd = draft.name.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.email.trim()) && !relationshipAtLimit
+    const drafts = externalDrafts[relationship]
 
     return (
       <div className="mt-3 rounded-lg border border-[#e2e8f0] bg-[#f8f9fc] p-3">
           <div>
             <p className="text-xs font-semibold text-[#1a1f2e] mb-2">Add {REL_LABELS[relationship]}</p>
-            <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2">
+            <div className="space-y-3">
+            {drafts.map((draft, index) => {
+              const duplicateEmail = nominees.some((nominee) => nominee.email.toLowerCase() === draft.email.trim().toLowerCase())
+                || drafts.some((other, otherIndex) => otherIndex !== index && other.email.trim() && other.email.trim().toLowerCase() === draft.email.trim().toLowerCase())
+              const canAdd = draft.name.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.email.trim()) && (draft.isExternal || draft.employeeId.trim()) && !duplicateEmail
+              return <div key={index} className="rounded-lg border border-slate-200 bg-white p-3">
+              <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-400">Nominee {grouped[relationship].length + index + 1}</p>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <input
                 type="text"
                 placeholder="Full name"
                 value={draft.name}
-                onChange={(e) => updateExternalDraft(relationship, 'name', e.target.value)}
+                onChange={(e) => updateExternalDraft(relationship, index, 'name', e.target.value)}
                 className="px-3 py-2 rounded-lg border border-[#e2e8f0] bg-white text-sm placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-[#1e4d8c]"
               />
               <input
                 type="email"
                 placeholder="Email address"
                 value={draft.email}
-                onChange={(e) => updateExternalDraft(relationship, 'email', e.target.value)}
+                onChange={(e) => updateExternalDraft(relationship, index, 'email', e.target.value)}
                 className="px-3 py-2 rounded-lg border border-[#e2e8f0] bg-white text-sm placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-[#1e4d8c]"
               />
+              <input
+                type="text"
+                disabled={draft.isExternal}
+                placeholder={draft.isExternal ? 'Ticket ID not required' : 'Ticket ID'}
+                value={draft.employeeId}
+                onChange={(e) => updateExternalDraft(relationship, index, 'employeeId', e.target.value)}
+                className="rounded-lg border border-[#e2e8f0] bg-white px-3 py-2 text-sm placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-[#1e4d8c] disabled:bg-slate-100"
+              />
+              <div className="flex items-center justify-between gap-3">
+                {relationship === 'peer' ? <label className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={draft.isExternal} onChange={(event) => { updateExternalDraft(relationship, index, 'isExternal', event.target.checked); if (event.target.checked) updateExternalDraft(relationship, index, 'employeeId', '') }} className="accent-[#1e4d8c]" />External stakeholder</label> : <span />}
               <button
                 disabled={!canAdd}
-                onClick={() => addExternalNominee(relationship)}
+                onClick={() => addExternalNominee(relationship, index)}
                 className="px-4 py-2 rounded-lg border border-[#1e4d8c] text-[#1e4d8c] text-sm font-medium hover:bg-[#dbeafe] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                {relationshipAtLimit ? 'Added' : 'Add'}
+                Add
               </button>
+              </div>
             </div>
+            {duplicateEmail && <p className="mt-2 text-xs font-medium text-red-600">This email address is already in the nominee list.</p>}
+            </div>
+            })}
+            </div>
+            <button type="button" onClick={() => setExternalDrafts((prev) => ({ ...prev, [relationship]: [...prev[relationship], emptyDraft()] }))} className="mt-3 rounded-lg border border-dashed border-[#1e4d8c] bg-blue-50 px-3 py-2 text-xs font-semibold text-[#1e4d8c] hover:bg-blue-100">+ Add More</button>
           </div>
       </div>
     )
   }
 
   function getVisibleRequirement(rel) {
-    if (rel === 'reporting-manager' && grouped['reporting-manager'].length >= 1) return null
-    if (rel === 'peer' && grouped.peer.length >= 4) return null
-    if (rel === 'skip-manager' && grouped['skip-manager'].length === 1) return null
     return REL_REQUIREMENTS[rel]
   }
 
@@ -165,6 +263,8 @@ export default function Nominees360() {
       const result = await api.saveNominees(participantId, nominees.map(n => ({
         name: n.name,
         email: n.email,
+        employeeId: n.employeeId || null,
+        isExternal: Boolean(n.isExternal),
         designation: n.designation || null,
         relationship: n.relationship,
         source: n.source || 'manual',
@@ -220,6 +320,10 @@ export default function Nominees360() {
     )
   }
 
+  if (!instructionsAccepted && !submitted) {
+    return <NominationInstructions nominationDeadline={cohort.nominationDeadline} feedbackCutoff={cohort.threeSixtyCutoff} onAccept={acceptInstructions} />
+  }
+
   return (
     <div className="p-6">
       <div className="flex items-center gap-2 text-xs text-gray-400 mb-5">
@@ -229,15 +333,14 @@ export default function Nominees360() {
       </div>
 
       <div className="mb-5">
-        <h1 className="text-xl font-bold text-[#1a1f2e]">360 Nominee Submission</h1>
-        <p className="text-xs text-gray-400 mt-1">Enter the name and email address for every nominee, including your Reporting Manager and Skip Manager.</p>
-        <p className="text-sm text-gray-500 mt-0.5">
-          {isEditing
-            ? 'Select respondents who will provide feedback on your behaviours - Due 20 Jun 2025'
-            : isReviewing
-              ? 'Review the saved nominee list before final submission. Links are sent only after final submit.'
-              : 'Nominee list submitted. Emails have been sent to the selected respondents.'}
-        </p>
+        <div className="flex flex-wrap items-start justify-between gap-3"><div><h1 className="text-xl font-bold text-[#1a1f2e]">360 Nominee Submission</h1>
+        <p className="text-xs text-gray-400 mt-1">Add each respondent’s full name, email address and Ticket ID. Mark external stakeholders where applicable.</p></div>
+        {!submitted && <button onClick={() => setInstructionsAccepted(false)} className="rounded-lg border border-[#163f73] bg-[#1e4d8c] px-3 py-2 text-xs font-semibold text-white shadow-sm hover:bg-[#163f73]">← Back to Instructions</button>}</div>
+        {!isEditing && <p className="text-sm text-gray-500 mt-0.5">
+          {isReviewing
+            ? 'Review the saved nominee list before final submission. Links are sent only after final submit.'
+            : 'Nominee list submitted. Emails have been sent to the selected respondents.'}
+        </p>}
       </div>
 
       {error && (
@@ -247,8 +350,9 @@ export default function Nominees360() {
       )}
 
       {!submitted && (
-        <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          <strong>Final submission warning:</strong> Once submitted, your 360 nominations cannot be edited or changed. Please verify every name, email address and relationship before submitting.
+        <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-4 text-sm text-blue-900">
+          <p className="font-bold">How the nomination form works</p>
+          <ol className="mt-2 list-decimal space-y-1 pl-5 text-xs leading-5"><li>Add each respondent’s full name and email address. Tick External for anyone outside Bajaj Auto.</li><li>Check every email address carefully. An incorrect address means that person never receives the form.</li><li>Fill all required nominations before submitting. Submission launches your 360 and sends invitations immediately.</li><li>Once submitted, your nominee list is locked and cannot be changed later.</li></ol>
         </div>
       )}
 
@@ -339,13 +443,13 @@ export default function Nominees360() {
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_240px] gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px] gap-5">
           <div>
-            <div className="flex items-center justify-between gap-3 mb-4">
-              <h2 className="text-sm font-semibold text-[#1a1f2e] uppercase tracking-wide">
+            <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3">
+              <div><h2 className="text-sm font-semibold text-[#1a1f2e] uppercase tracking-wide">
                 {isReviewing ? 'Saved Nominee List' : 'Selected Nominees'}
-              </h2>
-              <p className="text-sm font-semibold text-[#1e4d8c]">{nominees.length} total</p>
+              </h2><p className="mt-0.5 text-xs text-slate-500">Includes your automatic self-assessment</p></div>
+              <div className="flex h-10 min-w-10 items-center justify-center rounded-lg bg-[#1e4d8c] px-3 text-base font-bold text-white">{nominees.length + 1}</div>
             </div>
             {isReviewing && (
               <div className="bg-blue-50 border border-[#bfdbfe] rounded-lg px-4 py-2.5 mb-4">
@@ -354,6 +458,9 @@ export default function Nominees360() {
             )}
 
             <div className="space-y-4">
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                <div className="flex items-center justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-wide text-amber-800">Self</p><p className="mt-1 text-xs text-amber-700">Your self-assessment is automatically included.</p></div><span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-bold text-emerald-700">Included</span></div>
+              </div>
               {Object.keys(grouped).map((rel) => (
                 <div key={rel} className="rounded-xl border border-[#e2e8f0] bg-white p-4">
                   {(() => {
@@ -379,6 +486,8 @@ export default function Nominees360() {
               ))}
             </div>
 
+            {grouped.peer.length === 4 && <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-900"><strong>Consider nominating a few more respondents.</strong> With exactly the minimum, a single non-response could prevent this group’s feedback from appearing in your report.</div>}
+
             {errors.length > 0 && (
               <div className="mt-4 bg-red-50 border border-red-200 rounded-lg p-3 space-y-1">
                 {errors.map((e) => <p key={e} className="text-xs text-red-600">! {e}</p>)}
@@ -394,7 +503,9 @@ export default function Nominees360() {
                 {saving ? 'Saving...' : 'Save Nominee List'}
               </button>
             ) : (
-              <div className="mt-5 flex flex-col sm:flex-row gap-3">
+              <>
+              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-xs leading-5 text-red-800"><strong>Please review your list before submitting.</strong> Submitting sends invitations immediately and locks your list. Changes cannot be made afterwards.</div>
+              <div className="mt-4 flex flex-col gap-3 sm:flex-row">
                 <button
                   onClick={() => setMode('edit')}
                   className="flex-1 py-2.5 rounded-lg border border-[#e2e8f0] bg-white text-[#1a1f2e] text-sm font-medium hover:bg-gray-50 transition-colors"
@@ -409,45 +520,14 @@ export default function Nominees360() {
                   {submitting ? 'Submitting...' : 'Final Submit and Send Links'}
                 </button>
               </div>
+              </>
             )}
           </div>
 
           <div className="space-y-4">
-            <div className="bg-white rounded-xl border border-[#e2e8f0] p-4 sticky top-6">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Requirements</p>
-              <div className="space-y-2.5">
-                {[
-                  { label: 'Reporting Manager', detail: '1 or more', ok: grouped['reporting-manager'].length >= 1 },
-                  { label: 'Skip Manager', detail: 'Exactly 1', ok: grouped['skip-manager'].length === 1 },
-                  { label: 'Peers / Int. Customers', detail: 'Minimum 4', ok: grouped.peer.length >= 4 },
-                  { label: 'Direct Reportees', detail: 'Optional', ok: true },
-                ].map((r) => (
-                  <div key={r.label} className="flex items-start gap-2">
-                    <div className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${r.ok ? 'bg-green-100' : 'bg-red-50'}`}>
-                      {r.ok
-                        ? <svg className="w-2.5 h-2.5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                        : <svg className="w-2.5 h-2.5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-                      }
-                    </div>
-                    <div>
-                      <p className="text-xs font-medium text-[#1a1f2e]">{r.label}</p>
-                      <p className="text-[10px] text-gray-400">{r.detail}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-3 pt-3 border-t border-[#e2e8f0]">
-                <div className="flex justify-between text-xs">
-                  <span className="text-gray-400">Total nominees</span>
-                  <span className="font-semibold text-[#1e4d8c]">{nominees.length}</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-xl border border-[#e2e8f0] p-4">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Deadline</p>
-              <p className="text-sm font-semibold text-[#1a1f2e]">20 Jun 2025</p>
-              <p className="text-xs text-gray-400 mt-0.5">Nominee list must be submitted by EOD</p>
+            <div className="bg-white rounded-xl border border-[#e2e8f0] p-3 sticky top-6">
+              <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-500">Respondent categories and minimums</p>
+              <RequirementsTable compact />
             </div>
 
             <div className="bg-[#f1f4f9] rounded-xl border border-[#e2e8f0] p-4">
@@ -465,6 +545,7 @@ export default function Nominees360() {
                 ))}
               </div>
             </div>
+
           </div>
         </div>
       )}

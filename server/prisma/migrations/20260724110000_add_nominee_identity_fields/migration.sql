@@ -1,0 +1,3 @@
+ALTER TABLE "Nominee"
+ADD COLUMN "employeeId" TEXT,
+ADD COLUMN "isExternal" BOOLEAN NOT NULL DEFAULT false;

@@ -26,6 +26,8 @@ const relationshipMap = {
 const nomineeSchema = z.object({
   name: z.string().trim().min(1),
   email: z.string().trim().email(),
+  employeeId: z.string().trim().optional().nullable(),
+  isExternal: z.boolean().optional().default(false),
   designation: z.string().trim().optional().nullable(),
   relationship: z.enum(['reporting-manager', 'skip-manager', 'peer', 'direct-report']),
   source: z.string().trim().optional(),
@@ -129,6 +131,7 @@ participantsRouter.get('/:participantId', asyncHandler(async (req, res) => {
         eventStart: participant.cohort.eventStart?.toISOString() || null,
         eventEnd: participant.cohort.eventEnd?.toISOString() || null,
         threeSixtyCutoff: participant.cohort.threeSixtyCutoff?.toISOString() || null,
+        nominationDeadline: participant.cohort.nominationDeadline?.toISOString() || null,
         eventDate: participant.cohort.eventStart && participant.cohort.eventEnd
           ? `${participant.cohort.eventStart.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })} - ${participant.cohort.eventEnd.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}`
           : 'TBD',
@@ -177,7 +180,23 @@ participantsRouter.put('/:participantId/nominees', asyncHandler(async (req, res)
   const payload = nomineesPayloadSchema.parse(req.body)
   const participant = await findParticipant(req.params.participantId)
   assertParticipantAccess(req, participant)
+  if (hasCutoffPassed(participant.cohort.nominationDeadline)) throw httpError(409, 'The nomination deadline has passed. The nominee list can no longer be edited.')
   if (participant.nominees.some((nominee) => nominee.status === 'SUBMITTED')) throw httpError(409, 'Submitted nominations are final and cannot be edited')
+  const normalizedEmails = payload.nominees.map((nominee) => normalizeEmail(nominee.email))
+  if (new Set(normalizedEmails).size !== normalizedEmails.length) throw httpError(400, 'Each respondent email address can appear only once in the nominee list')
+  if (payload.nominees.some((nominee) => !nominee.isExternal && !nominee.employeeId)) {
+    throw httpError(400, 'Ticket ID is required for internal respondents')
+  }
+  if (payload.nominees.some((nominee) => nominee.isExternal && nominee.relationship !== 'peer')) {
+    throw httpError(400, 'External stakeholders must be added within the Peers category')
+  }
+  const lockedNominees = participant.nominees.filter((nominee) => nominee.locked)
+  for (const locked of lockedNominees) {
+    const retained = payload.nominees.find((nominee) => normalizeEmail(nominee.email) === normalizeEmail(locked.email) && relationshipMap[nominee.relationship] === locked.relationship)
+    if (!retained || retained.name !== locked.name || (retained.employeeId || null) !== (locked.employeeId || null)) {
+      throw httpError(409, 'Prefilled Reporting Manager and Skip / BU Head rows cannot be changed')
+    }
+  }
 
   const nominees = await prisma.$transaction(async (tx) => {
     await tx.nominee.deleteMany({
@@ -192,6 +211,8 @@ participantsRouter.put('/:participantId/nominees', asyncHandler(async (req, res)
         participantId: req.params.participantId,
         name: nominee.name,
         email: normalizeEmail(nominee.email),
+        employeeId: nominee.employeeId || null,
+        isExternal: nominee.isExternal,
         designation: nominee.designation || null,
         relationship: relationshipMap[nominee.relationship],
         source: nominee.source || 'manual',
@@ -224,6 +245,7 @@ participantsRouter.put('/:participantId/nominees', asyncHandler(async (req, res)
 participantsRouter.post('/:participantId/self-feedback-task', asyncHandler(async (req, res) => {
   const participant = await findParticipant(req.params.participantId)
   assertParticipantAccess(req, participant)
+  if (hasCutoffPassed(participant.cohort.nominationDeadline)) throw httpError(409, 'The nomination deadline has passed. Nominations can no longer be submitted.')
   if (!participant.nominees.some((nominee) => nominee.status === 'SUBMITTED')) throw httpError(409, 'Submit your 360 nominations before starting the self survey')
 
   const existing = await prisma.feedbackTask.findFirst({
@@ -251,8 +273,8 @@ participantsRouter.post('/:participantId/nominees/submit', asyncHandler(async (r
   if (!nominees.some((nominee) => nominee.relationship === 'REPORTING_MANAGER')) {
     throw httpError(400, 'At least 1 reporting manager nominee is required')
   }
-  if (nominees.filter((nominee) => nominee.relationship === 'SKIP_MANAGER').length !== 1) {
-    throw httpError(400, 'Exactly 1 skip manager nominee is required')
+  if (nominees.filter((nominee) => nominee.relationship === 'SKIP_MANAGER').length < 1) {
+    throw httpError(400, 'At least 1 Skip / BU Head nominee is required')
   }
   if (nominees.filter((nominee) => nominee.relationship === 'PEER').length < 4) {
     throw httpError(400, 'At least 4 peer nominees are required')

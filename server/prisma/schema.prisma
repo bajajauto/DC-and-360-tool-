@@ -121,6 +121,8 @@ model Nominee {
   userId         String?
   name           String
   email          String
+  employeeId     String?
+  isExternal     Boolean             @default(false)
   designation    String?
   relationship   NomineeRelationship
   source         String              @default("manual")

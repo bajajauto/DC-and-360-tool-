@@ -44,6 +44,8 @@ export function toNomineeDto(nominee) {
     id: nominee.id,
     name: nominee.name,
     email: nominee.email,
+    employeeId: nominee.employeeId,
+    isExternal: nominee.isExternal,
     designation: nominee.designation,
     relationship: nominee.relationship.toLowerCase().replaceAll('_', '-'),
     relationshipLabel: relationshipLabels[nominee.relationship] || nominee.relationship,
