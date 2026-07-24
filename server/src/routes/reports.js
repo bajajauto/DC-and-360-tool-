@@ -42,7 +42,15 @@ reportsRouter.get('/repository', asyncHandler(async (req, res) => {
     },
   })
 
-  res.json({ data: reports.map((report) => {
+  const visibleReports = reports.filter((report) => {
+    if (report.status === 'RELEASED') return true
+    const allSubmitted = report.participant.feedbackTasks.length > 0 && report.participant.feedbackTasks.every((task) => task.status === 'SUBMITTED')
+    const cutoff = report.participant.cohort.threeSixtyCutoff
+    const cutoffPassed = cutoff ? new Date() > new Date(new Date(cutoff).setUTCHours(23, 59, 59, 999)) : false
+    return allSubmitted || cutoffPassed
+  })
+
+  res.json({ data: visibleReports.map((report) => {
     const participant = report.participant
     const responses = participant.feedbackTasks.filter((task) => task.status === 'SUBMITTED' && task.relationship !== 'SELF').length
     return {

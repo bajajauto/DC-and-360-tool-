@@ -3,7 +3,6 @@ import { z } from 'zod'
 import { prisma } from '../db.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
 import { httpError } from '../utils/httpError.js'
-import { generate360ReportForParticipant } from '../reports/generate360Report.js'
 import { queueEmail } from '../notifications/service.js'
 
 export const feedbackTasksRouter = Router()
@@ -150,8 +149,6 @@ feedbackTasksRouter.post('/:taskId/submit', asyncHandler(async (req, res) => {
   }
 
   const allSubmitted = task.participant.feedbackTasks.every((item) => item.status === 'SUBMITTED')
-  let generatedReport = null
-
   if (allSubmitted) {
     await prisma.participant.update({
       where: { id: task.participantId },
@@ -161,8 +158,6 @@ feedbackTasksRouter.post('/:taskId/submit', asyncHandler(async (req, res) => {
         lastActivityAt: new Date(),
       },
     })
-
-    generatedReport = await generate360ReportForParticipant(prisma, task.participantId)
   }
 
   res.json({
@@ -170,13 +165,7 @@ feedbackTasksRouter.post('/:taskId/submit', asyncHandler(async (req, res) => {
       id: task.id,
       status: task.status.toLowerCase(),
       submittedAt: task.submittedAt?.toISOString() || null,
-      report: generatedReport
-        ? {
-            id: generatedReport.report.id,
-            status: generatedReport.report.status.toLowerCase(),
-            downloadUrl: `/api/reports/${task.participantId}/360/download`,
-          }
-        : null,
+      report: null,
     },
   })
 }))

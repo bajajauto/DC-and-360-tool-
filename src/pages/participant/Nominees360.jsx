@@ -31,12 +31,12 @@ function RequirementsTable({ compact = false }) {
   const columnWidths = compact ? ['w-[25%]', 'w-[31%]', 'w-[20%]', 'w-[24%]'] : ['', '', '', '']
   return (
     <div className="overflow-x-auto rounded-xl border border-slate-300">
-      <table className={`w-full text-left ${compact ? 'table-fixed text-[8px]' : 'min-w-[760px] text-xs'}`}>
+      <table className={`w-full text-left ${compact ? 'table-fixed text-[10px]' : 'min-w-[760px] text-xs'}`}>
         <thead className="bg-[#a9c5f7] text-slate-900">
-          <tr>{['Respondent Category', 'Description', 'Minimum Nominees Required', 'Minimum Responses Required for Reporting'].map((label, index) => <th key={label} className={`border-b border-r border-white font-bold last:border-r-0 ${columnWidths[index]} ${compact ? 'px-1.5 py-2 leading-[11px]' : 'px-3 py-2.5'}`}>{label}</th>)}</tr>
+          <tr>{['Respondent Category', 'Description', 'Minimum Nominees Required', 'Minimum Responses Required for Reporting'].map((label, index) => <th key={label} className={`border-b border-r border-white font-bold last:border-r-0 ${columnWidths[index]} ${compact ? 'px-2.5 py-2.5 leading-[13px]' : 'px-3 py-2.5'}`}>{label}</th>)}</tr>
         </thead>
         <tbody className="bg-white">
-          {NOMINATION_CATEGORIES.map((row) => <tr key={row[0]} className="border-b border-slate-200 last:border-0">{row.map((cell, index) => <td key={index} className={`border-r border-slate-200 align-top last:border-r-0 ${compact ? 'px-1.5 py-1.5 leading-[11px]' : 'px-3 py-2.5 leading-4'} ${index === 0 ? 'font-semibold text-slate-900' : 'text-slate-600'}`}>{cell}</td>)}</tr>)}
+          {NOMINATION_CATEGORIES.map((row) => <tr key={row[0]} className="border-b border-slate-200 last:border-0">{row.map((cell, index) => <td key={index} className={`border-r border-slate-200 align-top last:border-r-0 ${compact ? 'px-2.5 py-2 leading-[14px]' : 'px-3 py-2.5 leading-4'} ${index === 0 ? 'font-semibold text-slate-900' : 'text-slate-600'}`}>{cell}</td>)}</tr>)}
         </tbody>
       </table>
     </div>
@@ -115,6 +115,7 @@ export default function Nominees360() {
   const [saving, setSaving] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const [validationAttempted, setValidationAttempted] = useState(false)
   const [cohort, setCohort] = useState({})
   const acceptanceKey = participantId ? `nomination-instructions-accepted:${participantId}` : ''
   const [instructionsAccepted, setInstructionsAccepted] = useState(() => participantId ? window.localStorage.getItem(`nomination-instructions-accepted:${participantId}`) === 'true' : false)
@@ -161,6 +162,24 @@ export default function Nominees360() {
       ...prev,
       [relationship]: prev[relationship].map((draft, draftIndex) => draftIndex === index ? { ...draft, [field]: value } : draft),
     }))
+  }
+
+  function sectionIssue(relationship) {
+    if (relationship === 'reporting-manager' && grouped[relationship].length < 1) return 'Add at least one Reporting Manager.'
+    if (relationship === 'skip-manager' && grouped[relationship].length < 1) return 'Add at least one Skip / BU Head.'
+    if (relationship === 'peer' && grouped[relationship].length < 4) return `Add ${4 - grouped[relationship].length} more ${4 - grouped[relationship].length === 1 ? 'respondent' : 'respondents'} in this category.`
+    const allEmails = nominees.map((nominee) => nominee.email.trim().toLowerCase())
+    if (grouped[relationship].some((nominee) => allEmails.filter((email) => email === nominee.email.trim().toLowerCase()).length > 1)) return 'Remove the duplicate email address from this category.'
+    if (grouped[relationship].some((nominee) => !nominee.isExternal && !nominee.employeeId?.trim())) return 'Add the missing Ticket ID for each internal respondent.'
+    return ''
+  }
+
+  function promptInvalidSection() {
+    setValidationAttempted(true)
+    const firstInvalid = ['reporting-manager', 'skip-manager', 'peer', 'direct-report'].find((relationship) => sectionIssue(relationship))
+    if (firstInvalid) {
+      window.requestAnimationFrame(() => document.getElementById(`nominee-section-${firstInvalid}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }))
+    }
   }
 
   function addExternalNominee(relationship, index) {
@@ -256,7 +275,11 @@ export default function Nominees360() {
   }
 
   async function handleSaveList() {
-    if (errors.length > 0 || !participantId) return
+    if (errors.length > 0) {
+      promptInvalidSection()
+      return
+    }
+    if (!participantId) return
     setSaving(true)
     setError('')
     try {
@@ -281,7 +304,11 @@ export default function Nominees360() {
   }
 
   async function handleFinalSubmit() {
-    if (errors.length > 0 || !participantId) return
+    if (errors.length > 0) {
+      promptInvalidSection()
+      return
+    }
+    if (!participantId) return
     setSubmitting(true)
     setError('')
     try {
@@ -350,10 +377,19 @@ export default function Nominees360() {
       )}
 
       {!submitted && (
-        <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-4 text-sm text-blue-900">
+        <div className="mb-4 rounded-lg border border-slate-200 bg-white px-4 py-4 text-sm text-slate-700">
           <p className="font-bold">How the nomination form works</p>
           <ol className="mt-2 list-decimal space-y-1 pl-5 text-xs leading-5"><li>Add each respondent’s full name and email address. Tick External for anyone outside Bajaj Auto.</li><li>Check every email address carefully. An incorrect address means that person never receives the form.</li><li>Fill all required nominations before submitting. Submission launches your 360 and sends invitations immediately.</li><li>Once submitted, your nominee list is locked and cannot be changed later.</li></ol>
         </div>
+      )}
+
+      {!submitted && (
+        <section className="mb-4 max-w-[760px] rounded-xl border border-[#e2e8f0] bg-white p-3">
+          <div className="mb-2">
+            <h2 className="text-[10px] font-bold uppercase tracking-wide text-[#1e4d8c]">Respondent categories and minimums</h2>
+          </div>
+          <RequirementsTable compact />
+        </section>
       )}
 
       {submitted ? (
@@ -443,14 +479,8 @@ export default function Nominees360() {
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px] gap-5">
+        <div>
           <div>
-            <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3">
-              <div><h2 className="text-sm font-semibold text-[#1a1f2e] uppercase tracking-wide">
-                {isReviewing ? 'Saved Nominee List' : 'Selected Nominees'}
-              </h2><p className="mt-0.5 text-xs text-slate-500">Includes your automatic self-assessment</p></div>
-              <div className="flex h-10 min-w-10 items-center justify-center rounded-lg bg-[#1e4d8c] px-3 text-base font-bold text-white">{nominees.length + 1}</div>
-            </div>
             {isReviewing && (
               <div className="bg-blue-50 border border-[#bfdbfe] rounded-lg px-4 py-2.5 mb-4">
                 <p className="text-xs text-[#1e4d8c]">This saved list will be used for final submission unless you edit it.</p>
@@ -462,7 +492,7 @@ export default function Nominees360() {
                 <div className="flex items-center justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-wide text-amber-800">Self</p><p className="mt-1 text-xs text-amber-700">Your self-assessment is automatically included.</p></div><span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-bold text-emerald-700">Included</span></div>
               </div>
               {Object.keys(grouped).map((rel) => (
-                <div key={rel} className="rounded-xl border border-[#e2e8f0] bg-white p-4">
+                <div id={`nominee-section-${rel}`} key={rel} className={`rounded-xl border bg-white p-4 transition-colors ${validationAttempted && sectionIssue(rel) ? 'border-red-300 ring-2 ring-red-100' : 'border-[#e2e8f0]'}`}>
                   {(() => {
                     const visibleRequirement = getVisibleRequirement(rel)
                     return (
@@ -482,29 +512,31 @@ export default function Nominees360() {
                     : grouped[rel].map(renderNominee)
                   }
                   {renderAddControls(rel)}
+                  {validationAttempted && sectionIssue(rel) && <p className="mt-3 text-xs font-semibold text-red-600">{sectionIssue(rel)}</p>}
                 </div>
               ))}
             </div>
 
             {grouped.peer.length === 4 && <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-900"><strong>Consider nominating a few more respondents.</strong> With exactly the minimum, a single non-response could prevent this group’s feedback from appearing in your report.</div>}
 
-            {errors.length > 0 && (
-              <div className="mt-4 bg-red-50 border border-red-200 rounded-lg p-3 space-y-1">
-                {errors.map((e) => <p key={e} className="text-xs text-red-600">! {e}</p>)}
-              </div>
-            )}
+            <div className="mt-5 text-xs leading-5 text-slate-600">
+              <p className="font-bold text-slate-800">On final submit</p>
+              <p>Invitations are sent immediately to every respondent using their unique link. Your list is then locked and visible to your BUHR, and respondents cannot be changed afterwards.</p>
+              <p className="mt-1 font-semibold text-red-700">Please review every name, email address, Ticket ID and relationship before submitting.</p>
+            </div>
 
             {isEditing ? (
+              <div className="mt-5 flex justify-center">
               <button
-                disabled={errors.length > 0 || saving}
+                disabled={saving}
                 onClick={handleSaveList}
-                className="mt-5 w-full py-2.5 rounded-lg bg-[#1e4d8c] text-white text-sm font-medium hover:bg-[#183f73] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className="rounded-lg bg-[#1e4d8c] px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#183f73] disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {saving ? 'Saving...' : 'Save Nominee List'}
               </button>
+              </div>
             ) : (
               <>
-              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-xs leading-5 text-red-800"><strong>Please review your list before submitting.</strong> Submitting sends invitations immediately and locks your list. Changes cannot be made afterwards.</div>
               <div className="mt-4 flex flex-col gap-3 sm:flex-row">
                 <button
                   onClick={() => setMode('edit')}
@@ -513,7 +545,7 @@ export default function Nominees360() {
                   Edit List
                 </button>
                 <button
-                  disabled={errors.length > 0 || submitting}
+                  disabled={submitting}
                   onClick={handleFinalSubmit}
                   className="flex-1 py-2.5 rounded-lg bg-[#1e4d8c] text-white text-sm font-medium hover:bg-[#183f73] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
@@ -522,30 +554,6 @@ export default function Nominees360() {
               </div>
               </>
             )}
-          </div>
-
-          <div className="space-y-4">
-            <div className="bg-white rounded-xl border border-[#e2e8f0] p-3 sticky top-6">
-              <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-500">Respondent categories and minimums</p>
-              <RequirementsTable compact />
-            </div>
-
-            <div className="bg-[#f1f4f9] rounded-xl border border-[#e2e8f0] p-4">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">On Final Submit</p>
-              <div className="space-y-2">
-                {[
-                  'Emails sent to all respondents with their unique link',
-                  'List locked and visible to your BUHR',
-                  'Respondents can\'t be changed after this',
-                ].map((tip) => (
-                  <div key={tip} className="flex items-start gap-2">
-                    <div className="w-1 h-1 rounded-full bg-[#1e4d8c] mt-1.5 shrink-0" />
-                    <p className="text-xs text-gray-600 leading-relaxed">{tip}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
           </div>
         </div>
       )}

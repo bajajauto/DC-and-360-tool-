@@ -98,6 +98,7 @@ async function findParticipant(id) {
       cohort: true,
       nominees: { orderBy: { createdAt: 'asc' } },
       feedbackTasks: { include: { responses: true } },
+      reports: { where: { type: '360' }, orderBy: { updatedAt: 'desc' }, take: 1 },
     },
   })
 
@@ -120,6 +121,7 @@ participantsRouter.get('/:participantId', asyncHandler(async (req, res) => {
   res.json({
     data: {
       ...toParticipantSummary(participant),
+      reportStatus: participant.reports[0]?.status?.toLowerCase() || (participant.reportStatus === 'READY' ? 'ready' : 'waiting'),
       masterData: participant.masterData || {},
       reportReady: participant.feedbackTasks.length > 0 && (allResponsesComplete || cutoffPassed),
       allResponsesComplete,
