@@ -314,6 +314,7 @@ export function NotificationTemplates() {
   const [recipients, setRecipients] = useState([])
   const [selectedRecipientIds, setSelectedRecipientIds] = useState([])
   const [recipientSearch, setRecipientSearch] = useState('')
+  const [manualEmails, setManualEmails] = useState([])
   const [bulkEmails, setBulkEmails] = useState('')
   const [subject, setSubject] = useState('')
   const [body, setBody] = useState('')
@@ -343,6 +344,8 @@ export function NotificationTemplates() {
     setSent(false)
     setError('')
     setSelectedRecipientIds([])
+    setManualEmails([])
+    setRecipientSearch('')
     setRecipientsLoading(true)
     api.getNotificationRecipients(selected.templateId)
       .then((result) => setRecipients(result.data || []))
@@ -367,11 +370,31 @@ export function NotificationTemplates() {
   const pastedRecipients = [...new Set(pastedAddresses)]
     .filter((email) => !invalidAddresses.includes(email) && !selectedEmails.has(email))
     .map((email) => ({ email, name: null, sourceType: 'manual', sourceId: null }))
-  const composedRecipients = [...selectedDirectoryRecipients, ...pastedRecipients]
+  const pastedEmails = new Set(pastedRecipients.map((recipient) => recipient.email))
+  const manualRecipients = manualEmails
+    .filter((email) => !selectedEmails.has(email) && !pastedEmails.has(email))
+    .map((email) => ({ email, name: null, sourceType: 'manual', sourceId: null }))
+  const composedRecipients = [...selectedDirectoryRecipients, ...manualRecipients, ...pastedRecipients]
+
+  const trimmedSearch = recipientSearch.trim().toLowerCase()
+  const searchIsNewEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedSearch)
+    && !visibleRecipients.some((recipient) => recipient.email.toLowerCase() === trimmedSearch)
+    && !manualEmails.includes(trimmedSearch)
 
   function toggleRecipient(id) {
     setSent(false)
     setSelectedRecipientIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id])
+  }
+
+  function addManualEmail(email) {
+    setSent(false)
+    setManualEmails((current) => current.includes(email) ? current : [...current, email])
+    setRecipientSearch('')
+  }
+
+  function removeManualEmail(email) {
+    setSent(false)
+    setManualEmails((current) => current.filter((item) => item !== email))
   }
 
   async function handleSend() {
@@ -435,14 +458,29 @@ export function NotificationTemplates() {
             <input value={recipientSearch} onChange={(event) => setRecipientSearch(event.target.value)} placeholder="Search name, email, role or BU" className="mb-2 w-full rounded-lg border border-[#c2ccda] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#d6e4f7]" />
             <div className="mb-3 max-h-48 overflow-y-auto rounded-lg border border-[#d5dce5]">
               {recipientsLoading && <p className="p-3 text-xs text-slate-500">Loading eligible recipients…</p>}
-              {!visibleRecipients.length && <p className="p-3 text-xs text-slate-500">No matching accounts.</p>}
+              {!visibleRecipients.length && !searchIsNewEmail && <p className="p-3 text-xs text-slate-500">No matching accounts.</p>}
               {visibleRecipients.map((recipient) => (
                 <label key={recipient.id} className="flex cursor-pointer items-start gap-3 border-b border-[#edf1f6] px-3 py-2 last:border-b-0 hover:bg-[#f8fbff]">
                   <input type="checkbox" checked={selectedRecipientIds.includes(recipient.id)} onChange={() => toggleRecipient(recipient.id)} className="mt-1" />
                   <span className="min-w-0"><span className="block truncate text-xs font-semibold text-slate-800">{recipient.name}</span><span className="block truncate text-[11px] text-slate-500">{recipient.email} · {recipient.detail || recipient.roles.join(', ')}</span></span>
                 </label>
               ))}
+              {searchIsNewEmail && (
+                <button type="button" onClick={() => addManualEmail(trimmedSearch)} className="flex w-full items-center gap-3 border-b border-[#edf1f6] px-3 py-2 text-left last:border-b-0 hover:bg-[#f8fbff]">
+                  <span className="text-xs font-semibold text-[#1e5fba]">+ Add "{trimmedSearch}" as a new recipient</span>
+                </button>
+              )}
             </div>
+            {manualEmails.length > 0 && (
+              <div className="mb-3 flex flex-wrap gap-2">
+                {manualEmails.map((email) => (
+                  <span key={email} className="inline-flex items-center gap-1.5 rounded-full border border-[#d6e4f7] bg-[#ebf2fa] px-2.5 py-1 text-[11px] font-medium text-[#1e5fba]">
+                    {email}
+                    <button type="button" onClick={() => removeManualEmail(email)} className="text-[#1e5fba] hover:text-red-600">×</button>
+                  </span>
+                ))}
+              </div>
+            )}
 
             <label className="mb-1 block text-xs font-semibold text-slate-700">Or paste email addresses in bulk</label>
             <textarea value={bulkEmails} onChange={(event) => { setBulkEmails(event.target.value); setSent(false) }} rows={3} placeholder="name@company.com, another@company.com" className="mb-3 w-full rounded-lg border border-[#c2ccda] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#d6e4f7]" />
