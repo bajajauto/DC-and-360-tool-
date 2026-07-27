@@ -7,8 +7,6 @@ import { getSurveySections, SURVEY_SECTIONS } from '../../src/data/surveyConfig.
 const prisma = new PrismaClient()
 
 const PARTICIPANT_PASSWORD = process.env.MOCK_USER_PASSWORD || 'Welcome@123'
-const RESPONDENT_PASSWORD = process.env.RESPONDENT_PASSWORD || 'Respondent@123'
-const DEMO_RESPONDENT_EMAIL = 'respondent.demo@bajaj.com'
 
 const competencies = SURVEY_SECTIONS.flatMap((section) =>
   section.competencies.map((competency) => ({
@@ -32,7 +30,6 @@ const nomineeSeeds = {
     ['Ankit Verma', 'ankit.verma@bajaj.com', 'Peer', 'PEER', 'SUBMITTED'],
     ['Pooja Shah', 'pooja.shah@bajaj.com', 'Peer', 'PEER', 'SUBMITTED'],
     ['Sameer Kulkarni', 'sameer.kulkarni@bajaj.com', 'Peer', 'PEER', 'SUBMITTED'],
-    ['Demo Respondent', DEMO_RESPONDENT_EMAIL, 'Direct Reportee', 'DIRECT_REPORT', 'SUBMITTED'],
   ],
   'neha.sharma@bajaj.com': [
     ['Suresh Nair', 'suresh.nair@bajaj.com', 'Reporting Manager', 'REPORTING_MANAGER', 'SUBMITTED'],
@@ -192,32 +189,7 @@ async function seedParticipants(cohort) {
   return participants
 }
 
-async function seedDemoRespondent() {
-  const passwordHash = await hashPassword(RESPONDENT_PASSWORD)
-
-  return prisma.user.upsert({
-    where: { email: DEMO_RESPONDENT_EMAIL },
-    update: {
-      name: 'Demo Respondent',
-      employeeId: 'RESP-DEMO',
-      designation: 'Direct Reportee',
-      businessUnit: 'Two-Wheeler',
-      passwordHash,
-      roles: ['RESPONDENT'],
-    },
-    create: {
-      name: 'Demo Respondent',
-      email: DEMO_RESPONDENT_EMAIL,
-      employeeId: 'RESP-DEMO',
-      designation: 'Direct Reportee',
-      businessUnit: 'Two-Wheeler',
-      passwordHash,
-      roles: ['RESPONDENT'],
-    },
-  })
-}
-
-async function seedNominees(participants, demoRespondent) {
+async function seedNominees(participants) {
   for (const participant of participants) {
     const nominees = nomineeSeeds[participant.email] || []
 
@@ -234,13 +206,11 @@ async function seedNominees(participants, demoRespondent) {
         update: {
           name,
           designation,
-          userId: email === DEMO_RESPONDENT_EMAIL ? demoRespondent.id : undefined,
           status,
           submittedAt: status === 'SUBMITTED' ? new Date() : null,
         },
         create: {
           participantId: participant.id,
-          userId: email === DEMO_RESPONDENT_EMAIL ? demoRespondent.id : undefined,
           name,
           email,
           designation,
@@ -255,15 +225,9 @@ async function seedNominees(participants, demoRespondent) {
       if (status === 'SUBMITTED') {
         const task = await prisma.feedbackTask.upsert({
           where: { nomineeId: savedNominee.id },
-          update: {
-            respondentId: email === DEMO_RESPONDENT_EMAIL ? demoRespondent.id : undefined,
-            ...(participant.reportStatus === 'GENERATED'
-              ? { status: 'SUBMITTED', submittedAt: new Date() }
-              : {}),
-          },
+          update: participant.reportStatus === 'GENERATED' ? { status: 'SUBMITTED', submittedAt: new Date() } : {},
           create: {
             participantId: participant.id,
-            respondentId: email === DEMO_RESPONDENT_EMAIL ? demoRespondent.id : undefined,
             nomineeId: savedNominee.id,
             relationship,
             status: participant.reportStatus === 'GENERATED' ? 'SUBMITTED' : 'PENDING',
@@ -290,8 +254,7 @@ async function main() {
   await seedCompetencies()
   const cohort = await seedCohort()
   const participants = await seedParticipants(cohort)
-  const demoRespondent = await seedDemoRespondent()
-  await seedNominees(participants, demoRespondent)
+  await seedNominees(participants)
   await seedAccessAccounts(prisma)
 }
 
