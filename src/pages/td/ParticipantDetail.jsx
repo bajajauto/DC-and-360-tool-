@@ -12,13 +12,10 @@ const relationshipLabels = {
   'direct-report': 'Direct Report',
 }
 
-function stepState(participant, index) {
-  const completed = Math.floor((participant.progress / 100) * processSteps.length)
-  if (processSteps[index].id === 'feedback' && participant.responses < participant.totalResponses) return 'upcoming'
-  if (processSteps[index].id === 'report' && participant.responses < participant.totalResponses) return 'upcoming'
-  if (index < completed) return 'complete'
-  if (index === completed) return 'current'
-  return 'upcoming'
+function stepState(participant, step, index) {
+  if (participant.taskStatus?.[step.id] === 'completed') return 'complete'
+  const firstIncompleteIndex = processSteps.findIndex((s) => participant.taskStatus?.[s.id] !== 'completed')
+  return index === firstIncompleteIndex ? 'current' : 'upcoming'
 }
 
 export default function ParticipantDetail() {
@@ -33,7 +30,13 @@ export default function ParticipantDetail() {
     setReportAction({ loading: true, error: '' })
     try {
       await api.generate360Report(participant.id)
-      setParticipant((current) => ({ ...current, reportStatus: 'generated', progress: 100, lastActivity: new Date().toISOString() }))
+      setParticipant((current) => {
+        const taskStatus = { ...current.taskStatus, report: 'completed' }
+        const taskCompletionPercent = Math.round(
+          (Object.values(taskStatus).filter((status) => status === 'completed').length / Object.keys(taskStatus).length) * 100,
+        )
+        return { ...current, reportStatus: 'generated', progress: 100, taskStatus, taskCompletionPercent, lastActivity: new Date().toISOString() }
+      })
     } catch (err) {
       setReportAction({ loading: false, error: err.message || 'Unable to generate the report.' })
       return
@@ -80,7 +83,7 @@ export default function ParticipantDetail() {
     }
   }).filter((item) => item.total > 0)
 
-  const tasksWithState = processSteps.map((step, index) => ({ ...step, index, state: stepState(participant, index) }))
+  const tasksWithState = processSteps.map((step, index) => ({ ...step, index, state: stepState(participant, step, index) }))
   const completedTasks = tasksWithState.filter((step) => step.state === 'complete')
   const pendingTasks = tasksWithState.filter((step) => step.state !== 'complete')
   const taskGroups = taskView === 'all'
@@ -119,7 +122,7 @@ export default function ParticipantDetail() {
             <span className="font-semibold text-emerald-700">{cohort?.name || 'Unassigned cohort'}</span>
           </p>
         </div>
-        <div className="min-w-56"><div className="flex justify-between text-xs mb-2"><span className="text-gray-500">Overall completion</span><strong>{participant.progress}%</strong></div><div className="h-2 bg-gray-100 rounded-full"><div className="h-2 rounded-full bg-[#2867a7]" style={{ width: `${participant.progress}%` }} /></div></div>
+        <div className="min-w-56"><div className="flex justify-between text-xs mb-2"><span className="text-gray-500">Overall completion</span><strong>{participant.taskCompletionPercent}%</strong></div><div className="h-2 bg-gray-100 rounded-full"><div className="h-2 rounded-full bg-[#2867a7]" style={{ width: `${participant.taskCompletionPercent}%` }} /></div></div>
       </section>
 
       <div className="grid xl:grid-cols-[1fr_320px] gap-6">

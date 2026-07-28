@@ -3,10 +3,13 @@ import { useEffect, useState } from 'react'
 import { api } from '../../lib/api'
 import { useUser } from '../../context/UserContext'
 
+// `status` here is only the placeholder shown before participantData has
+// loaded — real status is derived live from taskStatus (or nomineeStatus /
+// selfSurveyStatus) below, never left on these fallback values.
 const baseJourneySteps = [
-  { id: 1, label: 'Role Interview', to: '/participant/role-interview', status: 'completed', deadline: '15 Jun' },
-  { id: 2, label: 'Photograph', to: '/participant/photograph', status: 'completed', deadline: '15 Jun' },
-  { id: 3, label: 'Pre-Work', to: '/participant/pre-work', status: 'in-progress', deadline: '20 Jun' },
+  { id: 1, label: 'Role Interview', to: '/participant/role-interview', status: 'pending', deadline: '15 Jun' },
+  { id: 2, label: 'Photograph', to: '/participant/photograph', status: 'pending', deadline: '15 Jun' },
+  { id: 3, label: 'Pre-Work', to: '/participant/pre-work', status: 'pending', deadline: '20 Jun' },
   { id: 4, label: 'Self 360 Survey', to: '/participant/self-360', status: 'locked', deadline: '30 Jun' },
   { id: 5, label: '360 Nominees', to: '/participant/360-nominees', status: 'pending', deadline: '20 Jun' },
   { id: 6, label: '360 Feedback', to: '/participant/360-status', status: 'locked', deadline: '30 Jun' },
@@ -14,14 +17,6 @@ const baseJourneySteps = [
 ]
 
 const pendingTasks = [
-  {
-    title: 'Complete Pre-Work form',
-    description: '8 of 10 self-reflection questions answered',
-    to: '/participant/pre-work',
-    deadline: '20 Jun 2025',
-    urgency: 'medium',
-    progress: 80,
-  },
   {
     title: 'Submit 360 Nominees',
     description: 'Select your feedback respondents from the directory',
@@ -31,6 +26,14 @@ const pendingTasks = [
     progress: 0,
   },
 ]
+
+const TASK_STATUS_KEY_BY_LABEL = {
+  'Role Interview': 'role',
+  Photograph: 'photo',
+  'Pre-Work': 'prework',
+  '360 Feedback': 'feedback',
+  'DC Report': 'report',
+}
 
 function StatusBadge({ status }) {
   const map = {
@@ -93,9 +96,14 @@ export default function Dashboard() {
   }, [nomineeStatus, user?.participantId])
 
   const selfSurveyStatus = nomineeStatus !== 'completed' ? 'locked' : selfTask?.status === 'submitted' ? 'completed' : selfTask?.status === 'saved' ? 'saved' : 'pending'
-  const journeySteps = baseJourneySteps.map((step) => (
-    step.label === '360 Nominees' ? { ...step, status: nomineeStatus } : step.label === 'Self 360 Survey' ? { ...step, status: selfSurveyStatus } : step
-  ))
+  const taskStatus = participantData?.taskStatus
+  const preWorkAnsweredCount = participantData?.preWorkAnsweredCount ?? 0
+  const journeySteps = baseJourneySteps.map((step) => {
+    if (step.label === '360 Nominees') return { ...step, status: nomineeStatus }
+    if (step.label === 'Self 360 Survey') return { ...step, status: selfSurveyStatus }
+    const taskKey = TASK_STATUS_KEY_BY_LABEL[step.label]
+    return taskKey && taskStatus?.[taskKey] ? { ...step, status: taskStatus[taskKey] } : step
+  })
   const visiblePendingTasks = pendingTasks
     .map((task) => {
       if (task.to !== '/participant/360-nominees') return task
@@ -112,6 +120,16 @@ export default function Dashboard() {
       return task
     })
     .filter(Boolean)
+  if (taskStatus?.prework && taskStatus.prework !== 'completed') {
+    visiblePendingTasks.unshift({
+      title: 'Complete Pre-Work form',
+      description: `${preWorkAnsweredCount} of 10 self-reflection questions answered`,
+      to: '/participant/pre-work',
+      deadline: '20 Jun 2025',
+      urgency: 'medium',
+      progress: preWorkAnsweredCount * 10,
+    })
+  }
   if (nomineeStatus === 'completed' && selfSurveyStatus !== 'completed') {
     visiblePendingTasks.unshift({
       title: 'Complete your Self 360 Survey',

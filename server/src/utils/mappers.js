@@ -39,6 +39,29 @@ export function toParticipantSummary(participant) {
   }
 }
 
+// Real, per-task completion derived from each task's own saved data, shared
+// by every TD/BUHR view (and their Excel exports) so they never disagree
+// with each other or with the coarse, manually-jumped `progress` counter.
+export function deriveTaskStatus(participant, { allResponsesComplete, nomineesSubmitted, latestReport, latestAssessorReview }) {
+  const roleInterviewStatus = participant.roleInterview?.status
+  const preWorkStatus = participant.preWork?.status
+
+  return {
+    application: 'completed',
+    role: roleInterviewStatus === 'submitted' ? 'completed' : roleInterviewStatus ? 'in-progress' : 'pending',
+    photo: participant.photoUrl ? 'completed' : 'pending',
+    prework: preWorkStatus === 'submitted' ? 'completed' : preWorkStatus ? 'in-progress' : 'pending',
+    nominees: nomineesSubmitted ? 'completed' : (participant.nominees?.length > 0) ? 'in-progress' : 'pending',
+    feedback: !nomineesSubmitted ? 'locked' : allResponsesComplete ? 'completed' : 'in-progress',
+    assessment: latestAssessorReview?.status === 'uploaded' ? 'completed' : 'pending',
+    report: latestReport && ['GENERATED', 'RELEASED'].includes(latestReport.status) ? 'completed' : 'locked',
+  }
+}
+
+export function taskCompletionPercent(taskStatus) {
+  return Math.round((Object.values(taskStatus).filter((status) => status === 'completed').length / Object.keys(taskStatus).length) * 100)
+}
+
 export function toNomineeDto(nominee) {
   return {
     id: nominee.id,

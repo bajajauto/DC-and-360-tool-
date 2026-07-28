@@ -25,6 +25,75 @@ export async function ensureNotificationTemplates(db = prisma) {
   }
 }
 
+// Build (and cache) the SMTP transporter. Returns null with a human-readable
+// reason string when the configuration is incomplete, so callers can record a
+// helpful failure instead of a cryptic nodemailer stack trace.
+let cachedTransporter = null
+let cachedTransporterKey = null
+
+async function getTransporter() {
+  const host = process.env.SMTP_HOST || 'smtp.office365.com'
+  const port = Number(process.env.SMTP_PORT || 587)
+  const secure = process.env.SMTP_SECURE === 'true'
+  const user = process.env.SMTP_USER
+  const pass = process.env.SMTP_PASS
+
+  const missing = []
+  if (!user) missing.push('SMTP_USER')
+  if (!pass) missing.push('SMTP_PASS')
+  if (missing.length) {
+    return { transporter: null, error: `SMTP is not configured: missing ${missing.join(', ')} in the server environment.` }
+  }
+
+  const key = `${host}:${port}:${secure}:${user}`
+  if (cachedTransporter && cachedTransporterKey === key) {
+    return { transporter: cachedTransporter, error: null }
+  }
+
+  const nodemailer = await import('nodemailer')
+  cachedTransporter = nodemailer.default.createTransport({
+    host,
+    port,
+    secure,
+    auth: { user, pass },
+  })
+  cachedTransporterKey = key
+  return { transporter: cachedTransporter, error: null }
+}
+
+function describeSmtpError(error) {
+  if (error.code === 'EAUTH') {
+    return `SMTP authentication failed (${error.message}). For Office365 with MFA enabled, SMTP_PASS must be an app password, and SMTP AUTH must be enabled for the mailbox.`
+  }
+  if (error.code === 'ECONNECTION' || error.code === 'ETIMEDOUT' || error.code === 'ESOCKET') {
+    return `Could not reach the SMTP server at ${process.env.SMTP_HOST || 'smtp.office365.com'}:${process.env.SMTP_PORT || 587} (${error.message}). Check SMTP_HOST/SMTP_PORT/SMTP_SECURE and network access.`
+  }
+  return error.message
+}
+
+// Called on server boot to surface SMTP misconfiguration early instead of
+// failing silently on the first email. Logs a clear line; never throws.
+export async function verifyEmailTransport() {
+  const mode = process.env.EMAIL_MODE || 'smtp'
+  if (mode !== 'smtp') {
+    console.warn(`[email] EMAIL_MODE=${mode} — no email will be sent until EMAIL_MODE=smtp.`)
+    return
+  }
+
+  const { transporter, error: configError } = await getTransporter()
+  if (!transporter) {
+    console.warn(`[email] ${configError}`)
+    return
+  }
+
+  try {
+    await transporter.verify()
+    console.log(`[email] SMTP ready — ${process.env.SMTP_HOST || 'smtp.office365.com'}:${process.env.SMTP_PORT || 587} as ${process.env.SMTP_USER}`)
+  } catch (error) {
+    console.warn(`[email] SMTP verification failed — ${describeSmtpError(error)}`)
+  }
+}
+
 async function deliverEmail(email, db = prisma) {
   const mode = process.env.EMAIL_MODE || 'smtp'
   if (mode !== 'smtp') {
@@ -37,16 +106,13 @@ async function deliverEmail(email, db = prisma) {
     })
   }
 
-  const nodemailer = await import('nodemailer')
-  const transporter = nodemailer.default.createTransport({
-    host: process.env.SMTP_HOST || 'smtp.office365.com',
-    port: Number(process.env.SMTP_PORT || 587),
-    secure: process.env.SMTP_SECURE === 'true',
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-  })
+  const { transporter, error: configError } = await getTransporter()
+  if (!transporter) {
+    return db.emailOutbox.update({
+      where: { id: email.id },
+      data: { status: 'FAILED', error: configError },
+    })
+  }
 
   try {
     const result = await transporter.sendMail({
@@ -70,7 +136,7 @@ async function deliverEmail(email, db = prisma) {
       where: { id: email.id },
       data: {
         status: 'FAILED',
-        error: error.message,
+        error: describeSmtpError(error),
       },
     })
   }

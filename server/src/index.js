@@ -13,6 +13,7 @@ import { buhrRouter } from './routes/buhr.js'
 import { assessorRouter } from './routes/assessor.js'
 import { assessorAnalysisRouter } from './routes/assessorAnalysis.js'
 import { startNotificationScheduler } from './notifications/scheduler.js'
+import { verifyEmailTransport } from './notifications/service.js'
 import { disconnectPrisma } from './db.js'
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js'
 import { requireAuth, requireRole } from './middleware/auth.js'
@@ -55,6 +56,7 @@ app.use(errorHandler)
 
 const server = app.listen(port, () => {
   console.log(`DC Tool API listening on http://localhost:${port}`)
+  verifyEmailTransport()
   startNotificationScheduler()
 })
 

@@ -433,8 +433,8 @@ function ParticipantsTab({ rows, generated, onManage }) {
                   </td>
                   <td className="border-b border-[#d5dce5] px-3 py-3 text-slate-600">{participant.bu}</td>
                   <td className="border-b border-[#d5dce5] px-3 py-3"><Badge tone={participant.nominees?.length ? 'success' : 'warning'}>{participant.nominees?.length ? 'Submitted' : 'Not submitted'}</Badge></td>
-                  <td className="border-b border-[#d5dce5] px-3 py-3"><Badge tone={participant.progress >= 63 ? 'success' : 'warning'}>{participant.progress >= 63 ? 'Submitted' : 'Pending'}</Badge></td>
-                  <td className="border-b border-[#d5dce5] px-3 py-3"><Badge tone={participant.progress >= 75 ? 'success' : 'warning'}>{participant.progress >= 75 ? 'Uploaded' : 'Pending'}</Badge></td>
+                  <td className="border-b border-[#d5dce5] px-3 py-3"><Badge tone={participant.preWorkSubmitted ? 'success' : 'warning'}>{participant.preWorkSubmitted ? 'Submitted' : 'Pending'}</Badge></td>
+                  <td className="border-b border-[#d5dce5] px-3 py-3"><Badge tone={participant.photoSubmitted ? 'success' : 'warning'}>{participant.photoSubmitted ? 'Uploaded' : 'Pending'}</Badge></td>
                   <td className="border-b border-[#d5dce5] px-3 py-3"><Badge tone={complete360 ? 'success' : participant.responses ? 'info' : 'neutral'}>{participant.responses}/{participant.totalResponses}</Badge></td>
                   <td className="border-b border-[#d5dce5] px-3 py-3"><Badge tone={reportTone}>{reportLabel}</Badge></td>
                   <td className="border-b border-[#d5dce5] px-3 py-3"><Badge tone={dcReportGenerated ? 'success' : 'warning'}>{dcReportGenerated ? 'Generated' : 'Not generated'}</Badge></td>

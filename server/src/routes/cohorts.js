@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { prisma } from '../db.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
 import { httpError } from '../utils/httpError.js'
-import { toParticipantSummary } from '../utils/mappers.js'
+import { deriveTaskStatus, taskCompletionPercent, toParticipantSummary } from '../utils/mappers.js'
 import { hashPassword } from '../utils/passwords.js'
 import { queueEmail } from '../notifications/service.js'
 
@@ -172,11 +172,24 @@ cohortsRouter.get('/:cohortId/participants', asyncHandler(async (req, res) => {
       user: true,
       nominees: true,
       feedbackTasks: true,
+      reports: { where: { type: '360' }, orderBy: { updatedAt: 'desc' }, take: 1 },
+      assessorReviews: { orderBy: { updatedAt: 'desc' }, take: 1 },
     },
   })
 
   res.json({
-    data: participants.map(toParticipantSummary),
+    data: participants.map((participant) => {
+      const summary = toParticipantSummary(participant)
+      const nomineesSubmitted = participant.nominees.length > 0 && participant.nominees.every((nominee) => nominee.status === 'SUBMITTED')
+      const allResponsesComplete = summary.totalResponses > 0 && summary.responses === summary.totalResponses
+      const taskStatus = deriveTaskStatus(participant, {
+        allResponsesComplete,
+        nomineesSubmitted,
+        latestReport: participant.reports[0] || null,
+        latestAssessorReview: participant.assessorReviews[0] || null,
+      })
+      return { ...summary, taskStatus, taskCompletionPercent: taskCompletionPercent(taskStatus) }
+    }),
   })
 }))
 

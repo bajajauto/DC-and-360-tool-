@@ -167,8 +167,8 @@ export default function BUHRMasterTracker() {
                 {filtered.map((participant) => {
                   const responsesComplete = participant.totalResponses > 0 && participant.responses >= participant.totalResponses
                   const nominationsSubmitted = participant.nominees?.length > 0
-                  const preWorkSubmitted = participant.progress >= 63
-                  const photoUploaded = participant.progress >= 75
+                  const preWorkSubmitted = participant.preWorkSubmitted
+                  const photoUploaded = participant.photoSubmitted
                   const report360Released = participant.reportStatus === 'released'
                   const report360Ready = participant.reportStatus === 'ready'
                   const report360Generated = participant.reportStatus === 'generated'

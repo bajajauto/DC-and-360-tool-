@@ -10,7 +10,7 @@ import {
   hashMagicToken,
   normalizeEmail,
 } from '../utils/magicLinks.js'
-import { toNomineeDto, toParticipantSummary } from '../utils/mappers.js'
+import { deriveTaskStatus, taskCompletionPercent, toNomineeDto, toParticipantSummary } from '../utils/mappers.js'
 import { queueEmail } from '../notifications/service.js'
 import { getBehaviourIds, getSurveySections } from '../../../src/data/surveyConfig.js'
 
@@ -99,11 +99,20 @@ async function findParticipant(id) {
       nominees: { orderBy: { createdAt: 'asc' } },
       feedbackTasks: { include: { responses: true } },
       reports: { where: { type: '360' }, orderBy: { updatedAt: 'desc' }, take: 1 },
+      assessorReviews: { orderBy: { updatedAt: 'desc' }, take: 1 },
     },
   })
 
   if (!participant) throw httpError(404, 'Participant not found')
   return participant
+}
+
+const PRE_WORK_QUESTION_COUNT = 10
+
+function countAnsweredPreWork(preWork) {
+  const answers = preWork?.answers || {}
+  return Array.from({ length: PRE_WORK_QUESTION_COUNT }, (_, index) => `q${index + 1}`)
+    .filter((key) => String(answers[key] || '').trim().length > 0).length
 }
 
 participantsRouter.get('/:participantId', asyncHandler(async (req, res) => {
@@ -117,6 +126,13 @@ participantsRouter.get('/:participantId', asyncHandler(async (req, res) => {
     return getBehaviourIds(getSurveySections(task.relationship)).every((id) => Number.isFinite(ratings[id]) && ratings[id] >= 1 && ratings[id] <= 4)
   })
   const cutoffPassed = hasCutoffPassed(participant.cohort.threeSixtyCutoff)
+  const nomineesSubmitted = participant.nominees.length > 0 && participant.nominees.every((nominee) => nominee.status === 'SUBMITTED')
+  const taskStatus = deriveTaskStatus(participant, {
+    allResponsesComplete,
+    nomineesSubmitted,
+    latestReport: participant.reports[0] || null,
+    latestAssessorReview: participant.assessorReviews[0] || null,
+  })
 
   res.json({
     data: {
@@ -126,6 +142,9 @@ participantsRouter.get('/:participantId', asyncHandler(async (req, res) => {
       reportReady: participant.feedbackTasks.length > 0 && (allResponsesComplete || cutoffPassed),
       allResponsesComplete,
       threeSixtyCutoffPassed: cutoffPassed,
+      taskStatus,
+      taskCompletionPercent: taskCompletionPercent(taskStatus),
+      preWorkAnsweredCount: countAnsweredPreWork(participant.preWork),
       cohort: {
         id: participant.cohort.id,
         name: participant.cohort.name,
