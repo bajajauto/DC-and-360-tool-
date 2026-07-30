@@ -7,7 +7,11 @@ import { httpError } from '../utils/httpError.js'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const serverRoot = path.resolve(__dirname, '..', '..')
-const reportsDirectory = path.join(serverRoot, 'generated', 'reports')
+// Point REPORTS_DIR at storage outside the deployment root in hosted environments;
+// a deploy replaces the app directory and would otherwise wipe generated reports.
+const reportsDirectory = process.env.REPORTS_DIR
+  ? path.resolve(process.env.REPORTS_DIR)
+  : path.join(serverRoot, 'generated', 'reports')
 
 function hasCutoffPassed(cutoff, now = new Date()) {
   if (!cutoff) return false

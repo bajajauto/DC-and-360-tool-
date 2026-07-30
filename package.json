@@ -3,13 +3,18 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "engines": {
+    "node": ">=20 <25"
+  },
   "scripts": {
     "dev": "node scripts/dev.js",
+    "start": "node server/src/index.js",
     "client:dev": "vite",
     "server:dev": "node server/src/index.js",
     "postinstall": "prisma generate --schema server/prisma/schema.prisma",
     "db:generate": "prisma generate --schema server/prisma/schema.prisma",
     "db:migrate": "prisma migrate dev --schema server/prisma/schema.prisma",
+    "db:deploy": "prisma migrate deploy --schema server/prisma/schema.prisma",
     "db:seed": "node server/prisma/seed.js",
     "db:import-hr": "node server/prisma/importHrData.js",
     "build": "vite build",
@@ -24,6 +29,7 @@
     "lucide-react": "^1.17.0",
     "node-cron": "^4.6.0",
     "nodemailer": "^9.0.3",
+    "prisma": "^6.1.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-router-dom": "^7.1.0",
@@ -36,7 +42,6 @@
     "@tailwindcss/vite": "^4.3.0",
     "@vitejs/plugin-react": "^4.3.1",
     "postcss": "^8",
-    "prisma": "^6.1.0",
     "tailwindcss": "^4",
     "vite": "^8.1.4"
   }

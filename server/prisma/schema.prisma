@@ -1,5 +1,8 @@
 generator client {
   provider = "prisma-client-js"
+  // App Service Linux images are Debian-based; keep both OpenSSL variants so the
+  // client generated on a CI runner also works on the deployed host.
+  binaryTargets = ["native", "debian-openssl-3.0.x", "debian-openssl-1.1.x"]
 }
 
 datasource db {

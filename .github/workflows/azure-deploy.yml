@@ -1,0 +1,70 @@
+name: Deploy to Azure App Service
+
+on:
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+# Never let two deploys race for the same App Service slot.
+concurrency:
+  group: azure-deploy-production
+  cancel-in-progress: false
+
+env:
+  AZURE_WEBAPP_NAME: app-dc-and-360-tool-prod-ci-001
+  NODE_VERSION: '22.x'
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      # postinstall generates the Prisma client; no DB connection is needed for it.
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build client
+        run: npm run build
+
+      # Vite/Tailwind are only needed for the build above. Dropping them keeps the
+      # deployment package small; `prisma` is a runtime dependency because
+      # startup.sh uses its CLI for `migrate deploy`.
+      - name: Drop dev dependencies
+        run: npm prune --omit=dev
+
+      # Regenerate after pruning, since prune can remove the generated client.
+      - name: Generate Prisma client
+        run: npx prisma generate --schema server/prisma/schema.prisma
+
+      - name: Strip files that must not ship
+        run: rm -rf .git .github .vscode .env *.PublishSettings
+
+      - name: Deploy
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+
+      # /api/health runs `SELECT 1`, so this fails if the app booted but cannot
+      # reach Postgres. Retries cover the cold start after a deploy.
+      - name: Smoke test
+        run: |
+          url="https://${{ env.AZURE_WEBAPP_NAME }}-afgbgufyd8fgfsh9.centralindia-01.azurewebsites.net/api/health"
+          for attempt in $(seq 1 20); do
+            code=$(curl -fsS -o /tmp/health.json -w '%{http_code}' "$url" || true)
+            if [ "$code" = "200" ]; then
+              echo "Healthy: $(cat /tmp/health.json)"
+              exit 0
+            fi
+            echo "Attempt $attempt: HTTP ${code:-no response}; retrying in 15s"
+            sleep 15
+          done
+          echo "App did not become healthy. Check the App Service log stream."
+          exit 1

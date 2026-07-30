@@ -1,4 +1,7 @@
 import 'dotenv/config'
+import fs from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import cors from 'cors'
 import express from 'express'
 import { authRouter } from './routes/auth.js'
@@ -21,6 +24,9 @@ import { requireAuth, requireRole } from './middleware/auth.js'
 const app = express()
 const port = Number(process.env.PORT || 4000)
 const clientOrigins = (process.env.CLIENT_ORIGIN || 'http://localhost:5173').split(',').map(s => s.trim())
+
+// Behind the App Service load balancer, so req.protocol/req.ip come from headers.
+app.set('trust proxy', 1)
 
 app.use(cors({
   origin(origin, callback) {
@@ -50,6 +56,28 @@ app.use('/api/reports', requireAuth, reportsRouter)
 app.use('/api/buhr', requireAuth, requireRole('buhr', 'td'), buhrRouter)
 app.use('/api/assessor', requireAuth, requireRole('assessor'), assessorRouter)
 app.use('/api/assessor-analysis', requireAuth, requireRole('assessor', 'td'), assessorAnalysisRouter)
+
+// In production the same process serves the built SPA, so there is one origin and
+// no CORS to configure. Skipped when dist/ is absent (dev runs Vite separately).
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
+const clientDist = process.env.CLIENT_DIST || path.join(repoRoot, 'dist')
+
+if (fs.existsSync(path.join(clientDist, 'index.html'))) {
+  // Vite fingerprints filenames under assets/, so those are safe to cache forever.
+  app.use('/assets', express.static(path.join(clientDist, 'assets'), { immutable: true, maxAge: '1y' }))
+  app.use(express.static(clientDist, { index: false }))
+
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api/')) {
+      next()
+      return
+    }
+
+    res.sendFile(path.join(clientDist, 'index.html'))
+  })
+} else {
+  console.warn(`No client build found at ${clientDist}; serving API only.`)
+}
 
 app.use(notFoundHandler)
 app.use(errorHandler)
