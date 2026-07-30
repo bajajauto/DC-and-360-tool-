@@ -56,7 +56,7 @@ function RoleGuide() {
     'Participants complete their Role Interview, Pre-Work, photograph and 360 nominations within the configured deadlines.',
     'Launch and track 360 feedback. Respondents receive task-specific magic links immediately, with reminders and delivery status available in Email History.',
     'Assessors review participant evidence and upload the completed assessor-analysis workbook for each participant.',
-    'Generate, review and release the 360 Feedback Report and final Development Centre Report when all required inputs are ready.',
+    'Generate, review and release the 360° Feedback Report and final Development Centre Report when all required inputs are ready.',
   ]
 
   return (
@@ -163,17 +163,22 @@ function CohortFormModal({ mode, initialCohort, onClose, onSubmit }) {
       const sheet = workbook.Sheets[workbook.SheetNames[0]]
       const values = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: false })
       const headers = (values[0] || []).map((value, index) => String(value).trim() || `Column ${index + 1}`)
-      if (headers.length < 28 || headers[1].toLowerCase() !== 'emp name' || !headers[2].toLowerCase().includes('ticket')) {
+      // Some exports include a leading blank/serial column before "Emp Name",
+      // others start with it directly — detect where it actually is rather than
+      // assuming a fixed position, so both layouts work.
+      const nameCol = headers.findIndex((header) => header.toLowerCase() === 'emp name')
+      if (nameCol === -1 || headers.length - nameCol < 27 || !headers[nameCol + 1].toLowerCase().includes('ticket')) {
         throw new Error('This file does not match the 28-column master data template.')
       }
+      const col = (offset) => nameCol + offset
 
       const text = (value) => String(value ?? '').trim()
-      const required = [1, 2, 4, 13, 15, 25, 26, 27]
-      const emailColumns = [15, 18, 21, 24, 27]
+      const required = [col(0), col(1), col(3), col(12), col(14), col(24), col(25), col(26)]
+      const emailColumns = [col(14), col(17), col(20), col(23), col(26)]
       // Some approved templates include a Field Type row below the headers and
       // others begin employee data immediately. Detect the first real employee
       // row from Ticket ID + participant email instead of always skipping row 2.
-      const firstCandidateIsEmployee = text(values[1]?.[2]) && EMAIL_RE.test(text(values[1]?.[15]))
+      const firstCandidateIsEmployee = text(values[1]?.[col(1)]) && EMAIL_RE.test(text(values[1]?.[col(14)]))
       const dataRows = values.slice(firstCandidateIsEmployee ? 1 : 2).filter((row) => row.some((value) => text(value)))
 
       if (!dataRows.length) throw new Error('The workbook contains no participant rows. Add data below the Field Type row.')
@@ -186,21 +191,21 @@ function CohortFormModal({ mode, initialCohort, onClose, onSubmit }) {
       dataRows.forEach((row, index) => {
         const rowNumber = index + (firstCandidateIsEmployee ? 2 : 3)
         const missing = required.filter((column) => !text(row[column]))
-        missing.forEach((column) => rowErrors.push({ row: rowNumber, ticket: text(row[2]) || '-', field: headers[column], issue: 'Missing (mandatory)' }))
+        missing.forEach((column) => rowErrors.push({ row: rowNumber, ticket: text(row[col(1)]) || '-', field: headers[column], issue: 'Missing (mandatory)' }))
 
         emailColumns.forEach((column) => {
           const value = text(row[column])
-          if (value && !EMAIL_RE.test(value)) rowErrors.push({ row: rowNumber, ticket: text(row[2]) || '-', field: headers[column], issue: `Not a valid email: ${value}` })
+          if (value && !EMAIL_RE.test(value)) rowErrors.push({ row: rowNumber, ticket: text(row[col(1)]) || '-', field: headers[column], issue: `Not a valid email: ${value}` })
         })
 
-        const employeeId = text(row[2]).toLowerCase()
-        const email = text(row[15]).toLowerCase()
+        const employeeId = text(row[col(1)]).toLowerCase()
+        const email = text(row[col(14)]).toLowerCase()
         if (employeeId) {
-          if (seenIds.has(employeeId)) rowErrors.push({ row: rowNumber, ticket: text(row[2]), field: 'Ticket ID', issue: `Duplicate Ticket ID (also row ${seenIds.get(employeeId)})` })
+          if (seenIds.has(employeeId)) rowErrors.push({ row: rowNumber, ticket: text(row[col(1)]), field: 'Ticket ID', issue: `Duplicate Ticket ID (also row ${seenIds.get(employeeId)})` })
           else seenIds.set(employeeId, rowNumber)
         }
         if (email) {
-          if (seenEmails.has(email)) rowErrors.push({ row: rowNumber, ticket: text(row[2]), field: 'Email', issue: `Duplicate email (also row ${seenEmails.get(email)})` })
+          if (seenEmails.has(email)) rowErrors.push({ row: rowNumber, ticket: text(row[col(1)]), field: 'Email', issue: `Duplicate email (also row ${seenEmails.get(email)})` })
           else seenEmails.set(email, rowNumber)
         }
 
@@ -209,19 +214,19 @@ function CohortFormModal({ mode, initialCohort, onClose, onSubmit }) {
 
         const masterData = Object.fromEntries(headers.map((header, column) => [`${header}_${column + 1}`, text(row[column])]))
         Object.assign(masterData, {
-          reportingManagerName: text(row[16]), reportingManagerEmail: text(row[18]),
-          skipManagerName: text(row[19]), skipManagerEmail: text(row[21]),
-          buHeadName: text(row[22]), buHeadEmail: text(row[24]),
-          buhrName: text(row[25]), buhrEmail: text(row[27]),
-          jobLevel: text(row[5]), positionLevel: text(row[6]), department: text(row[12]), location: text(row[14]),
+          reportingManagerName: text(row[col(15)]), reportingManagerEmail: text(row[col(17)]),
+          skipManagerName: text(row[col(18)]), skipManagerEmail: text(row[col(20)]),
+          buHeadName: text(row[col(21)]), buHeadEmail: text(row[col(23)]),
+          buhrName: text(row[col(24)]), buhrEmail: text(row[col(26)]),
+          jobLevel: text(row[col(4)]), positionLevel: text(row[col(5)]), department: text(row[col(11)]), location: text(row[col(13)]),
         })
         candidateRows.push({
           rowNumber,
-          name: text(row[1]), employeeId: text(row[2]), email: text(row[15]), designation: text(row[4]), businessUnit: text(row[13]),
-          reportingManager: { name: text(row[16]), employeeId: text(row[17]), email: text(row[18]) },
-          skipManager: { name: text(row[19]), employeeId: text(row[20]), email: text(row[21]) },
-          buHead: { name: text(row[22]), employeeId: text(row[23]), email: text(row[24]) },
-          buhr: { name: text(row[25]), employeeId: text(row[26]), email: text(row[27]) },
+          name: text(row[col(0)]), employeeId: text(row[col(1)]), email: text(row[col(14)]), designation: text(row[col(3)]), businessUnit: text(row[col(12)]),
+          reportingManager: { name: text(row[col(15)]), employeeId: text(row[col(16)]), email: text(row[col(17)]) },
+          skipManager: { name: text(row[col(18)]), employeeId: text(row[col(19)]), email: text(row[col(20)]) },
+          buHead: { name: text(row[col(21)]), employeeId: text(row[col(22)]), email: text(row[col(23)]) },
+          buhr: { name: text(row[col(24)]), employeeId: text(row[col(25)]), email: text(row[col(26)]) },
           masterData,
         })
       })
@@ -413,7 +418,7 @@ function ParticipantsTab({ rows, generated, onManage }) {
         <table className="w-full border-collapse bg-white text-left text-[13px]">
           <thead className="bg-[#ebf2fa]">
             <tr>
-              {['Ticket ID', 'Name', 'BU', 'Nominations', 'Pre-Work', 'Photo', '360 Responses', '360 Report Status', 'DC Report Status', ''].map((label) => (
+              {['Ticket ID', 'Name', 'BU', 'Nominations', 'Pre-Work', 'Photo', '360 Responses', '360° Feedback Report Status', 'DC Report Status', ''].map((label) => (
                 <th key={label} className="border-b border-[#d5dce5] px-3 py-2.5 text-[11px] font-bold uppercase tracking-wide text-slate-600">{label}</th>
               ))}
             </tr>
@@ -421,9 +426,16 @@ function ParticipantsTab({ rows, generated, onManage }) {
           <tbody>
             {rows.map((participant) => {
               const complete360 = participant.responses === participant.totalResponses && participant.totalResponses > 0
-              const reportTone = ['generated', 'released'].includes(participant.reportStatus) ? 'success' : participant.reportStatus === 'ready' ? 'info' : 'warning'
-              const reportLabel = participant.reportStatus === 'released' ? 'Released' : participant.reportStatus === 'generated' ? 'Generated' : participant.reportStatus === 'ready' ? 'Ready' : 'Waiting'
-              const dcReportGenerated = generated && participant.reportStatus === 'ready'
+              const nominationsSubmitted = participant.nominationsSubmitted || participant.taskStatus?.nominees === 'completed'
+              const preWorkSubmitted = participant.preWorkSubmitted || participant.taskStatus?.prework === 'completed'
+              const photoSubmitted = participant.photoSubmitted || participant.taskStatus?.photo === 'completed'
+              const report360 = participant.reports?.find((report) => report.type === '360')
+              const report360Status = report360?.status || participant.reportStatus
+              const reportTone = ['generated', 'released'].includes(report360Status) ? 'success' : report360Status === 'ready' ? 'info' : 'warning'
+              const reportLabel = report360Status === 'released' ? 'Released' : report360Status === 'generated' ? 'Generated' : report360Status === 'ready' ? 'Ready' : 'Awaited'
+              const dcReport = participant.reports?.find((report) => report.type === 'dc')
+              const dcReportGenerated = dcReport && ['generated', 'released'].includes(dcReport.status)
+              const dcReportLabel = dcReport?.status === 'released' ? 'Released' : dcReportGenerated ? 'Generated' : 'Not generated'
               return (
                 <tr key={participant.id} className="hover:bg-[#f4f7fb]">
                   <td className="border-b border-[#d5dce5] px-3 py-3 text-slate-500">{participant.employeeId}</td>
@@ -432,12 +444,12 @@ function ParticipantsTab({ rows, generated, onManage }) {
                     <p className="text-[11px] text-slate-500">{participant.designation}</p>
                   </td>
                   <td className="border-b border-[#d5dce5] px-3 py-3 text-slate-600">{participant.bu}</td>
-                  <td className="border-b border-[#d5dce5] px-3 py-3"><Badge tone={participant.nominees?.length ? 'success' : 'warning'}>{participant.nominees?.length ? 'Submitted' : 'Not submitted'}</Badge></td>
-                  <td className="border-b border-[#d5dce5] px-3 py-3"><Badge tone={participant.preWorkSubmitted ? 'success' : 'warning'}>{participant.preWorkSubmitted ? 'Submitted' : 'Pending'}</Badge></td>
-                  <td className="border-b border-[#d5dce5] px-3 py-3"><Badge tone={participant.photoSubmitted ? 'success' : 'warning'}>{participant.photoSubmitted ? 'Uploaded' : 'Pending'}</Badge></td>
+                  <td className="border-b border-[#d5dce5] px-3 py-3"><Badge tone={nominationsSubmitted ? 'success' : 'warning'}>{nominationsSubmitted ? 'Submitted' : 'Not submitted'}</Badge></td>
+                  <td className="border-b border-[#d5dce5] px-3 py-3"><Badge tone={preWorkSubmitted ? 'success' : 'warning'}>{preWorkSubmitted ? 'Submitted' : 'Pending'}</Badge></td>
+                  <td className="border-b border-[#d5dce5] px-3 py-3"><Badge tone={photoSubmitted ? 'success' : 'warning'}>{photoSubmitted ? 'Uploaded' : 'Pending'}</Badge></td>
                   <td className="border-b border-[#d5dce5] px-3 py-3"><Badge tone={complete360 ? 'success' : participant.responses ? 'info' : 'neutral'}>{participant.responses}/{participant.totalResponses}</Badge></td>
                   <td className="border-b border-[#d5dce5] px-3 py-3"><Badge tone={reportTone}>{reportLabel}</Badge></td>
-                  <td className="border-b border-[#d5dce5] px-3 py-3"><Badge tone={dcReportGenerated ? 'success' : 'warning'}>{dcReportGenerated ? 'Generated' : 'Not generated'}</Badge></td>
+                  <td className="border-b border-[#d5dce5] px-3 py-3"><Badge tone={dcReportGenerated ? 'success' : 'warning'}>{dcReportLabel}</Badge></td>
                   <td className="border-b border-[#d5dce5] px-3 py-3 text-right">
                     <Link to={`/td/participants/${participant.id}`} className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-[#ebf2fa] hover:text-[#1e5fba]" aria-label={`Open ${participant.name}`}>
                       <ChevronRight size={16} />
@@ -643,19 +655,22 @@ function ReportsTab({ rows, generated, onGenerate }) {
       <div className="overflow-hidden rounded-xl border border-[#d5dce5]">
         <table className="w-full border-collapse bg-white text-left text-[13px]">
           <thead className="bg-[#ebf2fa]">
-            <tr>{['Ticket ID', 'Participant', '360 Report', '360 Visible', 'DC Report', 'DC Visible'].map((label) => <th key={label} className="border-b border-[#d5dce5] px-3 py-2.5 text-[11px] font-bold uppercase tracking-wide text-slate-600">{label}</th>)}</tr>
+            <tr>{['Ticket ID', 'Participant', '360° Feedback Report', '360 Visible', 'DC Report', 'DC Visible'].map((label) => <th key={label} className="border-b border-[#d5dce5] px-3 py-2.5 text-[11px] font-bold uppercase tracking-wide text-slate-600">{label}</th>)}</tr>
           </thead>
           <tbody>
             {rows.map((participant) => {
-              const isGenerated = participant.reportStatus === 'generated' || (generated && participant.reportStatus === 'ready')
+              const report360 = participant.reports?.find((report) => report.type === '360')
+              const dcReport = participant.reports?.find((report) => report.type === 'dc')
+              const report360Available = report360 && ['generated', 'released'].includes(report360.status)
+              const dcReportAvailable = dcReport && ['generated', 'released'].includes(dcReport.status)
               return (
                 <tr key={participant.id} className="hover:bg-[#f4f7fb]">
                   <td className="border-b border-[#d5dce5] px-3 py-3 text-slate-500">{participant.employeeId}</td>
                   <td className="border-b border-[#d5dce5] px-3 py-3 font-semibold">{participant.name}</td>
-                  <td className="border-b border-[#d5dce5] px-3 py-3">{isGenerated ? <Badge tone="success">Generated</Badge> : <Badge>Not generated</Badge>}</td>
-                  <td className="border-b border-[#d5dce5] px-3 py-3"><span className={`inline-flex h-5 w-10 items-center rounded-full p-0.5 ${isGenerated ? 'bg-[#15803d]' : 'bg-slate-300'}`}><span className={`h-4 w-4 rounded-full bg-white transition-transform ${isGenerated ? 'translate-x-5' : ''}`} /></span></td>
-                  <td className="border-b border-[#d5dce5] px-3 py-3"><Badge>Not generated</Badge></td>
-                  <td className="border-b border-[#d5dce5] px-3 py-3"><span className="inline-flex h-5 w-10 items-center rounded-full bg-slate-300 p-0.5"><span className="h-4 w-4 rounded-full bg-white" /></span></td>
+                  <td className="border-b border-[#d5dce5] px-3 py-3">{report360Available ? <Badge tone="success">{report360.status === 'released' ? 'Released' : 'Generated'}</Badge> : <Badge>Not generated</Badge>}</td>
+                  <td className="border-b border-[#d5dce5] px-3 py-3"><span className={`inline-flex h-5 w-10 items-center rounded-full p-0.5 ${report360?.status === 'released' ? 'bg-[#15803d]' : 'bg-slate-300'}`}><span className={`h-4 w-4 rounded-full bg-white transition-transform ${report360?.status === 'released' ? 'translate-x-5' : ''}`} /></span></td>
+                  <td className="border-b border-[#d5dce5] px-3 py-3">{dcReportAvailable ? <Badge tone="success">{dcReport.status === 'released' ? 'Released' : 'Generated'}</Badge> : <Badge>Not generated</Badge>}</td>
+                  <td className="border-b border-[#d5dce5] px-3 py-3"><span className={`inline-flex h-5 w-10 items-center rounded-full p-0.5 ${dcReport?.status === 'released' ? 'bg-[#15803d]' : 'bg-slate-300'}`}><span className={`h-4 w-4 rounded-full bg-white transition-transform ${dcReport?.status === 'released' ? 'translate-x-5' : ''}`} /></span></td>
                 </tr>
               )
             })}
@@ -669,7 +684,7 @@ function ReportsTab({ rows, generated, onGenerate }) {
 export default function Cohorts({ view = 'dashboard' }) {
   const isCurrentView = view === 'current'
   const [cohorts, setCohorts] = useState([])
-  const [cohortId, setCohortId] = useState(null)
+  const [cohortId, setCohortId] = useState('')
   const [allParticipants, setAllParticipants] = useState([])
   const [query, setQuery] = useState('')
   const [activeTab, setActiveTab] = useState('participants')
@@ -713,12 +728,29 @@ export default function Cohorts({ view = 'dashboard' }) {
 
   useEffect(() => {
     if (!cohortId) return
-    setLoadingParticipants(true)
-    setError('')
-    api.getCohortParticipants(cohortId)
-      .then((result) => setAllParticipants(result.data || []))
-      .catch((err) => setError(err.message))
-      .finally(() => setLoadingParticipants(false))
+    let cancelled = false
+
+    const loadParticipants = (showLoading = false) => {
+      if (showLoading) setLoadingParticipants(true)
+      setError('')
+      return api.getCohortParticipants(cohortId)
+        .then((result) => {
+          if (!cancelled) setAllParticipants(result.data || [])
+        })
+        .catch((err) => {
+          if (!cancelled) setError(err.message)
+        })
+        .finally(() => {
+          if (!cancelled && showLoading) setLoadingParticipants(false)
+        })
+    }
+
+    loadParticipants(true)
+    const interval = window.setInterval(() => loadParticipants(false), 30000)
+    return () => {
+      cancelled = true
+      window.clearInterval(interval)
+    }
   }, [cohortId])
 
   const cohort = cohorts.find((item) => item.id === cohortId) || cohorts[0]
@@ -730,7 +762,7 @@ export default function Cohorts({ view = 'dashboard' }) {
   }, [allInCohort, query])
 
   const nominationsIn = allInCohort.filter((participant) => participant.totalResponses > 0).length
-  const released = allInCohort.filter((participant) => participant.reportStatus === 'generated').length
+  const released = allInCohort.filter((participant) => ['generated', 'released'].includes(participant.reportStatus)).length
   const responses = allInCohort.reduce((sum, participant) => sum + participant.responses, 0)
   const responseTotal = allInCohort.reduce((sum, participant) => sum + participant.totalResponses, 0)
   const ready = allInCohort.filter((participant) => participant.reportStatus === 'ready').length
@@ -787,7 +819,7 @@ export default function Cohorts({ view = 'dashboard' }) {
         )}
 
         {!isCurrentView && <div className="mb-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <Metric label="Active Cohorts" value={cohorts.length} sub={`${cohort.name} selected`} tone="text-[#1e5fba]" />
+          <Metric label="Active Cohorts" value={cohorts.length} sub={cohort ? `${cohort.name} selected` : 'No cohort yet'} tone="text-[#1e5fba]" />
           <Metric label="Participants" value={allInCohort.length} sub="in current cohort" />
           <Metric label="Nominations In" value={nominationsIn} sub={`${Math.round((nominationsIn / Math.max(1, allInCohort.length)) * 100)}% submitted`} tone="text-[#15803d]" />
           <Metric label="360 Responses" value={`${responses}/${responseTotal}`} sub={`${Math.round((responses / Math.max(1, responseTotal)) * 100)}% received`} tone="text-[#6a4c93]" />

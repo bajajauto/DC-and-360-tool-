@@ -6,7 +6,7 @@ import { api } from '../../lib/api'
 const evidenceConfig = {
   photograph: { title: 'Participant Photograph', label: 'Identity evidence', icon: Camera },
   'role-interview': { title: 'Role Interview', label: 'Interview submission', icon: MessageSquareText },
-  '360-report': { title: '360 Report', label: 'Aggregated feedback', icon: FileText },
+  '360-report': { title: '360° Feedback Report', label: 'Aggregated feedback', icon: FileText },
   'pre-work': { title: 'Pre-work', label: 'Participant submission', icon: BriefcaseBusiness },
 }
 
@@ -64,7 +64,7 @@ function DetailBody({ type, profile }) {
   if (type === 'photograph') return <div className="grid gap-6 lg:grid-cols-[360px_1fr]"><section className="rounded-2xl border border-[#e2e8f0] bg-white p-6">{profile.photograph.url ? <img src={profile.photograph.url} alt={profile.name} className="aspect-square w-full rounded-xl object-cover" /> : <PersonPlaceholder size="xl" />}</section><section className="rounded-2xl border border-[#e2e8f0] bg-white p-6"><h2 className="font-semibold text-[#172033]">Identity details</h2><div className="mt-4"><InfoRow label="Participant" value={profile.name} /><InfoRow label="Employee ID" value={profile.employeeId} /><InfoRow label="Designation" value={profile.designation} /><InfoRow label="Business unit" value={profile.bu} /><InfoRow label="Photo status" value={profile.photograph.status} /></div></section></div>
   if (type === 'role-interview') return <RoleInterview submission={profile.roleInterview} />
   if (type === 'pre-work') return <PreWork submission={profile.preWork} />
-  return <section className="rounded-2xl border border-[#e2e8f0] bg-white p-6"><div className="grid gap-4 md:grid-cols-3"><InfoRow label="Report status" value={profile.report360.status} /><InfoRow label="Responses submitted" value={`${profile.report360.submittedResponses}/${profile.report360.totalResponses}`} /><InfoRow label="Generated on" value={profile.report360.generatedAt ? new Date(profile.report360.generatedAt).toLocaleString('en-GB') : 'Not generated'} /></div><p className="mt-6 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">The aggregated 360 report becomes available after all required responses are complete and TD generates the report.</p></section>
+  return <section className="rounded-2xl border border-[#e2e8f0] bg-white p-6"><div className="grid gap-4 md:grid-cols-3"><InfoRow label="Report status" value={profile.report360.status} /><InfoRow label="Responses submitted" value={`${profile.report360.submittedResponses}/${profile.report360.totalResponses}`} /><InfoRow label="Generated on" value={profile.report360.generatedAt ? new Date(profile.report360.generatedAt).toLocaleString('en-GB') : 'Not generated'} /></div><p className="mt-6 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">The aggregated 360° Feedback Report becomes available after all required responses are complete and TD generates the report.</p></section>
 }
 
 export default function EvidenceDetail() {

@@ -35,8 +35,12 @@ function EvidenceCard({ icon: Icon, title, meta, to }) {
   )
 }
 
-function PersonPlaceholder({ size = 'sm' }) {
+function PersonPlaceholder({ size = 'sm', src = null, name = 'Participant' }) {
   const classes = size === 'lg' ? 'w-36 h-36 rounded-xl' : 'w-11 h-11 rounded-lg'
+
+  if (src) {
+    return <img src={src} alt={`${name} photograph`} className={`${classes} shrink-0 object-cover`} />
+  }
 
   return (
     <div className={`${classes} bg-[#e4eef9] text-[#1e4d8c] flex items-center justify-center shrink-0`}>
@@ -130,7 +134,7 @@ export default function CandidateProfiles() {
           <main className="space-y-6">
             <section className="bg-white border border-[#e2e8f0] rounded-2xl p-6">
               <div className="flex flex-col lg:flex-row gap-6">
-                <PersonPlaceholder size="lg" />
+                <PersonPlaceholder size="lg" src={selected.photograph.url} name={selected.name} />
                 <div className="flex-1 min-w-0">
                   <div className="flex flex-wrap items-start justify-between gap-4">
                     <div>
@@ -152,7 +156,7 @@ export default function CandidateProfiles() {
             <div className="grid lg:grid-cols-2 gap-5">
               <EvidenceCard icon={Camera} title="Participant Photograph" meta="Identity evidence" to={`/assessor/candidates/${selected.id}/photograph`} />
               <EvidenceCard icon={MessageSquareText} title="Role Interview" meta={selected.roleInterview.status} to={`/assessor/candidates/${selected.id}/role-interview`} />
-              <EvidenceCard icon={FileText} title="360 Report" meta={selected.report360.status} to={`/assessor/candidates/${selected.id}/360-report`} />
+              <EvidenceCard icon={FileText} title="360° Feedback Report" meta={selected.report360.status} to={`/assessor/candidates/${selected.id}/360-report`} />
               <EvidenceCard icon={BriefcaseBusiness} title="Pre-work" meta={selected.preWork.status} to={`/assessor/candidates/${selected.id}/pre-work`} />
             </div>
 

@@ -5,27 +5,22 @@ import { useUser } from '../../context/UserContext'
 
 // `status` here is only the placeholder shown before participantData has
 // loaded — real status is derived live from taskStatus (or nomineeStatus /
-// selfSurveyStatus) below, never left on these fallback values.
+// selfSurveyStatus) below, never left on these fallback values. `deadlineKey`
+// names the cohort field the real deadline is read from (see formatDeadline).
 const baseJourneySteps = [
-  { id: 1, label: 'Role Interview', to: '/participant/role-interview', status: 'pending', deadline: '15 Jun' },
-  { id: 2, label: 'Photograph', to: '/participant/photograph', status: 'pending', deadline: '15 Jun' },
-  { id: 3, label: 'Pre-Work', to: '/participant/pre-work', status: 'pending', deadline: '20 Jun' },
-  { id: 4, label: 'Self 360 Survey', to: '/participant/self-360', status: 'locked', deadline: '30 Jun' },
-  { id: 5, label: '360 Nominees', to: '/participant/360-nominees', status: 'pending', deadline: '20 Jun' },
-  { id: 6, label: '360 Feedback', to: '/participant/360-status', status: 'locked', deadline: '30 Jun' },
-  { id: 7, label: 'DC Report', to: '/participant/reports', status: 'locked', deadline: 'TBD' },
+  { id: 1, label: 'Role Interview', to: '/participant/role-interview', status: 'pending', deadlineKey: 'roleInterviewDeadline' },
+  { id: 2, label: 'Photograph', to: '/participant/photograph', status: 'pending', deadlineKey: 'photoDeadline' },
+  { id: 3, label: 'Pre-Work', to: '/participant/pre-work', status: 'pending', deadlineKey: 'preWorkDeadline' },
+  { id: 4, label: 'Self 360 Survey', to: '/participant/self-360', status: 'locked', deadlineKey: 'threeSixtyCutoff' },
+  { id: 5, label: '360 Nominees', to: '/participant/360-nominees', status: 'pending', deadlineKey: 'nominationDeadline' },
+  { id: 6, label: '360 Feedback', to: '/participant/360-status', status: 'locked', deadlineKey: 'threeSixtyCutoff' },
+  { id: 7, label: 'DC Report', to: '/participant/reports', status: 'locked', deadlineKey: null },
 ]
 
-const pendingTasks = [
-  {
-    title: 'Submit 360 Nominees',
-    description: 'Select your feedback respondents from the directory',
-    to: '/participant/360-nominees',
-    deadline: '20 Jun 2025',
-    urgency: 'high',
-    progress: 0,
-  },
-]
+function formatDeadline(cohort, key) {
+  const value = key && cohort?.[key]
+  return value ? new Date(value).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'TBD'
+}
 
 const TASK_STATUS_KEY_BY_LABEL = {
   'Role Interview': 'role',
@@ -33,6 +28,15 @@ const TASK_STATUS_KEY_BY_LABEL = {
   'Pre-Work': 'prework',
   '360 Feedback': 'feedback',
   'DC Report': 'report',
+}
+
+function nomineeCompletionPercent(nominees, submitted) {
+  if (submitted) return 100
+  const filledRequiredSlots =
+    Math.min(1, nominees.filter((nominee) => nominee.relationship === 'reporting-manager').length)
+    + Math.min(1, nominees.filter((nominee) => nominee.relationship === 'skip-manager').length)
+    + Math.min(4, nominees.filter((nominee) => nominee.relationship === 'peer').length)
+  return Math.round((filledRequiredSlots / 6) * 100)
 }
 
 function StatusBadge({ status }) {
@@ -89,6 +93,7 @@ export default function Dashboard() {
     : nominees.length > 0
       ? 'saved'
       : 'pending'
+  const nomineeProgress = nomineeCompletionPercent(nominees, nomineeStatus === 'completed')
 
   useEffect(() => {
     if (nomineeStatus !== 'completed' || !user?.participantId) return
@@ -98,34 +103,38 @@ export default function Dashboard() {
   const selfSurveyStatus = nomineeStatus !== 'completed' ? 'locked' : selfTask?.status === 'submitted' ? 'completed' : selfTask?.status === 'saved' ? 'saved' : 'pending'
   const taskStatus = participantData?.taskStatus
   const preWorkAnsweredCount = participantData?.preWorkAnsweredCount ?? 0
+  const cohort = participantData?.cohort
   const journeySteps = baseJourneySteps.map((step) => {
-    if (step.label === '360 Nominees') return { ...step, status: nomineeStatus }
-    if (step.label === 'Self 360 Survey') return { ...step, status: selfSurveyStatus }
+    const withDeadline = { ...step, deadline: formatDeadline(cohort, step.deadlineKey) }
+    if (step.label === '360 Nominees') return { ...withDeadline, status: nomineeStatus }
+    if (step.label === 'Self 360 Survey') return { ...withDeadline, status: selfSurveyStatus }
     const taskKey = TASK_STATUS_KEY_BY_LABEL[step.label]
-    return taskKey && taskStatus?.[taskKey] ? { ...step, status: taskStatus[taskKey] } : step
+    return taskKey && taskStatus?.[taskKey] ? { ...withDeadline, status: taskStatus[taskKey] } : withDeadline
   })
-  const visiblePendingTasks = pendingTasks
-    .map((task) => {
-      if (task.to !== '/participant/360-nominees') return task
-      if (nomineeStatus === 'completed') return null
-      if (nomineeStatus === 'saved') {
-        return {
-          ...task,
-          title: 'Review saved 360 nominees',
-          description: `${nominees.length} nominees saved. Final submit will send magic links.`,
-          urgency: 'medium',
-          progress: 80,
-        }
-      }
-      return task
+  const visiblePendingTasks = []
+  if (nomineeStatus !== 'completed') {
+    visiblePendingTasks.push(nomineeStatus === 'saved' ? {
+      title: 'Review saved 360 nominees',
+      description: `${nominees.length} nominees saved. Final submit will send magic links.`,
+      to: '/participant/360-nominees',
+      deadline: formatDeadline(cohort, 'nominationDeadline'),
+      urgency: 'medium',
+      progress: nomineeProgress,
+    } : {
+      title: 'Submit 360 Nominees',
+      description: 'Select your feedback respondents from the directory',
+      to: '/participant/360-nominees',
+      deadline: formatDeadline(cohort, 'nominationDeadline'),
+      urgency: 'high',
+      progress: 0,
     })
-    .filter(Boolean)
+  }
   if (taskStatus?.prework && taskStatus.prework !== 'completed') {
     visiblePendingTasks.unshift({
       title: 'Complete Pre-Work form',
       description: `${preWorkAnsweredCount} of 10 self-reflection questions answered`,
       to: '/participant/pre-work',
-      deadline: '20 Jun 2025',
+      deadline: formatDeadline(cohort, 'preWorkDeadline'),
       urgency: 'medium',
       progress: preWorkAnsweredCount * 10,
     })
@@ -135,19 +144,36 @@ export default function Dashboard() {
       title: 'Complete your Self 360 Survey',
       description: 'Your self-rating is a required part of the 360 feedback process.',
       to: '/participant/self-360',
-      deadline: '30 Jun 2025',
+      deadline: formatDeadline(cohort, 'threeSixtyCutoff'),
       urgency: 'high',
-      progress: selfSurveyStatus === 'saved' ? 50 : 0,
+      progress: selfTask?.progress ?? 0,
     })
   }
   const completedSteps = journeySteps.filter((s) => s.status === 'completed').length
   const totalSteps = journeySteps.length
-  const progressPct = Math.round((completedSteps / totalSteps) * 100)
+  const roleQuestionCount = participantData?.roleInterviewQuestionCount ?? 0
+  const roleProgress = taskStatus?.role === 'completed'
+    ? 100
+    : roleQuestionCount
+      ? Math.round(((participantData?.roleInterviewAnsweredCount ?? 0) / roleQuestionCount) * 100)
+      : 0
+  const stageProgress = {
+    'Role Interview': roleProgress,
+    Photograph: taskStatus?.photo === 'completed' ? 100 : 0,
+    'Pre-Work': Math.min(100, preWorkAnsweredCount * 10),
+    'Self 360 Survey': selfSurveyStatus === 'completed' ? 100 : (selfTask?.progress ?? 0),
+    '360 Nominees': nomineeProgress,
+    '360 Feedback': participantData?.totalResponses
+      ? Math.round(((participantData?.responses ?? 0) / participantData.totalResponses) * 100)
+      : 0,
+    'DC Report': taskStatus?.report === 'completed' ? 100 : 0,
+  }
+  const progressPct = Math.round(journeySteps.reduce((sum, step) => sum + (stageProgress[step.label] ?? 0), 0) / totalSteps)
 
   return (
     <div className="p-6">
       <div className="mb-5">
-        <p className="text-sm text-gray-500 mb-0.5">EX-to-LX Development Centre · Cohort 2025</p>
+        <p className="text-sm text-gray-500 mb-0.5">{cohort?.programme ? `${cohort.programme} Development Centre` : 'Development Centre'} · {cohort?.name || 'Your cohort'}</p>
         <h1 className="text-2xl font-bold text-[#1a1f2e]">Welcome back, {user.name.split(' ')[0]}</h1>
       </div>
 
@@ -166,7 +192,7 @@ export default function Dashboard() {
         <div className="w-full bg-blue-800 rounded-full h-2">
           <div className="bg-white rounded-full h-2 transition-all duration-500" style={{ width: `${progressPct}%` }} />
         </div>
-        <p className="text-blue-200 text-xs mt-2">DC date: <span className="text-white font-medium">25–26 July 2025</span></p>
+        <p className="text-blue-200 text-xs mt-2">DC date: <span className="text-white font-medium">{cohort?.eventDate || 'TBD'}</span></p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">

@@ -1,4 +1,4 @@
-import { LayoutDashboard, LogOut, UsersRound } from 'lucide-react'
+import { LogOut, UsersRound } from 'lucide-react'
 import { Link, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useUser } from '../context/UserContext'
 
@@ -24,18 +24,7 @@ export default function AssessorLayout() {
           </div>
         </div>
 
-        <div className="px-4 pt-5">
-          <p className="px-2 text-[10px] font-semibold tracking-[0.14em] text-blue-300 uppercase mb-2">Workspace</p>
-          <div className="flex items-center gap-3 rounded-xl bg-white/10 border border-white/10 px-3 py-3">
-            <LayoutDashboard size={17} className="text-blue-200" />
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold">Assessment Panel</p>
-              <p className="text-[10px] text-blue-200">Evidence review</p>
-            </div>
-          </div>
-        </div>
-
-        <nav className="flex-1 px-4 pt-6 space-y-1">
+        <nav className="flex-1 px-4 pt-5 space-y-1">
           {navItems.map(({ to, label, icon: Icon }) => {
             const active = pathname.startsWith(to)
             return (

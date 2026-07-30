@@ -28,6 +28,8 @@ export function toParticipantSummary(participant) {
     employeeId: participant.user.employeeId,
     designation: participant.user.designation,
     bu: participant.user.businessUnit,
+    photoSubmitted: Boolean(participant.photoUrl),
+    preWorkSubmitted: participant.preWork?.status === 'submitted',
     cohortId: participant.cohortId,
     progress: participant.progress,
     stage: stageLabels[participant.stage] || participant.stage,

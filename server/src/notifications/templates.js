@@ -120,7 +120,7 @@ Please note:
 - You can track response progress on the Tool at any time.
 - You will not be able to see who has said what. Feedback is shown only as group aggregates.
 
-Your 360 Degree Feedback report is confidential and shall be shared and used with utmost discretion by Managers, HR, and Assessors.
+Your 360° Feedback Report is confidential and shall be shared and used with utmost discretion by Managers, HR, and Assessors.
 
 ${support}
 
@@ -194,14 +194,14 @@ ${signature}`,
   {
     templateId: 'report-360-released',
     phase: 'Reports',
-    trigger: 'TD Admin switches on 360 report visibility for a participant',
+    trigger: 'TD Admin switches on 360° Feedback Report visibility for a participant',
     recipient: 'Participant',
-    subject: 'Your 360 Degree Feedback Report is now available',
+    subject: 'Your 360° Feedback Report is now available',
     body: `Dear {{Participant Name}},
 
 Thank you for participating in the 360 Degree Feedback process.
 
-Your 360 Degree Feedback Report is now available to view and download on the Bajaj Auto 360/DC Tool under My Reports.
+Your 360° Feedback Report is now available to view and download on the Bajaj Auto 360/DC Tool under My Reports.
 
 As you read the report:
 1. Please go through the How to Read This Report pages first.

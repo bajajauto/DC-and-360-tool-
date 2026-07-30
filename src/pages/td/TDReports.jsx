@@ -162,7 +162,7 @@ export default function TDReports() {
               <h2 className="text-lg font-bold text-[#1e5fba]">All reports</h2>
               <p className="text-xs text-gray-400 mt-0.5">Browse current and historical reports across Development Centre cohorts.</p>
               <div className="mt-3 inline-flex rounded-lg border border-[#dce3ed] bg-slate-50 p-1" aria-label="Filter by report type">
-                {[['all', 'All reports'], ['dc', 'DC reports'], ['360', '360 reports']].map(([value, label]) => (
+                {[['all', 'All reports'], ['dc', 'DC reports'], ['360', '360° Feedback Reports']].map(([value, label]) => (
                   <button
                     key={value}
                     type="button"
@@ -196,10 +196,10 @@ export default function TDReports() {
               <thead className="bg-[#f8fafc] border-b border-[#e8edf4]">
                 <tr>
                   {(selectedReportType === 'all'
-                    ? ['Ticket ID', 'Participant', 'DC Report', '360 Report', 'Cohort', 'Business unit', 'Actions']
+                    ? ['Ticket ID', 'Participant', 'DC Report', '360° Feedback Report', 'Cohort', 'Business unit', 'Actions']
                     : ['Ticket ID', 'Participant', 'Report type', 'Cohort', 'Business unit', 'Responses', 'Status', 'Actions']
                   ).map((label) => (
-                    <th key={label} className={`px-5 py-3 text-[10px] uppercase tracking-wider font-semibold text-gray-400 ${selectedReportType === 'all' && ['DC Report', '360 Report'].includes(label) ? 'w-28 text-center' : ''}`}>{label}</th>
+                    <th key={label} className={`px-5 py-3 text-[10px] uppercase tracking-wider font-semibold text-gray-400 ${selectedReportType === 'all' && ['DC Report', '360° Feedback Report'].includes(label) ? 'w-28 text-center' : ''}`}>{label}</th>
                   ))}
                 </tr>
               </thead>
@@ -229,7 +229,7 @@ export default function TDReports() {
                         })}
                       </> : <td className="px-5 py-4">
                         <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase ${participant.reportType === 'dc' ? 'border-violet-200 bg-violet-50 text-violet-700' : 'border-blue-200 bg-blue-50 text-blue-700'}`}>
-                          {participant.reportType === 'dc' ? 'DC Report' : '360 Report'}
+                          {participant.reportType === 'dc' ? 'DC Report' : '360° Feedback Report'}
                         </span>
                       </td>}
                       <td className="px-5 py-4">

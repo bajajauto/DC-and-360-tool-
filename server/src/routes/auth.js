@@ -27,6 +27,10 @@ function initials(name) {
     .toUpperCase()
 }
 
+function formatDeadline(date) {
+  return date ? date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'the deadline configured for your cohort'
+}
+
 authRouter.post('/login', asyncHandler(async (req, res) => {
   const payload = loginSchema.parse(req.body)
   const normalized = payload.identifier.toLowerCase()
@@ -91,7 +95,7 @@ authRouter.post('/login', asyncHandler(async (req, res) => {
           totalQuestions,
           answered: task.status === 'SUBMITTED' ? totalQuestions : 0,
           dcType: task.participant.cohort?.programme || 'DC',
-          deadline: task.dueAt?.toISOString() || '30 Jun 2025',
+          deadline: formatDeadline(task.dueAt || task.participant.cohort?.threeSixtyCutoff),
         }
       }),
     },

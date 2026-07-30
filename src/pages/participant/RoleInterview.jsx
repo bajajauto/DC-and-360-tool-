@@ -7,7 +7,7 @@ const transitionFields = [['role', 'Role'], ['roleDescription', 'Role Descriptio
 const transitions = [1, 2, 3].map((n) => ({ n, fields: transitionFields }))
 const transitionKeys = [1, 2, 3].flatMap((number) => transitionFields.map(([key]) => `transition${number}_${key}`))
 const shortRequiredKeys = ['currentRole', ...transitionKeys]
-const reflectionKeys = ['responsibilities', 'highlight1', 'highlight2', 'highlight3', 'challenge1', 'challenge2', 'challenge3']
+const reflectionKeys = ['responsibilities', 'highlight1', 'highlight2', 'challenge1', 'challenge2']
 const allRequiredKeys = [...shortRequiredKeys, ...reflectionKeys]
 const placeholderPattern = /^(?:n\/?a|none|nil|[^\p{L}\p{N}]+)$/iu
 const validShort = (value) => {
@@ -32,12 +32,12 @@ function RoleInterviewInstructions() {
       <div className="mt-4 border-t border-blue-200 pt-4">
         <h2 className="text-xs font-bold uppercase tracking-wide text-[#1e5fba]">How to fill it</h2>
         <ol className="mt-2 list-decimal space-y-1.5 pl-5 leading-6">
-          <li>Please answer every field. Nothing should be left blank.</li>
+          <li>Please answer every required field. The third Highlight and third Challenge are optional.</li>
           <li>Please write in as much detail as you need. There is no word limit, and a considered answer is far more useful than a brief one.</li>
           <li>Please do not enter placeholder text such as NA, N/A, None, hyphens, dots or any other special characters in place of an answer. If a question genuinely does not apply to you, write a line explaining why.</li>
           <li>For Highlights and Challenges, please mention the initiative or event, what prompted it, and what made it a significant accomplishment or a difficult situation to overcome.</li>
           <li>Your responses save as you go. You may return and edit at any time before the deadline.</li>
-          <li>After the deadline, the submitted form becomes read-only.</li>
+          <li>After the deadline, the submitted form cannot be edited.</li>
         </ol>
       </div>
     </section>
@@ -134,7 +134,7 @@ export default function RoleInterview() {
           <h1 className="text-xl font-bold">Role Interview</h1>
           {status === 'submitted' && <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-700">Submitted</span>}
         </div>
-        <p className="mt-1 text-sm text-gray-500">Career history, current role, highlights and challenges · All fields are mandatory · {completed}/{allRequiredKeys.length} complete</p>
+        <p className="mt-1 text-sm text-gray-500">Career history, current role, highlights and challenges · {completed}/{allRequiredKeys.length} required fields complete</p>
         {autoSaveStatus !== 'idle' && <p className={`mt-1 text-xs ${autoSaveStatus === 'saved' ? 'text-emerald-600' : 'text-slate-400'}`}>{autoSaveStatus === 'saved' ? 'Saved automatically' : 'Saving...'}</p>}
       </div>
       <div className={`mb-4 rounded-lg border px-4 py-3 text-sm ${canEdit ? 'border-blue-200 bg-blue-50 text-blue-900' : 'border-amber-200 bg-amber-50 text-amber-900'}`}>
@@ -164,7 +164,7 @@ export default function RoleInterview() {
         {[
           ['Highlights', 'Share two or three accomplishments from the last two years. For each, mention the initiative, what prompted it, and what makes it significant to you.'],
           ['Challenges', 'Share events or initiatives from the last two years that you found challenging. For each, mention what prompted it and the obstacles you had to overcome.'],
-        ].map(([title, hint]) => <section key={title} className="rounded-xl border bg-white p-5"><h2 className="font-semibold">{title}</h2><p className="mb-4 text-xs leading-5 text-slate-500">{hint}</p>{[1, 2, 3].map((n) => { const key = `${title.toLowerCase().slice(0, -1)}${n}`; return <div key={n} className="mb-4"><label className="mb-1 block text-xs font-semibold text-slate-600">{title.slice(0, -1)} {n}<span className="text-red-500"> *</span></label><textarea required rows={4} value={answers[key] || ''} onChange={(event) => set(key, event.target.value)} placeholder={`Describe ${title.toLowerCase().slice(0, -1)} ${n}...`} className="w-full rounded-lg border px-4 py-3 text-sm" /><ReflectionMeta value={answers[key]} /></div>})}</section>)}
+        ].map(([title, hint]) => <section key={title} className="rounded-xl border bg-white p-5"><h2 className="font-semibold">{title}</h2><p className="mb-4 text-xs leading-5 text-slate-500">{hint}</p>{[1, 2, 3].map((n) => { const key = `${title.toLowerCase().slice(0, -1)}${n}`; const optional = n === 3; return <div key={n} className="mb-4"><label className="mb-1 block text-xs font-semibold text-slate-600">{title.slice(0, -1)} {n}{optional ? <span className="ml-1 font-normal text-slate-400">(Optional)</span> : <span className="text-red-500"> *</span>}</label><textarea required={!optional} rows={4} value={answers[key] || ''} onChange={(event) => set(key, event.target.value)} placeholder={`Describe ${title.toLowerCase().slice(0, -1)} ${n}...`} className="w-full rounded-lg border px-4 py-3 text-sm" />{(!optional || answers[key]) && <ReflectionMeta value={answers[key]} />}</div>})}</section>)}
       </fieldset>
       <div className="mt-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-900"><strong>Please review your responses before submitting.</strong> You may edit your submission until the cohort cutoff. Timelines are sacrosanct and will not be extended.</div>
       <div className="sticky bottom-0 mt-5 flex justify-end gap-3 border-t bg-[#f4f7fb]/95 py-4">{status !== 'submitted' && <button disabled={saving || !canEdit} onClick={() => save(false)} className="rounded-lg border bg-white px-4 py-2 text-sm font-semibold disabled:opacity-40">Save Draft</button>}{status === 'submitted' && !editing && <button disabled className="rounded-lg border border-emerald-200 bg-emerald-100 px-5 py-2 text-sm font-semibold text-emerald-700">Submitted</button>}{editing && <button disabled={saving} onClick={() => { setAnswers(submittedSnapshot.current); setEditing(false) }} className="rounded-lg border bg-white px-4 py-2 text-sm font-semibold">Cancel</button>}{(status !== 'submitted' || editing) && <button disabled={saving || !canEdit || !complete} onClick={() => save(true)} className="rounded-lg bg-[#1e4d8c] px-5 py-2 text-sm font-semibold text-white disabled:opacity-40">{editing ? 'Save Changes' : 'Submit'}</button>}</div>

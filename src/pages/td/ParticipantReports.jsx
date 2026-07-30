@@ -5,7 +5,7 @@ import { api } from '../../lib/api'
 import { download360Pptx } from '../../lib/reportDownload'
 
 const reportDefinitions = [
-  { type: '360', title: '360 Feedback Report', description: 'Feedback collected from the participant’s nominated respondents.', tone: 'border-blue-200 bg-blue-50 text-blue-700' },
+  { type: '360', title: '360° Feedback Report', description: 'Feedback collected from the participant’s nominated respondents.', tone: 'border-blue-200 bg-blue-50 text-blue-700' },
   { type: 'dc', title: 'Development Centre Report', description: 'Final Development Centre observations and development recommendations.', tone: 'border-violet-200 bg-violet-50 text-violet-700' },
 ]
 

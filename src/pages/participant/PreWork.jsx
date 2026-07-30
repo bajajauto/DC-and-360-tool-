@@ -50,7 +50,7 @@ function PreWorkInstructions() {
           <li>Please write in as much detail as you need. A few honest sentences are worth more than a single word.</li>
           <li>Please do not enter placeholder text such as NA, N/A, None, hyphens, dots or any other special characters in place of an answer.</li>
           <li>Set aside a quiet 30 to 40 minutes. Your responses save as you go, so you may return and edit at any time before the deadline.</li>
-          <li>After the deadline, the submitted form becomes read-only.</li>
+          <li>After the deadline, the submitted form cannot be edited.</li>
         </ol>
       </div>
     </section>

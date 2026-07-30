@@ -6,7 +6,7 @@ import { api } from '../../lib/api'
 import { downloadBuhrReport } from '../../lib/reportDownload'
 
 const reportDefinitions = [
-  { type: '360', title: '360 Feedback Report', description: 'The participant’s released multi-rater feedback report.', tone: 'border-blue-200 bg-blue-50 text-blue-700' },
+  { type: '360', title: '360° Feedback Report', description: 'The participant’s released multi-rater feedback report.', tone: 'border-blue-200 bg-blue-50 text-blue-700' },
   { type: 'dc', title: 'Development Centre Report', description: 'The participant’s released Development Centre report.', tone: 'border-violet-200 bg-violet-50 text-violet-700' },
 ]
 

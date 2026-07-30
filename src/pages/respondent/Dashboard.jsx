@@ -101,7 +101,7 @@ export default function RespondentDashboard() {
   const inProgress = user.respondentTasks.filter((t) => t.status === 'saved')
   const submitted = user.respondentTasks.filter((t) => t.status === 'submitted')
   const incomplete = pending.length + inProgress.length
-  const cutoff = '30 Jun 2025'
+  const cutoff = (pending[0] || inProgress[0] || submitted[0])?.deadline || 'the deadline configured for your cohort'
 
   function handleOpen(taskId) {
     navigate(`/respondent/feedback/${taskId}`)
@@ -218,7 +218,7 @@ export default function RespondentDashboard() {
               <div>
                 <p className="text-xs font-semibold text-gray-600 mb-1">Confidentiality</p>
                 <p className="text-xs text-gray-500 leading-relaxed">
-                  Your individual responses are never shared. Scores are aggregated across respondent groups before appearing in the 360 report.
+                  Your individual responses are never shared. Scores are aggregated across respondent groups before appearing in the 360° Feedback Report.
                 </p>
               </div>
             </div>

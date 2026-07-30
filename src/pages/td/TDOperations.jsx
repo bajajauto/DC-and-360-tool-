@@ -8,7 +8,6 @@ import {
   Send,
   Users,
 } from 'lucide-react'
-import { competencyScores } from '../../data/adminData'
 import { exportCohortNomineeStatus, exportCohortProcessStatus } from '../../lib/trackingExport'
 import { api } from '../../lib/api'
 
@@ -228,65 +227,6 @@ export function EmailOutbox() {
             )}
           </Card>
         )}
-      </div>
-    </Page>
-  )
-}
-
-const sections = [
-  {
-    name: 'Section 1: Thinking and Problem Solving',
-    note: 'Covers generating ideas and solving problems creatively.',
-    rows: [
-      ['GI-1', 'Uses a method to evaluate ideas for their effectiveness', 'Included'],
-      ['SPC-1', 'Arrives at a clear problem statement when faced with a problem', 'Included'],
-      ['SPC-2', 'Arrives at root causes through analysis', 'Included'],
-    ],
-  },
-  {
-    name: 'Section 2: Change and Improvement',
-    note: 'Covers championing improvement and positive change.',
-    rows: [
-      ['CIPC-1', 'Looks for opportunities and identifies the need for improvement/change', 'Included'],
-      ['CIPC-2', 'Visualizes the end state and makes a case for improvement/change', 'Included'],
-      ['CIPC-3', 'Works to gain buy-in from stakeholders', 'Included'],
-    ],
-  },
-  {
-    name: 'Section 3: People Leadership',
-    note: 'Covers developing and engaging people, aligning and motivating teams.',
-    rows: [
-      ['DEP-1', 'Builds and sustains positive work relations', 'Included'],
-      ['AMT-1', 'Appreciates and recognises individual and team efforts', 'Included'],
-      ['AMT-2', 'Removes blocks or obstacles to performance', 'Included'],
-    ],
-  },
-]
-
-export function QuestionBank() {
-  return (
-    <Page
-      eyebrow="Talent Development / Configuration"
-      title="360 Question Bank"
-      subtitle="The live statements used in the 360 form. The BU Head / Skip Manager variant can contain fewer statements while reports continue to show NA where not rated."
-    >
-      <div className="mb-5 grid gap-3 md:grid-cols-3">
-        <Card><p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Statements</p><p className="mt-1 text-[26px] font-semibold text-[#1e5fba]">30</p><p className="text-xs text-slate-500">standard form</p></Card>
-        <Card><p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">BU Head / Skip</p><p className="mt-1 text-[26px] font-semibold text-[#6a4c93]">15</p><p className="text-xs text-slate-500">shorter form variant</p></Card>
-        <Card><p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Competencies</p><p className="mt-1 text-[26px] font-semibold text-[#15803d]">{competencyScores.length}</p><p className="text-xs text-slate-500">mapped to report sections</p></Card>
-      </div>
-      <div className="space-y-4">
-        {sections.map((section) => (
-          <Card key={section.name}>
-            <CardHeader title={section.name} subtitle={section.note} action={<Badge tone="info">360 form</Badge>} />
-            <div className="overflow-hidden rounded-xl border border-[#d5dce5]">
-              <table className="w-full border-collapse bg-white text-left text-[13px]">
-                <thead className="bg-[#ebf2fa]"><tr>{['Code', 'Statement', 'BU Head / Skip version'].map((label) => <th key={label} className="border-b border-[#d5dce5] px-3 py-2.5 text-[11px] font-bold uppercase tracking-wide text-slate-600">{label}</th>)}</tr></thead>
-                <tbody>{section.rows.map(([code, statement, variant]) => <tr key={code}><td className="border-b border-[#d5dce5] px-3 py-3 font-semibold text-slate-500">{code}</td><td className="border-b border-[#d5dce5] px-3 py-3">{statement}</td><td className="border-b border-[#d5dce5] px-3 py-3"><Badge tone="success">{variant}</Badge></td></tr>)}</tbody>
-              </table>
-            </div>
-          </Card>
-        ))}
       </div>
     </Page>
   )

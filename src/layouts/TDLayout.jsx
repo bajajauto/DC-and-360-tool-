@@ -1,7 +1,6 @@
 import {
   BarChart3,
   Bell,
-  BookOpen,
   ChevronDown,
   ClipboardList,
   FileText,
@@ -32,7 +31,6 @@ const navSections = [
       { to: '/td/outbox', label: 'Email Outbox', icon: Mail },
       { to: '/td/exports', label: 'Trackers & Exports', icon: ClipboardList },
       { to: '/td/assessor-analysis', label: 'Assessor Excel', icon: FileSpreadsheet },
-      { to: '/td/question-bank', label: 'Question Bank', icon: BookOpen },
     ],
   },
 ]

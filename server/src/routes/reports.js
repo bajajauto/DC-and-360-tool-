@@ -3,7 +3,7 @@ import { Router } from 'express'
 import { prisma } from '../db.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
 import { httpError } from '../utils/httpError.js'
-import { generate360ReportForParticipant, getOrGenerate360Report } from '../reports/generate360Report.js'
+import { generate360ReportForParticipant, get360ReportPreviewHtml, getOrGenerate360Report } from '../reports/generate360Report.js'
 import { build360ResponseDataWorkbook } from '../reports/build360ResponseData.js'
 import { queueEmail } from '../notifications/service.js'
 
@@ -98,6 +98,12 @@ reportsRouter.get('/:participantId/360/download', asyncHandler(async (req, res) 
   res.download(generated.outputPath, generated.fileName || path.basename(generated.outputPath))
 }))
 
+reportsRouter.get('/:participantId/360/preview', asyncHandler(async (req, res) => {
+  await assertReportDownloadAccess(req)
+  const html = await get360ReportPreviewHtml(prisma, req.params.participantId)
+  res.type('html').send(html)
+}))
+
 reportsRouter.get('/:participantId/360/response-data', asyncHandler(async (req, res) => {
   requireTd(req)
   const { buffer, fileName } = await build360ResponseDataWorkbook(prisma, req.params.participantId)
@@ -119,7 +125,7 @@ reportsRouter.post('/:participantId/360/release', asyncHandler(async (req, res) 
   })
 
   if (!report) {
-    res.status(409).json({ error: { message: 'Generate the 360 report before publishing it.' } })
+    res.status(409).json({ error: { message: 'Generate the 360° Feedback Report before publishing it.' } })
     return
   }
 

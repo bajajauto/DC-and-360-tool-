@@ -1,27 +1,17 @@
 import { Link } from 'react-router-dom'
+import { useEffect } from 'react'
+import { useUser } from '../../context/UserContext'
 
-const respondents = [
-  { name: 'Rahul Kumar (Self)', relationship: 'Self', status: 'submitted', submittedOn: '10 Jun 2025' },
-  { name: 'Priya Menon', relationship: 'Reporting Manager', status: 'submitted', submittedOn: '12 Jun 2025' },
-  { name: 'Vikram Sood', relationship: 'Skip Manager', status: 'submitted', submittedOn: '14 Jun 2025' },
-  { name: 'Anika Kapoor', relationship: 'Peer', status: 'submitted', submittedOn: '13 Jun 2025' },
-  { name: 'Deepak Rajan', relationship: 'Peer', status: 'pending', submittedOn: null },
-  { name: 'Shalini Nair', relationship: 'Peer', status: 'pending', submittedOn: null },
-  { name: 'Arjun Mehta', relationship: 'Peer', status: 'pending', submittedOn: null },
-  { name: 'Kavitha S', relationship: 'Peer', status: 'pending', submittedOn: null },
-]
-
-const orderedRespondents = [...respondents].sort(
-  (a, b) => Number(b.relationship === 'Self') - Number(a.relationship === 'Self'),
-)
-
-const submitted = respondents.filter((r) => r.status === 'submitted').length
-const total = respondents.length
-const pct = Math.round((submitted / total) * 100)
-
-function initials(name) {
-  if (name === 'Rahul Kumar (Self)') return 'ME'
+function initials(respondent) {
+  if (respondent.isSelf) return 'ME'
+  const { name } = respondent
   return name.split(' ').map((w) => w[0]).join('').slice(0, 2)
+}
+
+function formatSubmittedAt(value) {
+  return value
+    ? new Date(value).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+    : null
 }
 
 const relationshipStyles = {
@@ -33,6 +23,24 @@ const relationshipStyles = {
 }
 
 export default function Status360() {
+  const { user, participantData, refreshParticipantData } = useUser()
+
+  useEffect(() => {
+    if (!user?.participantId) return
+    refreshParticipantData(user.participantId)
+    const interval = window.setInterval(() => refreshParticipantData(user.participantId), 30000)
+    return () => window.clearInterval(interval)
+  }, [refreshParticipantData, user?.participantId])
+
+  const respondents = participantData?.respondents ?? []
+  const summary = participantData?.responseSummary
+  const submitted = summary?.submitted ?? respondents.filter((respondent) => respondent.status === 'submitted').length
+  const total = summary?.total ?? respondents.length
+  const pending = summary?.pending ?? Math.max(0, total - submitted)
+  const pct = summary?.percent ?? (total ? Math.round((submitted / total) * 100) : 0)
+  const cutoffDate = participantData?.cohort?.threeSixtyCutoff
+  const cutoffLabel = cutoffDate ? new Date(cutoffDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'TBD'
+
   return (
     <div className="p-6">
       <div className="flex items-center gap-2 text-xs text-gray-400 mb-5">
@@ -43,7 +51,7 @@ export default function Status360() {
 
       <div className="mb-5">
         <h1 className="text-xl font-bold text-[#1a1f2e]">360 Feedback Status</h1>
-        <p className="text-sm text-gray-500 mt-0.5">Track who has submitted · Cutoff: 30 Jun 2025</p>
+        <p className="text-sm text-gray-500 mt-0.5">Track who has submitted · Cutoff: {cutoffLabel}</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_248px] gap-6">
@@ -65,8 +73,8 @@ export default function Status360() {
               <div className="bg-white rounded-full h-2" style={{ width: `${pct}%` }} />
             </div>
             <div className="flex justify-between text-xs text-blue-300 mt-1">
-              <span>{total - submitted} pending</span>
-              <span>Cutoff: 30 Jun 2025</span>
+              <span>{pending} pending</span>
+              <span>Cutoff: {cutoffLabel}</span>
             </div>
           </div>
 
@@ -76,20 +84,25 @@ export default function Status360() {
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Respondents ({total})</p>
             </div>
             <div className="space-y-2 p-3">
-              {orderedRespondents.map((r) => (
-                <div key={r.name} className={`flex items-center gap-4 rounded-lg border px-4 py-3.5 ${relationshipStyles[r.relationship]?.row ?? 'bg-gray-50 border-gray-100'}`}>
+              {!respondents.length && (
+                <p className="px-4 py-8 text-center text-sm text-gray-500">
+                  Respondent tracking will appear after the nominee list is submitted.
+                </p>
+              )}
+              {respondents.map((r) => (
+                <div key={r.id} className={`flex items-center gap-4 rounded-lg border px-4 py-3.5 ${relationshipStyles[r.relationship]?.row ?? 'bg-gray-50 border-gray-100'}`}>
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold shrink-0 ${relationshipStyles[r.relationship]?.avatar ?? 'bg-gray-100 text-gray-500'}`}>
-                    {initials(r.name)}
+                    {initials(r)}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-[#1a1f2e]">{r.name === 'Rahul Kumar (Self)' ? 'You (Self)' : r.name}</p>
+                    <p className="text-sm font-medium text-[#1a1f2e]">{r.isSelf ? 'You (Self)' : r.name}</p>
                     <span className={`inline-flex mt-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded-full ${relationshipStyles[r.relationship]?.badge ?? 'bg-gray-100 text-gray-500'}`}>{r.relationship}</span>
                   </div>
                   <div className="text-right shrink-0">
                     {r.status === 'submitted' ? (
                       <div>
                         <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-100 px-2 py-0.5 rounded-full">✓ Submitted</span>
-                        <p className="text-[10px] text-gray-400 mt-0.5">{r.submittedOn}</p>
+                        <p className="text-[10px] text-gray-400 mt-0.5">{formatSubmittedAt(r.submittedAt)}</p>
                       </div>
                     ) : (
                       <span className="inline-flex items-center gap-1 text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">⏳ Pending</span>
@@ -101,7 +114,7 @@ export default function Status360() {
           </div>
 
           <p className="text-xs text-gray-400 text-center">
-            Your 360 report will be auto-generated once all responses are in or the cutoff date passes.
+            Your 360° Feedback Report will be auto-generated once all responses are received or the cutoff date passes.
           </p>
         </div>
 
@@ -126,7 +139,7 @@ export default function Status360() {
             <div className="space-y-3">
               {[
                 { label: 'Submitted', count: submitted, color: 'bg-green-500' },
-                { label: 'Pending', count: total - submitted, color: 'bg-gray-300' },
+                { label: 'Pending', count: pending, color: 'bg-gray-300' },
               ].map((item) => (
                 <div key={item.label}>
                   <div className="flex justify-between text-xs mb-1">
@@ -134,7 +147,7 @@ export default function Status360() {
                     <span className="font-semibold text-[#1a1f2e]">{item.count}</span>
                   </div>
                   <div className="w-full bg-gray-100 rounded-full h-1.5">
-                    <div className={`${item.color} rounded-full h-1.5`} style={{ width: `${(item.count / total) * 100}%` }} />
+                    <div className={`${item.color} rounded-full h-1.5`} style={{ width: `${total ? (item.count / total) * 100 : 0}%` }} />
                   </div>
                 </div>
               ))}
@@ -146,9 +159,9 @@ export default function Status360() {
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">What Happens Next</p>
             <div className="space-y-3">
               {[
-                { step: '1', text: 'Responses collected until 30 Jun cutoff' },
-                { step: '2', text: 'TD aggregates scores by competency' },
-                { step: '3', text: '360 report released to you post-DC' },
+                { step: '1', text: `Responses will be collected until the cutoff date: ${cutoffLabel}` },
+                { step: '2', text: 'Scores are aggregated based on pre-defined competencies.' },
+                { step: '3', text: 'The 360° Feedback Report will be shared with you, your Reporting Manager and BUHR after completion of the DC.' },
               ].map((item) => (
                 <div key={item.step} className="flex items-start gap-2.5">
                   <div className="w-5 h-5 rounded-full bg-[#1e4d8c] flex items-center justify-center shrink-0 mt-0.5">
@@ -163,7 +176,7 @@ export default function Status360() {
           {/* Cutoff info */}
           <div className="bg-white rounded-xl border border-[#e2e8f0] p-4">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Feedback Cutoff</p>
-            <p className="text-sm font-semibold text-[#1a1f2e]">30 Jun 2025</p>
+            <p className="text-sm font-semibold text-[#1a1f2e]">{cutoffLabel}</p>
             <p className="text-xs text-gray-400 mt-0.5">Respondents cannot submit after this date</p>
           </div>
         </div>

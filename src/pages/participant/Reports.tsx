@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 const reports = [
   {
     id: '360',
-    title: '360 Feedback Report',
+    title: '360° Feedback Report',
     subtitle: 'EX-to-LX Cohort · Jun 2025',
     status: 'available',
     releasedOn: '28 Jun 2025',

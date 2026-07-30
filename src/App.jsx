@@ -29,7 +29,7 @@ import ReportPreview from './pages/td/ReportPreview'
 import TDReports from './pages/td/TDReports'
 import ParticipantReports from './pages/td/ParticipantReports'
 import Placeholder from './pages/td/Placeholder'
-import { EmailOutbox, NotificationTemplates, QuestionBank, TrackersExports } from './pages/td/TDOperations'
+import { EmailOutbox, NotificationTemplates, TrackersExports } from './pages/td/TDOperations'
 import AssessorAnalysis from './pages/td/AssessorAnalysis'
 
 // Assessor
@@ -95,7 +95,6 @@ export default function App() {
           <Route path="exports" element={<TrackersExports />} />
           <Route path="assessor-analysis" element={<AssessorAnalysis />} />
           <Route path="outbox" element={<EmailOutbox />} />
-          <Route path="question-bank" element={<QuestionBank />} />
           <Route path="templates" element={<NotificationTemplates />} />
           <Route path="settings" element={<Placeholder title="Programme setup" />} />
         </Route>
