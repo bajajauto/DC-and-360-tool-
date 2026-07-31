@@ -104,6 +104,35 @@ export async function download360ResponseData(participantId, participantName = '
   window.URL.revokeObjectURL(url)
 }
 
+export async function downloadReportArchive(cohortId = 'all', reportType = 'all') {
+  const token = getToken()
+  const query = new URLSearchParams({ cohortId, reportType })
+  let response
+
+  try {
+    response = await fetch(`${API_BASE}/api/reports/bulk-download?${query}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+  } catch {
+    throw new Error('Backend API is not responding. Please start the backend server and try again.')
+  }
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}))
+    throw new Error(body?.error?.message || 'Unable to download the report ZIP file.')
+  }
+
+  const blob = await response.blob()
+  const url = window.URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = getFileName(response, 'reports.zip')
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  window.URL.revokeObjectURL(url)
+}
+
 export async function downloadBuhr360Pptx(userId, participantId, participantName = 'participant') {
   let response
 

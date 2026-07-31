@@ -288,7 +288,19 @@ export function NotificationTemplates() {
     setRecipientSearch('')
     setRecipientsLoading(true)
     api.getNotificationRecipients(selected.templateId)
-      .then((result) => setRecipients(result.data || []))
+      .then((result) => {
+        const intendedRole = {
+          Participant: 'participant',
+          Respondent: 'respondent',
+          BUHR: 'buhr',
+          'TD Admin': 'td',
+        }[selected.recipient]
+        const rows = (result.data || []).filter((recipient) => (
+          !intendedRole || (recipient.roles || []).map((role) => role.toLowerCase()).includes(intendedRole)
+        ))
+        setRecipients(rows)
+        setSelectedRecipientIds(rows.map((recipient) => recipient.id))
+      })
       .catch((err) => setError(err.message))
       .finally(() => setRecipientsLoading(false))
   }, [selected])
@@ -396,6 +408,13 @@ export function NotificationTemplates() {
 
             <label className="mb-1 block text-xs font-semibold text-slate-700">Select recipients</label>
             <input value={recipientSearch} onChange={(event) => setRecipientSearch(event.target.value)} placeholder="Search name, email, role or BU" className="mb-2 w-full rounded-lg border border-[#c2ccda] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#d6e4f7]" />
+            {!!visibleRecipients.length && <div className="mb-2 flex items-center justify-between text-[11px]">
+              <span className="text-slate-500">Tick recipients to include; untick anyone to exclude.</span>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setSelectedRecipientIds((current) => [...new Set([...current, ...visibleRecipients.map((recipient) => recipient.id)])])} className="font-semibold text-[#1e5fba] hover:underline">Select all shown</button>
+                <button type="button" onClick={() => setSelectedRecipientIds((current) => current.filter((id) => !visibleRecipients.some((recipient) => recipient.id === id)))} className="font-semibold text-slate-500 hover:underline">Clear shown</button>
+              </div>
+            </div>}
             <div className="mb-3 max-h-48 overflow-y-auto rounded-lg border border-[#d5dce5]">
               {recipientsLoading && <p className="p-3 text-xs text-slate-500">Loading eligible recipients…</p>}
               {!visibleRecipients.length && !searchIsNewEmail && <p className="p-3 text-xs text-slate-500">No matching accounts.</p>}

@@ -1,3 +1,4 @@
+import fs from 'node:fs/promises'
 import path from 'node:path'
 import { Router } from 'express'
 import { prisma } from '../db.js'
@@ -6,11 +7,25 @@ import { httpError } from '../utils/httpError.js'
 import { generate360ReportForParticipant, get360ReportPreviewHtml, getOrGenerate360Report } from '../reports/generate360Report.js'
 import { build360ResponseDataWorkbook } from '../reports/build360ResponseData.js'
 import { queueEmail } from '../notifications/service.js'
+import { createZip } from '../utils/zip.js'
 
 export const reportsRouter = Router()
 
 function requireTd(req) {
   if (!req.auth.roles.includes('td')) throw httpError(403, 'Talent Development access required')
+}
+
+function isVisibleInRepository(report) {
+  if (report.status === 'RELEASED') return true
+  const allSubmitted = report.participant.feedbackTasks.length > 0 && report.participant.feedbackTasks.every((task) => task.status === 'SUBMITTED')
+  const cutoff = report.participant.cohort.threeSixtyCutoff
+  const cutoffPassed = cutoff ? new Date() > new Date(new Date(cutoff).setUTCHours(23, 59, 59, 999)) : false
+  return allSubmitted || cutoffPassed
+}
+
+function safeFilePart(value, fallback) {
+  const result = String(value || '').trim().replace(/[<>:"/\\|?*\u0000-\u001f]/g, '-').replace(/\s+/g, ' ')
+  return result || fallback
 }
 
 async function assertReportDownloadAccess(req) {
@@ -42,13 +57,7 @@ reportsRouter.get('/repository', asyncHandler(async (req, res) => {
     },
   })
 
-  const visibleReports = reports.filter((report) => {
-    if (report.status === 'RELEASED') return true
-    const allSubmitted = report.participant.feedbackTasks.length > 0 && report.participant.feedbackTasks.every((task) => task.status === 'SUBMITTED')
-    const cutoff = report.participant.cohort.threeSixtyCutoff
-    const cutoffPassed = cutoff ? new Date() > new Date(new Date(cutoff).setUTCHours(23, 59, 59, 999)) : false
-    return allSubmitted || cutoffPassed
-  })
+  const visibleReports = reports.filter(isVisibleInRepository)
 
   res.json({ data: visibleReports.map((report) => {
     const participant = report.participant
@@ -73,6 +82,80 @@ reportsRouter.get('/repository', asyncHandler(async (req, res) => {
       totalResponses: participant.nominees.length,
     }
   }) })
+}))
+
+reportsRouter.get('/bulk-download', asyncHandler(async (req, res) => {
+  requireTd(req)
+  const cohortId = typeof req.query.cohortId === 'string' ? req.query.cohortId : 'all'
+  const reportType = typeof req.query.reportType === 'string' ? req.query.reportType.toLowerCase() : 'all'
+  if (!['all', 'dc', '360'].includes(reportType)) throw httpError(400, 'Report type must be all, dc, or 360')
+
+  const reports = await prisma.report.findMany({
+    where: {
+      ...(cohortId !== 'all' ? { participant: { cohortId } } : {}),
+      ...(reportType !== 'all' ? { type: { equals: reportType, mode: 'insensitive' } } : {}),
+    },
+    orderBy: [{ updatedAt: 'desc' }],
+    include: {
+      participant: {
+        include: {
+          user: true,
+          cohort: true,
+          feedbackTasks: { select: { status: true } },
+        },
+      },
+    },
+  })
+
+  const visibleReports = reports.filter(isVisibleInRepository)
+  if (!visibleReports.length) throw httpError(404, 'No reports are available for the selected filters')
+
+  const entries = []
+  const unavailable = []
+  for (const report of visibleReports) {
+    if (!report.fileUrl) {
+      unavailable.push(`${report.participant.user.name} — ${report.type.toUpperCase()} report has no stored file`)
+      continue
+    }
+
+    try {
+      const data = await fs.readFile(report.fileUrl)
+      const cohortFolder = safeFilePart(report.participant.cohort.name, 'Unassigned cohort')
+      const extension = path.extname(report.fileUrl) || (report.type.toLowerCase() === '360' ? '.pptx' : '.pdf')
+      const employee = safeFilePart(report.participant.user.employeeId, report.participant.id)
+      const participant = safeFilePart(report.participant.user.name, 'Participant')
+      const type = report.type.toLowerCase() === '360' ? '360-feedback' : 'dc'
+      entries.push({
+        name: `${cohortFolder}/${employee} - ${participant} - ${type}-report${extension}`,
+        data,
+        modifiedAt: report.generatedAt || report.updatedAt,
+      })
+    } catch {
+      unavailable.push(`${report.participant.user.name} — ${report.type.toUpperCase()} report file is missing`)
+    }
+  }
+
+  if (unavailable.length) {
+    entries.push({
+      name: 'Unavailable reports.txt',
+      data: `The following repository entries could not be included:\r\n\r\n${unavailable.join('\r\n')}\r\n`,
+    })
+  }
+  if (!entries.some((entry) => entry.name !== 'Unavailable reports.txt')) {
+    throw httpError(410, 'The report records exist, but none of their stored files are available')
+  }
+
+  const cohortLabel = cohortId === 'all'
+    ? 'all-cohorts'
+    : safeFilePart(visibleReports[0]?.participant.cohort.name, 'cohort').replace(/\s+/g, '-')
+  const typeLabel = reportType === 'all' ? 'all-reports' : `${reportType}-reports`
+  const fileName = `${cohortLabel}-${typeLabel}.zip`
+  const zip = createZip(entries)
+
+  res.setHeader('Content-Type', 'application/zip')
+  res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`)
+  res.setHeader('Content-Length', zip.length)
+  res.send(zip)
 }))
 
 reportsRouter.post('/:participantId/360/generate', asyncHandler(async (req, res) => {

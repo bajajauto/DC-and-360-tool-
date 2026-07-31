@@ -44,6 +44,7 @@ const participantWorkSchema = z.object({
 })
 
 const placeholderPattern = /^(?:n\/?a|none|nil|[^\p{L}\p{N}]+)$/iu
+const PRE_WORK_QUESTION_KEYS = ['q1', 'q2', 'q3', 'q4', 'q5', 'q6', 'q8', 'q9', 'q10']
 
 function validResponse(value, minimum = 1) {
   const text = String(value || '').trim()
@@ -52,8 +53,7 @@ function validResponse(value, minimum = 1) {
 
 function validateParticipantWork(type, answers) {
   if (type === 'pre-work') {
-    const invalid = Array.from({ length: 10 }, (_, index) => `q${index + 1}`)
-      .filter((key) => !validResponse(answers[key], 15))
+    const invalid = PRE_WORK_QUESTION_KEYS.filter((key) => !validResponse(answers[key], 15))
     if (invalid.length) throw httpError(400, 'Please answer every Pre-Work question with at least 15 characters. Placeholder responses such as NA, None, hyphens, or dots are not accepted.')
     return
   }
@@ -109,7 +109,6 @@ async function findParticipant(id) {
   return participant
 }
 
-const PRE_WORK_QUESTION_COUNT = 10
 const ROLE_INTERVIEW_KEYS = [
   'currentRole',
   'responsibilities',
@@ -122,8 +121,7 @@ const ROLE_INTERVIEW_KEYS = [
 
 function countAnsweredPreWork(preWork) {
   const answers = preWork?.answers || {}
-  return Array.from({ length: PRE_WORK_QUESTION_COUNT }, (_, index) => `q${index + 1}`)
-    .filter((key) => String(answers[key] || '').trim().length > 0).length
+  return PRE_WORK_QUESTION_KEYS.filter((key) => String(answers[key] || '').trim().length > 0).length
 }
 
 function countAnsweredRoleInterview(roleInterview) {
@@ -455,17 +453,18 @@ participantsRouter.post('/:participantId/nominees/submit', asyncHandler(async (r
         })
       }
 
-      // Internal nominees already have a login account and reach their task from their
-      // own respondent dashboard; magic-link invites are only wired up for external
-      // nominees for now (AD-backed sign-in for internal employees is not live yet).
-      if (!respondentUser) {
+      // Every nominee receives a task-scoped link, including internal employees.
+      // This keeps Email Centre recipient selection complete and gives each
+      // respondent one consistent route into the exact feedback form.
+      {
         const token = generateMagicToken()
         const inviteUrl = buildInviteUrl(token)
         const expiresAt = getMagicLinkExpiry()
+        const nomineeType = respondentUser ? 'internal' : 'external'
 
         const magicLink = await tx.magicLink.create({
           data: {
-            userId: null,
+            userId: respondentUser?.id || null,
             email: normalizeEmail(nominee.email),
             role: 'RESPONDENT',
             tokenHash: hashMagicToken(token),
@@ -475,7 +474,7 @@ participantsRouter.post('/:participantId/nominees/submit', asyncHandler(async (r
               nomineeId: nominee.id,
               participantId: participant.id,
               name: nominee.name,
-              nomineeType: 'external',
+              nomineeType,
             },
           },
         })
@@ -499,7 +498,7 @@ participantsRouter.post('/:participantId/nominees/submit', asyncHandler(async (r
           metadata: {
             nomineeId: nominee.id,
             participantId: participant.id,
-            nomineeType: 'external',
+            nomineeType,
           },
         }, tx)
         queuedEmailIds.push(inviteEmail.id)
@@ -509,7 +508,7 @@ participantsRouter.post('/:participantId/nominees/submit', asyncHandler(async (r
           taskId: task.id,
           name: nominee.name,
           email: normalizeEmail(nominee.email),
-          nomineeType: 'external',
+          nomineeType,
           inviteUrl,
           expiresAt: expiresAt.toISOString(),
         })

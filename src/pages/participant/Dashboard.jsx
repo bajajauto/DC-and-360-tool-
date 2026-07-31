@@ -8,11 +8,11 @@ import { useUser } from '../../context/UserContext'
 // selfSurveyStatus) below, never left on these fallback values. `deadlineKey`
 // names the cohort field the real deadline is read from (see formatDeadline).
 const baseJourneySteps = [
-  { id: 1, label: 'Role Interview', to: '/participant/role-interview', status: 'pending', deadlineKey: 'roleInterviewDeadline' },
-  { id: 2, label: 'Photograph', to: '/participant/photograph', status: 'pending', deadlineKey: 'photoDeadline' },
-  { id: 3, label: 'Pre-Work', to: '/participant/pre-work', status: 'pending', deadlineKey: 'preWorkDeadline' },
-  { id: 4, label: 'Self 360 Survey', to: '/participant/self-360', status: 'locked', deadlineKey: 'threeSixtyCutoff' },
-  { id: 5, label: '360 Nominees', to: '/participant/360-nominees', status: 'pending', deadlineKey: 'nominationDeadline' },
+  { id: 1, label: 'Photograph', to: '/participant/photograph', status: 'pending', deadlineKey: 'photoDeadline' },
+  { id: 2, label: 'Pre-Work', to: '/participant/pre-work', status: 'pending', deadlineKey: 'preWorkDeadline' },
+  { id: 3, label: 'Role Interview', to: '/participant/role-interview', status: 'pending', deadlineKey: 'roleInterviewDeadline' },
+  { id: 4, label: '360 Nominees', to: '/participant/360-nominees', status: 'pending', deadlineKey: 'nominationDeadline' },
+  { id: 5, label: 'Self 360 Survey', to: '/participant/self-360', status: 'locked', deadlineKey: 'threeSixtyCutoff' },
   { id: 6, label: '360 Feedback', to: '/participant/360-status', status: 'locked', deadlineKey: 'threeSixtyCutoff' },
   { id: 7, label: 'DC Report', to: '/participant/reports', status: 'locked', deadlineKey: null },
 ]
@@ -112,6 +112,16 @@ export default function Dashboard() {
     return taskKey && taskStatus?.[taskKey] ? { ...withDeadline, status: taskStatus[taskKey] } : withDeadline
   })
   const visiblePendingTasks = []
+  if (taskStatus?.prework && taskStatus.prework !== 'completed') {
+    visiblePendingTasks.push({
+      title: 'Complete Pre-Work form',
+      description: `${preWorkAnsweredCount} of 9 self-reflection questions answered`,
+      to: '/participant/pre-work',
+      deadline: formatDeadline(cohort, 'preWorkDeadline'),
+      urgency: 'medium',
+      progress: preWorkAnsweredCount * 10,
+    })
+  }
   if (nomineeStatus !== 'completed') {
     visiblePendingTasks.push(nomineeStatus === 'saved' ? {
       title: 'Review saved 360 nominees',
@@ -129,18 +139,8 @@ export default function Dashboard() {
       progress: 0,
     })
   }
-  if (taskStatus?.prework && taskStatus.prework !== 'completed') {
-    visiblePendingTasks.unshift({
-      title: 'Complete Pre-Work form',
-      description: `${preWorkAnsweredCount} of 10 self-reflection questions answered`,
-      to: '/participant/pre-work',
-      deadline: formatDeadline(cohort, 'preWorkDeadline'),
-      urgency: 'medium',
-      progress: preWorkAnsweredCount * 10,
-    })
-  }
   if (nomineeStatus === 'completed' && selfSurveyStatus !== 'completed') {
-    visiblePendingTasks.unshift({
+    visiblePendingTasks.push({
       title: 'Complete your Self 360 Survey',
       description: 'Your self-rating is a required part of the 360 feedback process.',
       to: '/participant/self-360',

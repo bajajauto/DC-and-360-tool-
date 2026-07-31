@@ -2,7 +2,7 @@ import { ArrowUpRight, Check, Download, Eye, FileSpreadsheet, FileText, Search, 
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../../lib/api'
-import { download360Pptx, download360ResponseData } from '../../lib/reportDownload'
+import { download360Pptx, download360ResponseData, downloadReportArchive } from '../../lib/reportDownload'
 
 function getCohort(cohorts, participant) {
   return cohorts.find((cohort) => cohort.id === participant.cohortId)
@@ -17,6 +17,7 @@ export default function TDReports() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [downloadError, setDownloadError] = useState('')
+  const [downloadingArchive, setDownloadingArchive] = useState(false)
   const [releaseError, setReleaseError] = useState('')
 
   useEffect(() => {
@@ -105,6 +106,19 @@ export default function TDReports() {
     }
   }
 
+  async function handleDownloadArchive() {
+    setDownloadError('')
+    setDownloadingArchive(true)
+
+    try {
+      await downloadReportArchive(selectedCohortId, selectedReportType)
+    } catch (err) {
+      setDownloadError(err.message || 'Unable to download the report ZIP file.')
+    } finally {
+      setDownloadingArchive(false)
+    }
+  }
+
   async function handleRelease(participant) {
     setReleaseError('')
 
@@ -188,6 +202,16 @@ export default function TDReports() {
                 <Search size={15} className="absolute left-3 top-2.5 text-gray-400" />
                 <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search reports" className="w-full rounded-lg border border-[#dce3ed] py-2 pl-9 pr-3 text-xs focus:outline-none focus:ring-2 focus:ring-blue-100 sm:w-56" />
               </div>
+              <button
+                type="button"
+                onClick={handleDownloadArchive}
+                disabled={downloadingArchive || !generatedReports.length}
+                className="inline-flex min-h-8 items-center justify-center gap-2 rounded-lg bg-[#1e5fba] px-4 py-2 text-xs font-semibold text-white hover:bg-[#174d98] disabled:cursor-not-allowed disabled:bg-slate-300"
+                title="Downloads every available report matching the selected cohort and report type"
+              >
+                <Download size={14} />
+                {downloadingArchive ? 'Preparing ZIP…' : 'Download ZIP'}
+              </button>
             </div>
           </div>
 

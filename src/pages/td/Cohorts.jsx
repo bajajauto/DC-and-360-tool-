@@ -214,9 +214,9 @@ function CohortFormModal({ mode, initialCohort, onClose, onSubmit }) {
 
         const masterData = Object.fromEntries(headers.map((header, column) => [`${header}_${column + 1}`, text(row[column])]))
         Object.assign(masterData, {
-          reportingManagerName: text(row[col(15)]), reportingManagerEmail: text(row[col(17)]),
-          skipManagerName: text(row[col(18)]), skipManagerEmail: text(row[col(20)]),
-          buHeadName: text(row[col(21)]), buHeadEmail: text(row[col(23)]),
+          reportingManagerName: text(row[col(15)]), reportingManagerEmployeeId: text(row[col(16)]), reportingManagerEmail: text(row[col(17)]),
+          skipManagerName: text(row[col(18)]), skipManagerEmployeeId: text(row[col(19)]), skipManagerEmail: text(row[col(20)]),
+          buHeadName: text(row[col(21)]), buHeadEmployeeId: text(row[col(22)]), buHeadEmail: text(row[col(23)]),
           buhrName: text(row[col(24)]), buhrEmail: text(row[col(26)]),
           jobLevel: text(row[col(4)]), positionLevel: text(row[col(5)]), department: text(row[col(11)]), location: text(row[col(13)]),
         })
@@ -761,7 +761,7 @@ export default function Cohorts({ view = 'dashboard' }) {
     return allInCohort.filter((participant) => `${participant.name} ${participant.employeeId} ${participant.bu} ${participant.designation}`.toLowerCase().includes(normalized))
   }, [allInCohort, query])
 
-  const nominationsIn = allInCohort.filter((participant) => participant.totalResponses > 0).length
+  const nominationsIn = allInCohort.filter((participant) => participant.nominationsSubmitted).length
   const released = allInCohort.filter((participant) => ['generated', 'released'].includes(participant.reportStatus)).length
   const responses = allInCohort.reduce((sum, participant) => sum + participant.responses, 0)
   const responseTotal = allInCohort.reduce((sum, participant) => sum + participant.totalResponses, 0)
@@ -821,8 +821,8 @@ export default function Cohorts({ view = 'dashboard' }) {
         {!isCurrentView && <div className="mb-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <Metric label="Active Cohorts" value={cohorts.length} sub={cohort ? `${cohort.name} selected` : 'No cohort yet'} tone="text-[#1e5fba]" />
           <Metric label="Participants" value={allInCohort.length} sub="in current cohort" />
-          <Metric label="Nominations In" value={nominationsIn} sub={`${Math.round((nominationsIn / Math.max(1, allInCohort.length)) * 100)}% submitted`} tone="text-[#15803d]" />
-          <Metric label="360 Responses" value={`${responses}/${responseTotal}`} sub={`${Math.round((responses / Math.max(1, responseTotal)) * 100)}% received`} tone="text-[#6a4c93]" />
+          <Metric label="Nominations Submitted by Participants" value={nominationsIn} sub={`${Math.round((nominationsIn / Math.max(1, allInCohort.length)) * 100)}% submitted`} tone="text-[#15803d]" />
+          <Metric label="Respondent Feedback Forms Received" value={`${responses}/${responseTotal}`} sub={`${Math.round((responses / Math.max(1, responseTotal)) * 100)}% received out of nominees invited`} tone="text-[#6a4c93]" />
         </div>}
 
         {!isCurrentView && cohort && (
