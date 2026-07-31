@@ -84,6 +84,28 @@ if ([string]::IsNullOrWhiteSpace($existingJwt)) {
   Write-Ok 'Reusing the JWT_SECRET already set on the app'
 }
 
+# Passwords for the three access accounts created on first boot by
+# bootstrapAccessAccounts.js. Skipping a prompt leaves the built-in default from
+# accessAccounts.js (Admin@123 and friends), which must not survive in production.
+# These are only read when the database is empty, so changing one later does nothing
+# -- change the password in the app instead.
+$accessAccounts = [ordered]@{
+  TD_ADMIN_PASSWORD = 'TD Admin (td.admin@bajajauto.co.in)'
+  ASSESSOR_PASSWORD = 'Assessor (assessor@bajajauto.co.in)'
+  BUHR_PASSWORD     = 'BUHR (buhr.ev@bajajauto.co.in)'
+}
+$accessAccountSettings = [ordered]@{}
+foreach ($key in $accessAccounts.Keys) {
+  $secure = Read-Host "    Password for $($accessAccounts[$key]) [Enter to keep the built-in default]" -AsSecureString
+  $plain = [Runtime.InteropServices.Marshal]::PtrToStringBSTR(
+    [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure))
+  if (-not [string]::IsNullOrWhiteSpace($plain)) {
+    $accessAccountSettings[$key] = $plain
+  } else {
+    Write-Warn "$key not set - that account will use its built-in default password"
+  }
+}
+
 # SMTP config comes from the local .env so Brevo credentials are not retyped.
 $envPath = Join-Path $PSScriptRoot '..\.env'
 $envValues = @{}
@@ -124,6 +146,7 @@ $settings = [ordered]@{
 foreach ($key in @('EMAIL_FROM', 'SMTP_HOST', 'SMTP_PORT', 'SMTP_SECURE', 'SMTP_USER', 'SMTP_PASS')) {
   if ($envValues.ContainsKey($key)) { $settings[$key] = $envValues[$key] }
 }
+foreach ($key in $accessAccountSettings.Keys) { $settings[$key] = $accessAccountSettings[$key] }
 
 $settingArgs = @()
 foreach ($key in $settings.Keys) { $settingArgs += "$key=$($settings[$key])" }

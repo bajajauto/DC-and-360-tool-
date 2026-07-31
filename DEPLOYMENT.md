@@ -18,12 +18,18 @@ prompts for the DB password rather than storing it:
 ```powershell
 winget install -e --id Microsoft.AzureCLI   # if az is missing; then reopen the shell
 az login
-./scripts/azure-setup.ps1
+./scripts/azure-setup.ps1 -AllowAzureServicesInsteadOfIps
 ```
 
+Use `-AllowAzureServicesInsteadOfIps` when the Postgres server already has *Allow public
+access from any Azure service* ticked, as this environment does. Without the switch the
+script instead adds one firewall rule per possible App Service outbound IP — dozens of
+rules, and unnecessary here.
+
 The script discovers the resource groups itself, reuses an existing `JWT_SECRET` if one
-is already set (so re-running does not sign everyone out), and reads SMTP settings from
-your local `.env`. Step 1 stays manual on purpose. The rest of this section documents
+is already set (so re-running does not sign everyone out), reads SMTP settings from your
+local `.env`, and prompts for the three access account passwords. Step 1 stays manual on
+purpose. The rest of this section documents
 what the script does, for when you need to check or change it by hand.
 
 ### 1. GitHub secret
@@ -66,6 +72,9 @@ portal with *Overview → Download publish profile → Reset publish profile cre
 | `SMTP_USER` | Brevo SMTP login (`…@smtp-brevo.com`) |
 | `SMTP_PASS` | Brevo SMTP key |
 | `SCM_DO_BUILD_DURING_DEPLOYMENT` | `false` |
+| `TD_ADMIN_PASSWORD` | password for `td.admin@bajajauto.co.in` (optional — see below) |
+| `ASSESSOR_PASSWORD` | password for `assessor@bajajauto.co.in` (optional) |
+| `BUHR_PASSWORD` | password for `buhr.ev@bajajauto.co.in` (optional) |
 
 Notes:
 
@@ -79,15 +88,28 @@ Notes:
 - `SCM_DO_BUILD_DURING_DEPLOYMENT=false` matters — the workflow already installs and
   builds, so letting Oryx rebuild on the host is slow and can regenerate the Prisma
   client for the wrong platform.
+- The three `*_PASSWORD` settings are read **only when the database has no users**, i.e.
+  on the very first boot. Leave one unset and that account is created with the built-in
+  default from `server/prisma/accessAccounts.js` (`Admin@123`, `Assessor@123`,
+  `Buhr@123`) — fine for a throwaway environment, not for production. Setting one
+  afterwards has no effect; change the password in the app instead.
 
 ### 3. Database
 
-The workflow does not touch the database. `startup.sh` runs
-`prisma migrate deploy` on every boot, which applies `server/prisma/migrations/`
-and is a no-op once up to date.
+The workflow does not touch the database. Everything happens on boot, in `startup.sh`:
 
-Before the first deploy, create the database (the server only ships with a default
-`postgres` DB):
+1. `prisma migrate deploy` applies `server/prisma/migrations/` — a no-op once up to date.
+2. `node server/prisma/bootstrapAccessAccounts.js` creates the TD Admin, Assessor and
+   BUHR logins, but **only if the database contains no users at all**. Without this a
+   fresh deploy comes up with nothing to sign in as. It skips on every subsequent boot,
+   which matters because the underlying seeder rewrites `passwordHash` — running it
+   unconditionally would silently undo an admin's password change.
+
+No demo participants or mock feedback are created; real people come in through the app
+or `npm run db:import-hr`.
+
+The `dc_tool` database itself must exist first (the server only ships with a default
+`postgres` DB). It has already been created for this environment; for a new one:
 
 ```bash
 psql "postgresql://dctooladmin:<password>@psql-dc-and-360-tool-prod-ci-001.postgres.database.azure.com:5432/postgres?sslmode=require" \
@@ -101,14 +123,24 @@ Then allow the app to reach it — *Postgres server → Networking*:
    *Networking → Outbound addresses*. Use **Possible outbound IP addresses**, not just
    the current ones, or the app breaks when App Service moves it.
 
-Add your own IP too if you want to run `psql` or seed scripts from your machine.
+Option 1 is what this environment uses.
 
-To seed reference data, run against the prod URL from your machine:
+Add your own IP too if you want to run `psql` or the import scripts from your machine —
+and note it must be your **public egress** IP, which is often not what you expect on a
+corporate network. Check it with `curl https://api.ipify.org` from the machine itself
+rather than assuming.
+
+Loading real participants (needs DB access from your machine, per above):
 
 ```bash
-DATABASE_URL="<prod url>" npm run db:seed
-DATABASE_URL="<prod url>" npm run db:import-hr
+DATABASE_URL="<prod url>" HR_DATA_FILE="<path to master data template.xlsx>" npm run db:import-hr
 ```
+
+`HR_DATA_FILE` is not optional in practice — the built-in default path in
+`server/prisma/importHrData.js` points at a specific developer's Documents folder.
+
+`npm run db:seed` is **development only** — it inserts demo participants and mock
+feedback. Do not point it at production.
 
 ## What the pipeline does
 
@@ -133,10 +165,14 @@ DATABASE_URL="<prod url>" npm run db:import-hr
 
 - **Log stream:** Web App → *Monitoring → Log stream*, or
   `https://app-dc-and-360-tool-prod-ci-001-afgbgufyd8fgfsh9.scm.centralindia-01.azurewebsites.net/api/logs/docker`.
-- **Site 503s after a green deploy** — usually `prisma migrate deploy` failing in
-  `startup.sh`, which exits non-zero and stops boot. The log stream shows the Prisma
-  error; a connection timeout means the Postgres firewall does not include the app's
-  outbound IPs.
+- **Site 503s after a green deploy** — usually `prisma migrate deploy` or the access
+  account bootstrap failing in `startup.sh`, which runs under `set -e` and stops boot.
+  The log stream shows the error; a connection timeout means the Postgres firewall does
+  not include the app's outbound IPs.
+- **Deploy is green but you cannot log in** — look for `[bootstrap]` in the log stream.
+  `skipping access account seed` means the database already had users, so the built-in
+  logins were never created; sign in with an existing account or load data with
+  `db:import-hr`.
 - **`P1001 Can't reach database server`** — firewall, or `sslmode=require` missing.
 - **Blank page, 404s on `/assets/*`** — `dist/` did not ship; check the build step ran.
 - **Deep links 404** — the SPA fallback only activates when `dist/index.html` exists;

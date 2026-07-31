@@ -16,6 +16,7 @@
     "db:migrate": "prisma migrate dev --schema server/prisma/schema.prisma",
     "db:deploy": "prisma migrate deploy --schema server/prisma/schema.prisma",
     "db:seed": "node server/prisma/seed.js",
+    "db:bootstrap": "node server/prisma/bootstrapAccessAccounts.js",
     "db:import-hr": "node server/prisma/importHrData.js",
     "build": "vite build",
     "preview": "vite preview"
