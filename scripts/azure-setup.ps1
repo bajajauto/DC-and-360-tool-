@@ -20,6 +20,8 @@ param(
   [string]$PgServerName = 'psql-dc-and-360-tool-prod-ci-001',
   [string]$DatabaseName = 'dc_tool',
   [string]$NodeVersion  = 'NODE|22-lts',
+  [string]$PgAdminUser  = 'dctooladmin',
+  [string]$ResourceGroup = 'rg-hrtraining-ci-01',
   [switch]$AllowAzureServicesInsteadOfIps
 )
 
@@ -41,13 +43,32 @@ if (-not $account) { throw "Not logged in. Run 'az login' first." }
 Write-Ok "Subscription: $($account.name)"
 
 Write-Step 'Locating resources'
-$webAppRg = az webapp list --query "[?name=='$WebAppName'].resourceGroup | [0]" -o tsv
-if ([string]::IsNullOrWhiteSpace($webAppRg)) { throw "Web app '$WebAppName' not found in subscription '$($account.name)'." }
+$webAppRg = $null
+try { $webAppRg = az webapp list --query "[?name=='$WebAppName'].resourceGroup | [0]" -o tsv 2>$null } catch { }
+if ([string]::IsNullOrWhiteSpace($webAppRg)) {
+  # A role assignment scoped to the site itself can leave a subscription-wide list
+  # empty, so fall back to addressing the resource group directly.
+  Write-Warn "Could not list web apps; trying resource group '$ResourceGroup' directly."
+  try { $webAppRg = az webapp show -g $ResourceGroup -n $WebAppName --query resourceGroup -o tsv 2>$null } catch { }
+}
+if ([string]::IsNullOrWhiteSpace($webAppRg)) {
+  throw "Web app '$WebAppName' not reachable in subscription '$($account.name)'. Check the role assignment, or pass -ResourceGroup."
+}
 Write-Ok "Web app '$WebAppName' in resource group '$webAppRg'"
 
-$pgRg = az postgres flexible-server list --query "[?name=='$PgServerName'].resourceGroup | [0]" -o tsv
-if ([string]::IsNullOrWhiteSpace($pgRg)) { throw "Postgres server '$PgServerName' not found." }
-Write-Ok "Postgres '$PgServerName' in resource group '$pgRg'"
+# A 'Website Contributor' assignment scoped to the web app grants nothing on the
+# Postgres server, so not seeing it is an expected access level rather than an error.
+# The database and its firewall are then someone else's to manage; everything this
+# script does to the App Service still works.
+$pgRg = $null
+try { $pgRg = az postgres flexible-server list --query "[?name=='$PgServerName'].resourceGroup | [0]" -o tsv 2>$null } catch { }
+$hasPgAccess = -not [string]::IsNullOrWhiteSpace($pgRg)
+if ($hasPgAccess) {
+  Write-Ok "Postgres '$PgServerName' in resource group '$pgRg'"
+} else {
+  Write-Warn "Postgres '$PgServerName' is not visible to this account."
+  Write-Warn 'Skipping database creation and firewall rules; App Service config still applies.'
+}
 
 $defaultHostName = az webapp show -g $webAppRg -n $WebAppName --query defaultHostName -o tsv
 $appUrl = "https://$defaultHostName"
@@ -57,7 +78,11 @@ Write-Ok "Public URL: $appUrl"
 
 Write-Step 'Collecting secrets'
 
-$pgAdminUser = az postgres flexible-server show -g $pgRg -n $PgServerName --query administratorLogin -o tsv
+if ($hasPgAccess) {
+  $pgAdminUser = az postgres flexible-server show -g $pgRg -n $PgServerName --query administratorLogin -o tsv
+} else {
+  $pgAdminUser = $PgAdminUser
+}
 Write-Ok "Postgres admin user: $pgAdminUser"
 
 $pgPasswordSecure = Read-Host "    Postgres password for '$pgAdminUser'" -AsSecureString
@@ -158,18 +183,25 @@ Write-Warn 'PORT is deliberately not set — App Service injects it.'
 # ------------------------------------------------------------------ database ---
 
 Write-Step "Creating database '$DatabaseName'"
-$existingDb = az postgres flexible-server db list -g $pgRg -s $PgServerName --query "[?name=='$DatabaseName'].name | [0]" -o tsv
-if ([string]::IsNullOrWhiteSpace($existingDb)) {
-  az postgres flexible-server db create -g $pgRg -s $PgServerName -d $DatabaseName --output none
-  Write-Ok "Created '$DatabaseName'"
+if (-not $hasPgAccess) {
+  Write-Warn "No access to the Postgres server - assuming '$DatabaseName' already exists."
 } else {
-  Write-Ok "'$DatabaseName' already exists"
+  $existingDb = az postgres flexible-server db list -g $pgRg -s $PgServerName --query "[?name=='$DatabaseName'].name | [0]" -o tsv
+  if ([string]::IsNullOrWhiteSpace($existingDb)) {
+    az postgres flexible-server db create -g $pgRg -s $PgServerName -d $DatabaseName --output none
+    Write-Ok "Created '$DatabaseName'"
+  } else {
+    Write-Ok "'$DatabaseName' already exists"
+  }
 }
 
 # ------------------------------------------------------------------ firewall ---
 
 Write-Step 'Opening the Postgres firewall to the app'
-if ($AllowAzureServicesInsteadOfIps) {
+if (-not $hasPgAccess) {
+  Write-Warn 'No access to the Postgres server - leaving the firewall alone.'
+  Write-Warn 'The app needs "Allow public access from any Azure service" enabled on it.'
+} elseif ($AllowAzureServicesInsteadOfIps) {
   # 0.0.0.0/0 is Azure's magic value for "any Azure service", not the public internet.
   az postgres flexible-server firewall-rule create -g $pgRg -n $PgServerName `
     --rule-name 'AllowAllAzureServices' --start-ip-address 0.0.0.0 --end-ip-address 0.0.0.0 --output none

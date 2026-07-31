@@ -29,7 +29,15 @@ rules, and unnecessary here.
 The script discovers the resource groups itself, reuses an existing `JWT_SECRET` if one
 is already set (so re-running does not sign everyone out), reads SMTP settings from your
 local `.env`, and prompts for the three access account passwords. Step 1 stays manual on
-purpose. The rest of this section documents
+purpose.
+
+It also runs under a **Website Contributor** assignment scoped to just the web app, which
+is the access level granted here. That role grants nothing on the Postgres server, so the
+script detects it, warns, and skips database creation and firewall rules rather than
+failing — both are already done for this environment. It also cannot read the App Service
+Plan, so `Always On` must already be enabled (it is). Pass `-PgAdminUser` if the Postgres
+admin login is ever something other than `dctooladmin`, since it can no longer be read
+from the server. The rest of this section documents
 what the script does, for when you need to check or change it by hand.
 
 ### 1. GitHub secret
