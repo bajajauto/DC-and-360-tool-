@@ -15,21 +15,24 @@ async function fetchReport(participantId, signal) {
   })
 }
 
-function assertHtmlReport(response) {
-  const type = response.headers.get('content-type') || ''
-  if (!type.includes('text/html')) {
-    throw new Error('The server returned an old PPTX report. Restart npm run dev so the new HTML report service is loaded, then generate the report again.')
-  }
-}
-
-export async function get360ReportHtml(participantId) {
-  const response = await fetchReport(participantId)
+export async function get360ReportPreviewUrl(participantId) {
+  const token = getToken()
+  const response = await fetch(`${API_BASE}/api/reports/${participantId}/360/preview`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  })
   if (!response.ok) {
     const body = await response.json().catch(() => ({}))
-    throw new Error(body?.error?.message || 'Unable to load the report.')
+    throw new Error(body?.error?.message || 'Unable to load the report preview.')
   }
-  assertHtmlReport(response)
-  return response.text()
+  const html = await response.text()
+  return URL.createObjectURL(new Blob([html], { type: 'text/html' }))
+}
+
+function assertPptxReport(response) {
+  const type = response.headers.get('content-type') || ''
+  if (!type.includes('presentationml.presentation') && !type.includes('application/octet-stream')) {
+    throw new Error('The server did not return a PowerPoint report. Restart the backend, then generate the report again.')
+  }
 }
 
 export async function download360Pptx(participantId, participantName = 'participant') {
@@ -59,13 +62,13 @@ export async function download360Pptx(participantId, participantName = 'particip
     throw new Error(message)
   }
 
-  assertHtmlReport(response)
+  assertPptxReport(response)
 
   const blob = await response.blob()
   const url = window.URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
-  link.download = getFileName(response, `${participantName.replace(/\s+/g, '-')}-360-report.html`)
+  link.download = getFileName(response, `${participantName.replace(/\s+/g, '-')}-360-report.pptx`)
   document.body.appendChild(link)
   link.click()
   link.remove()
@@ -89,11 +92,41 @@ export async function download360ResponseData(participantId, participantName = '
     throw new Error(body?.error?.message || 'Unable to download the response data.')
   }
 
+  assertPptxReport(response)
   const blob = await response.blob()
   const url = window.URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
   link.download = getFileName(response, `${participantName.replace(/\s+/g, '-')}-360-response-data.xlsx`)
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  window.URL.revokeObjectURL(url)
+}
+
+export async function downloadReportArchive(cohortId = 'all', reportType = 'all') {
+  const token = getToken()
+  const query = new URLSearchParams({ cohortId, reportType })
+  let response
+
+  try {
+    response = await fetch(`${API_BASE}/api/reports/bulk-download?${query}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+  } catch {
+    throw new Error('Backend API is not responding. Please start the backend server and try again.')
+  }
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}))
+    throw new Error(body?.error?.message || 'Unable to download the report ZIP file.')
+  }
+
+  const blob = await response.blob()
+  const url = window.URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = getFileName(response, 'reports.zip')
   document.body.appendChild(link)
   link.click()
   link.remove()
@@ -121,7 +154,7 @@ export async function downloadBuhr360Pptx(userId, participantId, participantName
   const url = window.URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
-  link.download = getFileName(response, `${participantName.replace(/\s+/g, '-')}-360-report.html`)
+  link.download = getFileName(response, `${participantName.replace(/\s+/g, '-')}-360-report.pptx`)
   document.body.appendChild(link)
   link.click()
   link.remove()

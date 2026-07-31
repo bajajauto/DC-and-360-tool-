@@ -25,6 +25,7 @@ export function errorHandler(error, req, res, next) {
   }
 
   const status = error.statusCode || error.status || 500
+  if (status === 500) console.error(error)
   res.status(status).json({
     error: {
       message: status === 500 ? 'Internal server error' : error.message,

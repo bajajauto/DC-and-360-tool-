@@ -63,7 +63,7 @@ export default function BUHRDashboard({ view = 'dashboard' }) {
     const scoped = view === 'reports' ? participants.filter((participant) => participant.reportStatus === 'released') : participants
     if (!normalized) return scoped
     return scoped.filter((participant) =>
-      `${participant.name} ${participant.employeeId} ${participant.designation} ${participant.stage} ${participant.reportStatus}`.toLowerCase().includes(normalized),
+      `${participant.name} ${participant.employeeId} ${participant.designation} ${participant.bu} ${participant.stage} ${participant.reportStatus}`.toLowerCase().includes(normalized),
     )
   }, [participants, query, view])
 
@@ -117,23 +117,25 @@ export default function BUHRDashboard({ view = 'dashboard' }) {
             <table className="w-full border-collapse bg-white text-left text-[13px]">
               <thead className="bg-[#ebf2fa]">
                 <tr>
-                  {['Employee', 'Cohort', '360 Progress', '360 Report', 'DC Report', 'Actions'].map((label) => (
-                    <th key={label} className={`border-b border-[#d5dce5] px-5 py-3 text-[11px] font-bold uppercase tracking-wide text-slate-600 ${['360 Report', 'DC Report', 'Actions'].includes(label) ? 'w-40 text-center' : ''}`}>{label}</th>
+                  {['Ticket ID', 'Employee', 'Business Unit', 'Cohort', '360 Progress', '360° Feedback Report', 'DC Report', 'Actions'].map((label) => (
+                    <th key={label} className={`border-b border-[#d5dce5] px-5 py-3 text-[11px] font-bold uppercase tracking-wide text-slate-600 ${['360° Feedback Report', 'DC Report', 'Actions'].includes(label) ? 'w-40 text-center' : ''}`}>{label}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((participant) => (
                   <tr key={participant.id} className="hover:bg-[#f4f7fb]">
+                    <td className="border-b border-[#e8edf4] px-5 py-4 font-medium text-[#1e5fba]">{participant.employeeId || '—'}</td>
                     <td className="border-b border-[#e8edf4] px-5 py-4">
                       <div className="flex items-center gap-3">
                         <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#e4eef9] text-xs font-bold text-[#1e4d8c]">{participant.initials}</span>
                         <span>
                           <span className="block font-semibold text-[#172033]">{participant.name}</span>
-                          <span className="block text-[11px] text-slate-500">{participant.employeeId} - {participant.designation}</span>
+                          <span className="block text-[11px] text-slate-500">{participant.designation}</span>
                         </span>
                       </div>
                     </td>
+                    <td className="border-b border-[#e8edf4] px-5 py-4 font-medium text-slate-700">{participant.bu || '—'}</td>
                     <td className="border-b border-[#e8edf4] px-5 py-4">
                       <p className="font-medium text-slate-700">{participant.cohort?.name || 'Unassigned'}</p>
                       <p className="mt-0.5 text-[11px] text-slate-500">{participant.cohort?.programme || 'Development Centre'}</p>

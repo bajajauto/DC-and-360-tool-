@@ -104,6 +104,8 @@ export const api = {
       body: JSON.stringify({ nominees }),
     }),
 
+  getParticipantPhoto: (participantId) => apiFetch(`/api/participants/${participantId}/photo`),
+
   saveParticipantPhoto: (participantId, dataUrl) =>
     apiFetch(`/api/participants/${participantId}/photo`, { method: 'PUT', body: JSON.stringify({ dataUrl }) }),
 

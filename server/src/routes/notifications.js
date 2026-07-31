@@ -14,12 +14,13 @@ const bulkSendSchema = z.object({
   recipients: z.array(z.object({
     email: z.string().trim().email(),
     name: z.string().trim().optional().nullable(),
-    sourceType: z.enum(['user', 'magicLink', 'manual']).default('manual'),
+    sourceType: z.enum(['user', 'magicLink', 'masterContact', 'manual']).default('manual'),
     sourceId: z.string().trim().optional().nullable(),
   })).min(1).max(500),
 })
 
 const MAGIC_LINK_TEMPLATES = new Set(['resp-invite', 'resp-reminder', 'resp-recurring-reminder'])
+const RESPONDENT_TEMPLATES = new Set([...MAGIC_LINK_TEMPLATES, 'respondent-thank-you'])
 const PLACEHOLDER_RE = /\{\{[^}]+\}\}/g
 
 function dateLabel(value) {
@@ -43,6 +44,65 @@ function metadataContext(email) {
   return metadata && typeof metadata === 'object' && metadata.context && typeof metadata.context === 'object'
     ? metadata.context
     : {}
+}
+
+function buildParticipantContext(participant, recipientName) {
+  const cohort = participant?.cohort
+  const participantUser = participant?.user
+  const tasks = participant?.feedbackTasks || []
+  const nominees = participant?.nominees || []
+  const responded = tasks.filter((task) => task.status === 'SUBMITTED')
+  const relationshipStats = (relationship) => {
+    const group = tasks.filter((task) => task.relationship === relationship)
+    return { count: group.length, responded: group.filter((task) => task.status === 'SUBMITTED').length }
+  }
+  const self = relationshipStats('SELF')
+  const rm = relationshipStats('REPORTING_MANAGER')
+  const skip = relationshipStats('SKIP_MANAGER')
+  const dr = relationshipStats('DIRECT_REPORT')
+  const peer = relationshipStats('PEER')
+  const status = (count, minimum) => count >= minimum ? 'Minimum met' : 'Below minimum'
+  const pendingNames = nominees
+    .filter((nominee) => nominee.status !== 'RESPONDED')
+    .map((nominee) => nominee.name)
+    .join(', ')
+
+  return {
+    'Recipient Name': recipientName || participantUser?.name || '',
+    'Participant Name': participantUser?.name || '',
+    'Participant Email': participantUser?.email || '',
+    'Participant Password': process.env.MOCK_USER_PASSWORD || 'Welcome@123',
+    'Login Link': process.env.APP_URL || 'http://localhost:5173',
+    'BUHR Name': recipientName || '',
+    Cohort: cohort?.name || '',
+    'Financial Year': financialYear(cohort?.eventStart),
+    'DC Dates': cohort?.eventStart && cohort?.eventEnd ? `${dateLabel(cohort.eventStart)} - ${dateLabel(cohort.eventEnd)}` : dateLabel(cohort?.eventStart),
+    'Nomination Deadline': dateLabel(cohort?.nominationDeadline),
+    'Prework Deadline': dateLabel(cohort?.preWorkDeadline),
+    'Pending Items': 'Role Interview Form, Photograph, Pre-work Form',
+    '360 Cutoff': dateLabel(cohort?.threeSixtyCutoff),
+    'Days Remaining': daysRemaining(cohort?.threeSixtyCutoff),
+    'Respondent Count': String(tasks.length),
+    'Responded Count': String(responded.length),
+    'Groups Below Threshold': '',
+    'Pending Respondent Names': pendingNames || 'None',
+    'Self Responded': String(self.responded),
+    'Self Status': status(self.responded, 1),
+    'RM Count': String(rm.count),
+    'RM Responded': String(rm.responded),
+    'RM Status': status(rm.responded, 1),
+    'Skip Count': String(skip.count),
+    'Skip Responded': String(skip.responded),
+    'Skip Status': status(skip.responded, 1),
+    'DR Count': String(dr.count),
+    'DR Responded': String(dr.responded),
+    'DR Status': status(dr.responded, 2),
+    'Peer Count': String(peer.count),
+    'Peer Responded': String(peer.responded),
+    'Peer Status': status(peer.responded, 2),
+    'Item Name': '',
+    Deadline: '',
+  }
 }
 
 async function resolveRecipient(recipient) {
@@ -77,69 +137,43 @@ async function resolveRecipient(recipient) {
             cohort: true,
             nominees: true,
             feedbackTasks: true,
+            user: true,
           },
         },
       },
     })
     if (!user || user.email.toLowerCase() !== recipient.email.toLowerCase()) throw httpError(400, `Account not found for ${recipient.email}`)
-    const cohort = user.participant?.cohort
-    const participant = user.participant
-    const tasks = participant?.feedbackTasks || []
-    const nominees = participant?.nominees || []
-    const responded = tasks.filter((task) => task.status === 'SUBMITTED')
-    const relationshipStats = (relationship) => {
-      const group = tasks.filter((task) => task.relationship === relationship)
-      return { count: group.length, responded: group.filter((task) => task.status === 'SUBMITTED').length }
-    }
-    const self = relationshipStats('SELF')
-    const rm = relationshipStats('REPORTING_MANAGER')
-    const skip = relationshipStats('SKIP_MANAGER')
-    const dr = relationshipStats('DIRECT_REPORT')
-    const peer = relationshipStats('PEER')
-    const status = (count, minimum) => count >= minimum ? 'Minimum met' : 'Below minimum'
-    const pendingNames = nominees
-      .filter((nominee) => nominee.status !== 'RESPONDED')
-      .map((nominee) => nominee.name)
-      .join(', ')
     return {
       email: user.email.toLowerCase(),
       name: user.name,
-      context: {
-        'Recipient Name': user.name,
-        'Participant Name': user.name,
-        'Participant Email': user.email,
-        'Participant Password': process.env.MOCK_USER_PASSWORD || 'Welcome@123',
-        'Login Link': process.env.APP_URL || 'http://localhost:5173',
-        'BUHR Name': user.name,
-        Cohort: cohort?.name || '',
-        'Financial Year': financialYear(cohort?.eventStart),
-        'DC Dates': cohort?.eventStart && cohort?.eventEnd ? `${dateLabel(cohort.eventStart)} - ${dateLabel(cohort.eventEnd)}` : dateLabel(cohort?.eventStart),
-        'Nomination Deadline': dateLabel(cohort?.nominationDeadline),
-        'Prework Deadline': dateLabel(cohort?.preWorkDeadline),
-        'Pending Items': 'Role Interview Form, Photograph, Pre-work Form',
-        '360 Cutoff': dateLabel(cohort?.threeSixtyCutoff),
-        'Days Remaining': daysRemaining(cohort?.threeSixtyCutoff),
-        'Respondent Count': String(tasks.length),
-        'Responded Count': String(responded.length),
-        'Groups Below Threshold': '',
-        'Pending Respondent Names': pendingNames || 'None',
-        'Self Responded': String(self.responded),
-        'Self Status': status(self.responded, 1),
-        'RM Count': String(rm.count),
-        'RM Responded': String(rm.responded),
-        'RM Status': status(rm.responded, 1),
-        'Skip Count': String(skip.count),
-        'Skip Responded': String(skip.responded),
-        'Skip Status': status(skip.responded, 1),
-        'DR Count': String(dr.count),
-        'DR Responded': String(dr.responded),
-        'DR Status': status(dr.responded, 2),
-        'Peer Count': String(peer.count),
-        'Peer Responded': String(peer.responded),
-        'Peer Status': status(peer.responded, 2),
-        'Item Name': '',
-        Deadline: '',
-      },
+      context: buildParticipantContext(user.participant, user.name),
+      magicLinkId: null,
+    }
+  }
+
+  if (recipient.sourceType === 'masterContact') {
+    const [participantId, role] = String(recipient.sourceId || '').split(':')
+    const fields = {
+      reportingManager: ['reportingManagerName', 'reportingManagerEmail'],
+      skipManager: ['skipManagerName', 'skipManagerEmail'],
+      buHead: ['buHeadName', 'buHeadEmail'],
+    }[role]
+    if (!participantId || !fields) throw httpError(400, `Invalid master-sheet contact source for ${recipient.email}`)
+
+    const participant = await prisma.participant.findUnique({
+      where: { id: participantId },
+      include: { user: true, cohort: true, nominees: true, feedbackTasks: true },
+    })
+    const masterData = participant?.masterData && typeof participant.masterData === 'object' ? participant.masterData : {}
+    const [nameField, emailField] = fields
+    if (!participant || String(masterData[emailField] || '').toLowerCase() !== recipient.email.toLowerCase()) {
+      throw httpError(400, `Master-sheet contact not found for ${recipient.email}`)
+    }
+    const name = String(masterData[nameField] || recipient.name || recipient.email)
+    return {
+      email: recipient.email.toLowerCase(),
+      name,
+      context: buildParticipantContext(participant, name),
       magicLinkId: null,
     }
   }
@@ -198,24 +232,27 @@ notificationsRouter.get('/templates', asyncHandler(async (req, res) => {
 
 notificationsRouter.get('/recipients', asyncHandler(async (req, res) => {
   const templateId = String(req.query.templateId || '')
-  if (MAGIC_LINK_TEMPLATES.has(templateId)) {
+  if (RESPONDENT_TEMPLATES.has(templateId)) {
     const links = await prisma.magicLink.findMany({
       where: { role: 'RESPONDENT', expiresAt: { gt: new Date() } },
       orderBy: { createdAt: 'desc' },
       include: { emails: { orderBy: { queuedAt: 'desc' } } },
     })
     const taskIds = [...new Set(links.map((link) => link.payload?.taskId).filter(Boolean))]
-    const openTasks = await prisma.feedbackTask.findMany({
-      where: { id: { in: taskIds }, status: { not: 'SUBMITTED' } },
+    const eligibleTasks = await prisma.feedbackTask.findMany({
+      where: {
+        id: { in: taskIds },
+        status: templateId === 'respondent-thank-you' ? 'SUBMITTED' : { not: 'SUBMITTED' },
+      },
       select: { id: true },
     })
-    const openTaskIds = new Set(openTasks.map((task) => task.id))
+    const eligibleTaskIds = new Set(eligibleTasks.map((task) => task.id))
     const seenTasks = new Set()
     const rows = []
     for (const link of links) {
       const taskId = link.payload?.taskId
       const sourceEmail = link.emails.find((email) => metadataContext(email)['Magic Link'])
-      if (!taskId || !openTaskIds.has(taskId) || seenTasks.has(taskId) || !sourceEmail) continue
+      if (!taskId || !eligibleTaskIds.has(taskId) || seenTasks.has(taskId) || !sourceEmail) continue
       const context = metadataContext(sourceEmail)
       seenTasks.add(taskId)
       rows.push({
@@ -234,19 +271,65 @@ notificationsRouter.get('/recipients', asyncHandler(async (req, res) => {
     return
   }
 
+  await ensureNotificationTemplates()
+  const template = await prisma.notificationTemplate.findUnique({ where: { templateId } })
+  if (!template) throw httpError(404, 'Notification template not found')
+  const intendedRole = {
+    Participant: 'PARTICIPANT',
+    BUHR: 'BUHR',
+    'TD Admin': 'TD',
+  }[template.recipient]
+
   const users = await prisma.user.findMany({
-    where: { email: { not: '' } },
+    where: {
+      email: { not: '' },
+      ...(intendedRole ? { roles: { has: intendedRole } } : {}),
+    },
     orderBy: [{ name: 'asc' }, { email: 'asc' }],
     select: { id: true, name: true, email: true, employeeId: true, roles: true, businessUnit: true },
   })
+  const participants = template.recipient === 'Manager' ? await prisma.participant.findMany({
+    orderBy: [{ cohort: { createdAt: 'desc' } }, { user: { name: 'asc' } }],
+    select: {
+      id: true,
+      masterData: true,
+      cohort: { select: { name: true } },
+      user: { select: { name: true, employeeId: true, businessUnit: true } },
+    },
+  }) : []
+
+  const masterContactDefinitions = [
+    { role: 'reportingManager', nameField: 'reportingManagerName', emailField: 'reportingManagerEmail', label: 'Reporting Manager' },
+    { role: 'skipManager', nameField: 'skipManagerName', emailField: 'skipManagerEmail', label: 'Skip Manager' },
+    { role: 'buHead', nameField: 'buHeadName', emailField: 'buHeadEmail', label: 'BU Head' },
+  ]
+  const masterContacts = participants.flatMap((participant) => {
+    const masterData = participant.masterData && typeof participant.masterData === 'object' ? participant.masterData : {}
+    return masterContactDefinitions.flatMap((definition) => {
+      const email = String(masterData[definition.emailField] || '').trim().toLowerCase()
+      if (!email) return []
+      const name = String(masterData[definition.nameField] || '').trim() || email
+      return [{
+        id: `masterContact:${participant.id}:${definition.role}`,
+        sourceType: 'masterContact',
+        sourceId: `${participant.id}:${definition.role}`,
+        name,
+        email,
+        employeeId: null,
+        roles: [definition.role],
+        businessUnit: participant.user.businessUnit,
+        detail: `${definition.label} for ${participant.user.name} · ${participant.cohort.name}`,
+      }]
+    })
+  })
 
   res.json({
-    data: users.map((user) => ({
+    data: [...users.map((user) => ({
       ...user,
       sourceType: 'user',
       sourceId: user.id,
       roles: user.roles.map((role) => role.toLowerCase()),
-    })),
+    })), ...masterContacts],
   })
 }))
 

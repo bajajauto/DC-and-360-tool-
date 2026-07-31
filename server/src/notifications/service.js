@@ -142,7 +142,11 @@ async function deliverEmail(email, db = prisma) {
   }
 }
 
-export async function queueEmail({
+// Creates the outbox row only — no SMTP send. Use this inside a database transaction
+// (real network calls inside an interactive transaction risk hitting Prisma's
+// transaction timeout once there are more than a couple of recipients); call
+// sendEmail() for each returned row's id after the transaction commits.
+export async function createQueuedEmail({
   templateId,
   toEmail,
   toName,
@@ -161,7 +165,7 @@ export async function queueEmail({
     template = await db.notificationTemplate.create({ data: defaultTemplate })
   }
 
-  const email = await db.emailOutbox.create({
+  return db.emailOutbox.create({
     data: {
       templateId,
       toEmail,
@@ -179,7 +183,10 @@ export async function queueEmail({
       },
     },
   })
+}
 
+export async function queueEmail(params, db = prisma) {
+  const email = await createQueuedEmail(params, db)
   return deliverEmail(email, db)
 }
 

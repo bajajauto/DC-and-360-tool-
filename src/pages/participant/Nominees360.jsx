@@ -23,7 +23,7 @@ const NOMINATION_CATEGORIES = [
   ['Self', 'Self-assessment completed by you.', '1', '1'],
   ['Reporting Manager', 'Your immediate reporting manager.', '1 or more', '1'],
   ['Skip / BU Head', 'Your skip-level manager or relevant BU Head.', '1 or more', '1'],
-  ['Direct Reports', 'Team members (on-roll or off-roll) reporting directly to you, if applicable.', 'Optional', '2'],
+  ['Direct Reports', 'Team members (on-roll or off-roll) reporting directly to you, if applicable.', 'Optional', '0'],
   ['Peers / Internal Customers / External Stakeholders', 'Peers, internal customers, cross-functional partners, and external stakeholders who regularly interact with you.', '4 or more', '2'],
 ]
 
@@ -33,7 +33,7 @@ function RequirementsTable({ compact = false }) {
     <div className="overflow-x-auto rounded-xl border border-slate-300">
       <table className={`w-full text-left ${compact ? 'table-fixed text-[10px]' : 'min-w-[760px] text-xs'}`}>
         <thead className="bg-[#a9c5f7] text-slate-900">
-          <tr>{['Respondent Category', 'Description', 'Minimum Nominees Required', 'Minimum Responses Required for Reporting'].map((label, index) => <th key={label} className={`border-b border-r border-white font-bold last:border-r-0 ${columnWidths[index]} ${compact ? 'px-2.5 py-2.5 leading-[13px]' : 'px-3 py-2.5'}`}>{label}</th>)}</tr>
+          <tr>{['Respondent Category', 'Description', 'Minimum Nominees Required', 'Minimum Responses Required for 360° Feedback Report Generation'].map((label, index) => <th key={label} className={`border-b border-r border-white font-bold last:border-r-0 ${columnWidths[index]} ${compact ? 'px-2.5 py-2.5 leading-[13px]' : 'px-3 py-2.5'}`}>{label}</th>)}</tr>
         </thead>
         <tbody className="bg-white">
           {NOMINATION_CATEGORIES.map((row) => <tr key={row[0]} className="border-b border-slate-200 last:border-0">{row.map((cell, index) => <td key={index} className={`border-r border-slate-200 align-top last:border-r-0 ${compact ? 'px-2.5 py-2 leading-[14px]' : 'px-3 py-2.5 leading-4'} ${index === 0 ? 'font-semibold text-slate-900' : 'text-slate-600'}`}>{cell}</td>)}</tr>)}
@@ -78,7 +78,7 @@ function NominationInstructions({ nominationDeadline, feedbackCutoff, onAccept }
           <p className="mt-3 text-sm font-semibold text-blue-50">Mandatory · Complete by {formatDate(nominationDeadline)} EOD</p>
         </div>
         <div className="space-y-7 p-6 text-sm leading-6 text-slate-700">
-          <div><p className="font-semibold text-slate-900">Dear Participant,</p><p className="mt-2">As the next step in your development journey, please nominate the people who will provide your 360 Degree Feedback.</p><p className="mt-2">Your 360 feedback is one of the most valuable inputs in this entire process. It shapes your report, informs your assessors before the Development Centre, and forms the basis of your development conversations afterwards. The quality of that feedback depends entirely on who you nominate.</p></div>
+          <div><p className="font-semibold text-slate-900">Dear Participant,</p><p className="mt-2">As the next step in your development journey, please nominate the people who will provide your 360 Degree Feedback.</p><p className="mt-2">Your 360 feedback is one of the most valuable inputs in this entire process. It shapes your report, informs your assessors before the Development Centre, and forms the basis of your development conversations afterwards.</p></div>
           <div className="border-t pt-6"><h2 className="text-base font-bold text-[#1e4d8c]">Choosing the right respondents</h2><p className="mt-2">Nominate the people who see you work, not the people you get along with best. Choose stakeholders who observe your day-to-day behaviour, depend on your work, and can comment honestly on how you operate.</p><ul className="mt-3 space-y-2">
             <li><strong>Relevance over comfort.</strong> Include people who will give you a candid and balanced view, including those you find challenging to work with.</li>
             <li><strong>Range of perspectives.</strong> Cover different parts of your working world so your report reflects how you operate across the organisation.</li>
@@ -86,7 +86,7 @@ function NominationInstructions({ nominationDeadline, feedbackCutoff, onAccept }
             <li><strong>External stakeholders count.</strong> Vendors, dealers, partners and customers outside Bajaj Auto can be nominated.</li>
           </ul></div>
           <div className="border-t pt-6"><h2 className="text-base font-bold text-[#1e4d8c]">Respondent categories and minimums</h2><p className="mt-2">The minimum response threshold protects individual respondent confidentiality.</p><div className="mt-4"><RequirementsTable /></div>
-            <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-900"><strong>Please read the last column carefully.</strong> If a group does not receive its minimum number of responses, that group’s feedback cannot be shown in your report. For example, if only one Direct Report responds, the entire Direct Reports section will be blank.</div>
+            <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-900"><strong>Please read the last column carefully.</strong> It shows the minimum responses required from each category to generate the 360° Feedback Report. A value of 0 means responses from that category are not required for report generation.</div>
           </div>
           <div className="border-t pt-6"><h2 className="text-base font-bold text-[#1e4d8c]">Getting responses</h2><p className="mt-2">The onus of getting responses rests with you. Automated reminders may not be enough, so please tell your nominees why their input matters and follow up personally as the deadline approaches.</p><ul className="mt-3 list-disc space-y-1 pl-5"><li>You will receive a daily status email showing received and pending responses.</li><li>You can track the same progress on the Tool at any time.</li><li>Respondents receive an automated reminder every two days until they submit.</li></ul><p className="mt-3 font-semibold text-red-700">Feedback not completed by {formatDate(feedbackCutoff)} will not be included. Timelines are sacrosanct and will not be extended.</p></div>
           <div className="border-t pt-6"><h2 className="text-base font-bold text-[#1e4d8c]">Confidentiality</h2><p className="mt-2">Your respondents’ individual responses will remain confidential and will not be shared with you or any other individual. Feedback from Peers, Direct Reports and Stakeholders is combined and presented in aggregate form. Only feedback from the Reporting Manager and Skip-Level Manager / BU Head may be reported separately.</p><p className="mt-2">You will be able to see who has and has not responded so that you can follow up. You will not be able to see what any individual has said.</p></div>
@@ -522,7 +522,7 @@ export default function Nominees360() {
             <div className="mt-5 text-xs leading-5 text-slate-600">
               <p className="font-bold text-slate-800">On final submit</p>
               <p>Invitations are sent immediately to every respondent using their unique link. Your list is then locked and visible to your BUHR, and respondents cannot be changed afterwards.</p>
-              <p className="mt-1 font-semibold text-red-700">Please review every name, email address, Ticket ID and relationship before submitting.</p>
+              <p className="mt-1 font-semibold text-red-700">Please review the nomination list before submitting.</p>
             </div>
 
             {isEditing ? (
@@ -532,7 +532,7 @@ export default function Nominees360() {
                 onClick={handleSaveList}
                 className="rounded-lg bg-[#1e4d8c] px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#183f73] disabled:cursor-not-allowed disabled:opacity-40"
               >
-                {saving ? 'Saving...' : 'Save Nominee List'}
+                {saving ? 'Saving...' : 'Save List'}
               </button>
               </div>
             ) : (

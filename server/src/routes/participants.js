@@ -11,7 +11,7 @@ import {
   normalizeEmail,
 } from '../utils/magicLinks.js'
 import { deriveTaskStatus, taskCompletionPercent, toNomineeDto, toParticipantSummary } from '../utils/mappers.js'
-import { queueEmail } from '../notifications/service.js'
+import { createQueuedEmail, sendEmail } from '../notifications/service.js'
 import { getBehaviourIds, getSurveySections } from '../../../src/data/surveyConfig.js'
 
 export const participantsRouter = Router()
@@ -44,6 +44,7 @@ const participantWorkSchema = z.object({
 })
 
 const placeholderPattern = /^(?:n\/?a|none|nil|[^\p{L}\p{N}]+)$/iu
+const PRE_WORK_QUESTION_KEYS = ['q1', 'q2', 'q3', 'q4', 'q5', 'q6', 'q8', 'q9', 'q10']
 
 function validResponse(value, minimum = 1) {
   const text = String(value || '').trim()
@@ -52,17 +53,18 @@ function validResponse(value, minimum = 1) {
 
 function validateParticipantWork(type, answers) {
   if (type === 'pre-work') {
-    const invalid = Array.from({ length: 10 }, (_, index) => `q${index + 1}`)
-      .filter((key) => !validResponse(answers[key], 15))
+    const invalid = PRE_WORK_QUESTION_KEYS.filter((key) => !validResponse(answers[key], 15))
     if (invalid.length) throw httpError(400, 'Please answer every Pre-Work question with at least 15 characters. Placeholder responses such as NA, None, hyphens, or dots are not accepted.')
     return
   }
 
   const transitionKeys = [1, 2, 3].flatMap((number) => ['role', 'roleDescription', 'bu', 'duration'].map((key) => `transition${number}_${key}`))
   const shortFields = ['currentRole', ...transitionKeys]
-  const reflectionFields = ['responsibilities', 'highlight1', 'highlight2', 'highlight3', 'challenge1', 'challenge2', 'challenge3']
-  if (shortFields.some((key) => !validResponse(answers[key])) || reflectionFields.some((key) => !validResponse(answers[key], 15))) {
-    throw httpError(400, 'Please complete every Role Interview field. Detailed responses require at least 15 characters, and placeholder responses are not accepted.')
+  const reflectionFields = ['responsibilities', 'highlight1', 'highlight2', 'challenge1', 'challenge2']
+  const optionalReflectionFields = ['highlight3', 'challenge3']
+  const invalidOptionalResponse = optionalReflectionFields.some((key) => answers[key] && !validResponse(answers[key], 15))
+  if (shortFields.some((key) => !validResponse(answers[key])) || reflectionFields.some((key) => !validResponse(answers[key], 15)) || invalidOptionalResponse) {
+    throw httpError(400, 'Please complete every required Role Interview field. Detailed responses require at least 15 characters, and placeholder responses are not accepted.')
   }
 }
 
@@ -107,12 +109,60 @@ async function findParticipant(id) {
   return participant
 }
 
-const PRE_WORK_QUESTION_COUNT = 10
+const ROLE_INTERVIEW_KEYS = [
+  'currentRole',
+  'responsibilities',
+  'highlight1',
+  'highlight2',
+  'challenge1',
+  'challenge2',
+  ...[1, 2, 3].flatMap((number) => ['role', 'roleDescription', 'bu', 'duration'].map((key) => `transition${number}_${key}`)),
+]
 
 function countAnsweredPreWork(preWork) {
   const answers = preWork?.answers || {}
-  return Array.from({ length: PRE_WORK_QUESTION_COUNT }, (_, index) => `q${index + 1}`)
-    .filter((key) => String(answers[key] || '').trim().length > 0).length
+  return PRE_WORK_QUESTION_KEYS.filter((key) => String(answers[key] || '').trim().length > 0).length
+}
+
+function countAnsweredRoleInterview(roleInterview) {
+  const answers = roleInterview?.answers || {}
+  return ROLE_INTERVIEW_KEYS.filter((key) => String(answers[key] || '').trim().length > 0).length
+}
+
+const respondentRelationshipLabels = {
+  SELF: 'Self',
+  REPORTING_MANAGER: 'Reporting Manager',
+  SKIP_MANAGER: 'Skip Manager',
+  PEER: 'Peer',
+  DIRECT_REPORT: 'Direct Report',
+}
+
+function buildRespondentStatuses(participant, nomineesSubmitted) {
+  if (!nomineesSubmitted) return []
+
+  const selfTask = participant.feedbackTasks.find((task) => task.relationship === 'SELF')
+  const self = {
+    id: selfTask?.id || `self-${participant.id}`,
+    name: participant.user.name,
+    isSelf: true,
+    relationship: 'Self',
+    status: selfTask?.status?.toLowerCase() || 'pending',
+    submittedAt: selfTask?.submittedAt?.toISOString() || null,
+  }
+
+  const nominees = participant.nominees.map((nominee) => {
+    const task = participant.feedbackTasks.find((item) => item.nomineeId === nominee.id)
+    return {
+      id: task?.id || nominee.id,
+      name: nominee.name,
+      isSelf: false,
+      relationship: respondentRelationshipLabels[nominee.relationship] || nominee.relationship,
+      status: task?.status?.toLowerCase() || 'pending',
+      submittedAt: task?.submittedAt?.toISOString() || null,
+    }
+  })
+
+  return [self, ...nominees]
 }
 
 participantsRouter.get('/:participantId', asyncHandler(async (req, res) => {
@@ -133,6 +183,14 @@ participantsRouter.get('/:participantId', asyncHandler(async (req, res) => {
     latestReport: participant.reports[0] || null,
     latestAssessorReview: participant.assessorReviews[0] || null,
   })
+  const respondents = buildRespondentStatuses(participant, nomineesSubmitted)
+  const submittedRespondents = respondents.filter((respondent) => respondent.status === 'submitted').length
+  const responseSummary = {
+    submitted: submittedRespondents,
+    total: respondents.length,
+    pending: respondents.length - submittedRespondents,
+    percent: respondents.length ? Math.round((submittedRespondents / respondents.length) * 100) : 0,
+  }
 
   res.json({
     data: {
@@ -144,7 +202,11 @@ participantsRouter.get('/:participantId', asyncHandler(async (req, res) => {
       threeSixtyCutoffPassed: cutoffPassed,
       taskStatus,
       taskCompletionPercent: taskCompletionPercent(taskStatus),
+      respondents,
+      responseSummary,
       preWorkAnsweredCount: countAnsweredPreWork(participant.preWork),
+      roleInterviewAnsweredCount: countAnsweredRoleInterview(participant.roleInterview),
+      roleInterviewQuestionCount: ROLE_INTERVIEW_KEYS.length,
       cohort: {
         id: participant.cohort.id,
         name: participant.cohort.name,
@@ -153,6 +215,9 @@ participantsRouter.get('/:participantId', asyncHandler(async (req, res) => {
         eventEnd: participant.cohort.eventEnd?.toISOString() || null,
         threeSixtyCutoff: participant.cohort.threeSixtyCutoff?.toISOString() || null,
         nominationDeadline: participant.cohort.nominationDeadline?.toISOString() || null,
+        roleInterviewDeadline: participant.cohort.roleInterviewDeadline?.toISOString() || null,
+        photoDeadline: participant.cohort.photoDeadline?.toISOString() || null,
+        preWorkDeadline: participant.cohort.preWorkDeadline?.toISOString() || null,
         eventDate: participant.cohort.eventStart && participant.cohort.eventEnd
           ? `${participant.cohort.eventStart.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })} - ${participant.cohort.eventEnd.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}`
           : 'TBD',
@@ -189,10 +254,18 @@ participantsRouter.put('/:participantId/work/:type', asyncHandler(async (req, re
   res.json({ data: value })
 }))
 
+participantsRouter.get('/:participantId/photo', asyncHandler(async (req, res) => {
+  const participant = await findParticipant(req.params.participantId)
+  assertParticipantAccess(req, participant)
+  const cutoff = participant.cohort.photoDeadline
+  res.json({ data: { url: participant.photoUrl || null, cutoff: cutoff?.toISOString() || null, canEdit: !hasCutoffPassed(cutoff) } })
+}))
+
 participantsRouter.put('/:participantId/photo', asyncHandler(async (req, res) => {
   const payload = photoSchema.parse(req.body)
   const participant = await findParticipant(req.params.participantId)
   assertParticipantAccess(req, participant)
+  if (hasCutoffPassed(participant.cohort.photoDeadline)) throw httpError(409, 'The Photograph Upload cutoff has passed. This submission can no longer be edited.')
   await prisma.participant.update({ where: { id: participant.id }, data: { photoUrl: payload.dataUrl, lastActivityAt: new Date() } })
   res.json({ data: { url: payload.dataUrl, status: 'submitted' } })
 }))
@@ -271,6 +344,7 @@ participantsRouter.post('/:participantId/self-feedback-task', asyncHandler(async
 
   const existing = await prisma.feedbackTask.findFirst({
     where: { participantId: participant.id, respondentId: participant.userId, relationship: 'SELF' },
+    include: { responses: true },
   })
   const task = existing || await prisma.feedbackTask.create({
     data: {
@@ -280,8 +354,23 @@ participantsRouter.post('/:participantId/self-feedback-task', asyncHandler(async
       status: 'PENDING',
       dueAt: participant.cohort.threeSixtyCutoff,
     },
+    include: { responses: true },
   })
-  res.json({ data: { id: task.id, status: task.status.toLowerCase(), dueAt: task.dueAt?.toISOString() || null } })
+  const ratings = task.responses?.[0]?.ratings
+  const requiredIds = getBehaviourIds(getSurveySections('SELF'))
+  const answered = ratings && typeof ratings === 'object' && !Array.isArray(ratings)
+    ? requiredIds.filter((id) => Number.isFinite(ratings[id]) && ratings[id] >= 1 && ratings[id] <= 4).length
+    : 0
+  res.json({
+    data: {
+      id: task.id,
+      status: task.status.toLowerCase(),
+      dueAt: task.dueAt?.toISOString() || null,
+      answered,
+      totalQuestions: requiredIds.length,
+      progress: requiredIds.length ? Math.round((answered / requiredIds.length) * 100) : 0,
+    },
+  })
 }))
 
 participantsRouter.post('/:participantId/nominees/submit', asyncHandler(async (req, res) => {
@@ -301,7 +390,7 @@ participantsRouter.post('/:participantId/nominees/submit', asyncHandler(async (r
     throw httpError(400, 'At least 4 peer nominees are required')
   }
 
-  const { submittedNominees, invites } = await prisma.$transaction(async (tx) => {
+  const { submittedNominees, invites, pendingEmailIds } = await prisma.$transaction(async (tx) => {
     await tx.nominee.updateMany({
       where: { participantId: participant.id },
       data: {
@@ -311,6 +400,7 @@ participantsRouter.post('/:participantId/nominees/submit', asyncHandler(async (r
     })
 
     const generatedInvites = []
+    const queuedEmailIds = []
     const cutoffDate = participant.cohort.threeSixtyCutoff
     const cutoffLabel = formatCutoff(cutoffDate)
 
@@ -363,62 +453,69 @@ participantsRouter.post('/:participantId/nominees/submit', asyncHandler(async (r
         })
       }
 
-      const token = generateMagicToken()
-      const inviteUrl = buildInviteUrl(token)
-      const expiresAt = getMagicLinkExpiry()
+      // Every nominee receives a task-scoped link, including internal employees.
+      // This keeps Email Centre recipient selection complete and gives each
+      // respondent one consistent route into the exact feedback form.
+      {
+        const token = generateMagicToken()
+        const inviteUrl = buildInviteUrl(token)
+        const expiresAt = getMagicLinkExpiry()
+        const nomineeType = respondentUser ? 'internal' : 'external'
 
-      const magicLink = await tx.magicLink.create({
-        data: {
-          userId: respondentUser?.id || null,
-          email: normalizeEmail(nominee.email),
-          role: 'RESPONDENT',
-          tokenHash: hashMagicToken(token),
-          expiresAt,
-          payload: {
-            taskId: task.id,
+        const magicLink = await tx.magicLink.create({
+          data: {
+            userId: respondentUser?.id || null,
+            email: normalizeEmail(nominee.email),
+            role: 'RESPONDENT',
+            tokenHash: hashMagicToken(token),
+            expiresAt,
+            payload: {
+              taskId: task.id,
+              nomineeId: nominee.id,
+              participantId: participant.id,
+              name: nominee.name,
+              nomineeType,
+            },
+          },
+        })
+
+        const inviteEmail = await createQueuedEmail({
+          templateId: 'resp-invite',
+          toEmail: normalizeEmail(nominee.email),
+          toName: nominee.name,
+          context: {
+            'Respondent Name': nominee.name,
+            'Participant Name': participant.user.name,
+            Relationship: nominee.relationship.toLowerCase().replaceAll('_', ' '),
+            Cohort: participant.cohort.name,
+            'Estimated Time': '20 minutes',
+            'Magic Link': inviteUrl,
+            '360 Cutoff': cutoffLabel,
+          },
+          magicLinkId: magicLink.id,
+          entity: 'FeedbackTask',
+          entityId: task.id,
+          metadata: {
             nomineeId: nominee.id,
             participantId: participant.id,
-            name: nominee.name,
-            nomineeType: respondentUser ? 'internal' : 'external',
+            nomineeType,
           },
-        },
-      })
+        }, tx)
+        queuedEmailIds.push(inviteEmail.id)
 
-      await queueEmail({
-        templateId: 'resp-invite',
-        toEmail: normalizeEmail(nominee.email),
-        toName: nominee.name,
-        context: {
-          'Respondent Name': nominee.name,
-          'Participant Name': participant.user.name,
-          Relationship: nominee.relationship.toLowerCase().replaceAll('_', ' '),
-          Cohort: participant.cohort.name,
-          'Estimated Time': '20 minutes',
-          'Magic Link': inviteUrl,
-          '360 Cutoff': cutoffLabel,
-        },
-        magicLinkId: magicLink.id,
-        entity: 'FeedbackTask',
-        entityId: task.id,
-        metadata: {
+        generatedInvites.push({
           nomineeId: nominee.id,
-          participantId: participant.id,
-          nomineeType: respondentUser ? 'internal' : 'external',
-        },
-      }, tx)
-
-      generatedInvites.push({
-        nomineeId: nominee.id,
-        taskId: task.id,
-        name: nominee.name,
-        email: normalizeEmail(nominee.email),
-        nomineeType: respondentUser ? 'internal' : 'external',
-        inviteUrl,
-        expiresAt: expiresAt.toISOString(),
-      })
+          taskId: task.id,
+          name: nominee.name,
+          email: normalizeEmail(nominee.email),
+          nomineeType,
+          inviteUrl,
+          expiresAt: expiresAt.toISOString(),
+        })
+      }
     }
 
-    await queueEmail({
+    const confirmationEmail = await createQueuedEmail({
       templateId: 'nominations-confirmed',
       toEmail: normalizeEmail(participant.user.email),
       toName: participant.user.name,
@@ -433,6 +530,7 @@ participantsRouter.post('/:participantId/nominees/submit', asyncHandler(async (r
         nomineeCount: nominees.length,
       },
     }, tx)
+    queuedEmailIds.push(confirmationEmail.id)
 
     const buhrs = await tx.user.findMany({
       where: {
@@ -442,7 +540,7 @@ participantsRouter.post('/:participantId/nominees/submit', asyncHandler(async (r
     })
 
     for (const buhr of buhrs) {
-      await queueEmail({
+      const buhrEmail = await createQueuedEmail({
         templateId: 'nominees-submitted-buhr',
         toEmail: normalizeEmail(buhr.email),
         toName: buhr.name,
@@ -455,6 +553,7 @@ participantsRouter.post('/:participantId/nominees/submit', asyncHandler(async (r
         entity: 'Participant',
         entityId: participant.id,
       }, tx)
+      queuedEmailIds.push(buhrEmail.id)
     }
 
     await tx.participant.update({
@@ -471,8 +570,13 @@ participantsRouter.post('/:participantId/nominees/submit', asyncHandler(async (r
       orderBy: { createdAt: 'asc' },
     })
 
-    return { submittedNominees: submitted, invites: generatedInvites }
+    return { submittedNominees: submitted, invites: generatedInvites, pendingEmailIds: queuedEmailIds }
   })
+
+  // Real SMTP sends happen after the transaction commits — doing them inside the
+  // transaction risks exceeding Prisma's interactive transaction timeout once a
+  // participant has more than a couple of respondents.
+  await Promise.all(pendingEmailIds.map((id) => sendEmail(id)))
 
   res.json({
     data: submittedNominees.map(toNomineeDto),

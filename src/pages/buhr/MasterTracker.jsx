@@ -158,7 +158,7 @@ export default function BUHRMasterTracker() {
             <table className="w-full min-w-[1280px] border-collapse bg-white text-left text-[13px]">
               <thead className="bg-[#ebf2fa]">
                 <tr>
-                  {['Ticket ID', 'Employee', 'Cohort', 'Current stage', 'Nominations', 'Pre-Work', 'Photo', '360 Responses', '360 Report Status', 'DC Report Status'].map((label) => (
+                  {['Ticket ID', 'Employee', 'Business Unit', 'Cohort', 'Current stage', 'Nominations', 'Pre-Work', 'Photo', '360 Responses', '360° Feedback Report Status', 'DC Report Status'].map((label) => (
                     <th key={label} className="border-b border-[#d5dce5] px-4 py-3 text-[11px] font-bold uppercase tracking-wide text-slate-600">{label}</th>
                   ))}
                 </tr>
@@ -182,6 +182,7 @@ export default function BUHRMasterTracker() {
                         <p className="font-semibold text-[#172033]">{participant.name}</p>
                         <p className="mt-0.5 text-[11px] text-slate-500">{participant.designation}</p>
                       </td>
+                      <td className="border-b border-[#e8edf4] px-4 py-4 font-medium text-slate-700">{participant.bu || '—'}</td>
                       <td className="border-b border-[#e8edf4] px-4 py-4">
                         <p className="font-medium text-slate-700">{participant.cohort?.name || 'Unassigned'}</p>
                         <p className="mt-0.5 text-[11px] text-slate-500">{participant.cohort?.programme || 'Development Centre'}</p>

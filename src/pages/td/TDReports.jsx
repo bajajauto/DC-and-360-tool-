@@ -2,7 +2,7 @@ import { ArrowUpRight, Check, Download, Eye, FileSpreadsheet, FileText, Search, 
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../../lib/api'
-import { download360Pptx, download360ResponseData } from '../../lib/reportDownload'
+import { download360Pptx, download360ResponseData, downloadReportArchive } from '../../lib/reportDownload'
 
 function getCohort(cohorts, participant) {
   return cohorts.find((cohort) => cohort.id === participant.cohortId)
@@ -17,6 +17,7 @@ export default function TDReports() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [downloadError, setDownloadError] = useState('')
+  const [downloadingArchive, setDownloadingArchive] = useState(false)
   const [releaseError, setReleaseError] = useState('')
 
   useEffect(() => {
@@ -105,6 +106,19 @@ export default function TDReports() {
     }
   }
 
+  async function handleDownloadArchive() {
+    setDownloadError('')
+    setDownloadingArchive(true)
+
+    try {
+      await downloadReportArchive(selectedCohortId, selectedReportType)
+    } catch (err) {
+      setDownloadError(err.message || 'Unable to download the report ZIP file.')
+    } finally {
+      setDownloadingArchive(false)
+    }
+  }
+
   async function handleRelease(participant) {
     setReleaseError('')
 
@@ -162,7 +176,7 @@ export default function TDReports() {
               <h2 className="text-lg font-bold text-[#1e5fba]">All reports</h2>
               <p className="text-xs text-gray-400 mt-0.5">Browse current and historical reports across Development Centre cohorts.</p>
               <div className="mt-3 inline-flex rounded-lg border border-[#dce3ed] bg-slate-50 p-1" aria-label="Filter by report type">
-                {[['all', 'All reports'], ['dc', 'DC reports'], ['360', '360 reports']].map(([value, label]) => (
+                {[['all', 'All reports'], ['dc', 'DC reports'], ['360', '360° Feedback Reports']].map(([value, label]) => (
                   <button
                     key={value}
                     type="button"
@@ -188,6 +202,16 @@ export default function TDReports() {
                 <Search size={15} className="absolute left-3 top-2.5 text-gray-400" />
                 <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search reports" className="w-full rounded-lg border border-[#dce3ed] py-2 pl-9 pr-3 text-xs focus:outline-none focus:ring-2 focus:ring-blue-100 sm:w-56" />
               </div>
+              <button
+                type="button"
+                onClick={handleDownloadArchive}
+                disabled={downloadingArchive || !generatedReports.length}
+                className="inline-flex min-h-8 items-center justify-center gap-2 rounded-lg bg-[#1e5fba] px-4 py-2 text-xs font-semibold text-white hover:bg-[#174d98] disabled:cursor-not-allowed disabled:bg-slate-300"
+                title="Downloads every available report matching the selected cohort and report type"
+              >
+                <Download size={14} />
+                {downloadingArchive ? 'Preparing ZIP…' : 'Download ZIP'}
+              </button>
             </div>
           </div>
 
@@ -196,10 +220,10 @@ export default function TDReports() {
               <thead className="bg-[#f8fafc] border-b border-[#e8edf4]">
                 <tr>
                   {(selectedReportType === 'all'
-                    ? ['Ticket ID', 'Participant', 'DC Report', '360 Report', 'Cohort', 'Business unit', 'Actions']
+                    ? ['Ticket ID', 'Participant', 'DC Report', '360° Feedback Report', 'Cohort', 'Business unit', 'Actions']
                     : ['Ticket ID', 'Participant', 'Report type', 'Cohort', 'Business unit', 'Responses', 'Status', 'Actions']
                   ).map((label) => (
-                    <th key={label} className={`px-5 py-3 text-[10px] uppercase tracking-wider font-semibold text-gray-400 ${selectedReportType === 'all' && ['DC Report', '360 Report'].includes(label) ? 'w-28 text-center' : ''}`}>{label}</th>
+                    <th key={label} className={`px-5 py-3 text-[10px] uppercase tracking-wider font-semibold text-gray-400 ${selectedReportType === 'all' && ['DC Report', '360° Feedback Report'].includes(label) ? 'w-28 text-center' : ''}`}>{label}</th>
                   ))}
                 </tr>
               </thead>
@@ -229,7 +253,7 @@ export default function TDReports() {
                         })}
                       </> : <td className="px-5 py-4">
                         <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase ${participant.reportType === 'dc' ? 'border-violet-200 bg-violet-50 text-violet-700' : 'border-blue-200 bg-blue-50 text-blue-700'}`}>
-                          {participant.reportType === 'dc' ? 'DC Report' : '360 Report'}
+                          {participant.reportType === 'dc' ? 'DC Report' : '360° Feedback Report'}
                         </span>
                       </td>}
                       <td className="px-5 py-4">

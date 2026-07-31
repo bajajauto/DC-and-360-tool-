@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../../lib/api'
 import { useUser } from '../../context/UserContext'
@@ -12,13 +12,33 @@ const guidelines = [
   'Minimum resolution: 400 × 400 px',
 ]
 
+function formatDeadline(cutoff) {
+  return cutoff ? new Date(cutoff).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'the deadline configured for your cohort'
+}
+
 export default function Photograph() {
   const { user } = useUser()
   const [preview, setPreview] = useState(null)
   const [error, setError] = useState(null)
   const [submitted, setSubmitted] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [canEdit, setCanEdit] = useState(true)
+  const [cutoff, setCutoff] = useState(null)
   const inputRef = useRef(null)
+
+  useEffect(() => {
+    if (!user?.participantId) return
+    api.getParticipantPhoto(user.participantId)
+      .then(({ data }) => {
+        setPreview(data.url || null)
+        setSubmitted(Boolean(data.url))
+        setCanEdit(data.canEdit !== false)
+        setCutoff(data.cutoff || null)
+      })
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false))
+  }, [user?.participantId])
 
   function handleFile(file) {
     setError(null)
@@ -61,10 +81,12 @@ export default function Photograph() {
       <div className="mb-5">
         <h1 className="text-xl font-bold text-[#1a1f2e]">Photograph Upload</h1>
         <p className="text-sm text-gray-500 mt-0.5">Upload a recent, professional photograph for your DC artefact</p>
-        <p className="mt-2 text-sm font-semibold text-red-600">Deadline: 15 Jun 2025</p>
+        <p className={`mt-2 text-sm font-semibold ${canEdit ? 'text-red-600' : 'text-amber-600'}`}>
+          {canEdit ? `Deadline: ${formatDeadline(cutoff)}` : 'The cutoff date has passed — this upload is now locked.'}
+        </p>
       </div>
 
-      {submitted ? (
+      {loading ? null : submitted ? (
         <div className="bg-green-50 border border-green-200 rounded-xl p-8 text-center max-w-xl">
           <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
             <svg className="w-6 h-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -74,6 +96,12 @@ export default function Photograph() {
           <h3 className="text-sm font-semibold text-green-800 mb-1">Photograph submitted</h3>
           <p className="text-xs text-green-600">Your photo is locked and available to assessors.</p>
           {preview && <img src={preview} alt="Submitted" className="w-28 h-28 rounded-full object-cover border-4 border-green-200 mx-auto mt-4" />}
+          <Link to="/participant/dashboard" className="mt-4 inline-block text-xs text-[#1e4d8c] font-medium hover:underline">← Back to Dashboard</Link>
+        </div>
+      ) : !canEdit ? (
+        <div className="max-w-xl rounded-xl border border-amber-200 bg-amber-50 p-8 text-center">
+          <h3 className="mb-1 text-sm font-semibold text-amber-800">Upload window closed</h3>
+          <p className="text-xs text-amber-700">The cutoff date has passed and no photograph was submitted. Contact Talent Development if you need an exception.</p>
           <Link to="/participant/dashboard" className="mt-4 inline-block text-xs text-[#1e4d8c] font-medium hover:underline">← Back to Dashboard</Link>
         </div>
       ) : (

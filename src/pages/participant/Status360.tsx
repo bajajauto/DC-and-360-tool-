@@ -114,7 +114,7 @@ export default function Status360() {
       </div>
 
       <p className="text-xs text-gray-400 text-center mt-4">
-        Your 360 report will be auto-generated once all responses are in or the cutoff date passes.
+        Your 360° Feedback Report will be auto-generated once all responses are in or the cutoff date passes.
       </p>
     </div>
   )

@@ -57,7 +57,7 @@ ${signature}`,
   {
     templateId: 'nom-reminder',
     phase: '360 Cycle',
-    trigger: 'Nomination deadline approaching, list not yet submitted',
+    trigger: 'Automatic at T-3 and T-1 before nomination deadline, if not submitted',
     recipient: 'Participant',
     subject: 'Reminder | Submit your 360 nominations by {{Nomination Deadline}}',
     body: `Dear {{Participant Name}},
@@ -120,7 +120,7 @@ Please note:
 - You can track response progress on the Tool at any time.
 - You will not be able to see who has said what. Feedback is shown only as group aggregates.
 
-Your 360 Degree Feedback report is confidential and shall be shared and used with utmost discretion by Managers, HR, and Assessors.
+Your 360° Feedback Report is confidential and shall be shared and used with utmost discretion by Managers, HR, and Assessors.
 
 ${support}
 
@@ -153,7 +153,7 @@ ${signature}`,
   {
     templateId: 'resp-reminder',
     phase: '360 Cycle',
-    trigger: 'Scheduled or manual reminder to respondents yet to submit',
+    trigger: 'Automatic final reminder at T-1 before the 360 cutoff, if pending',
     recipient: 'Respondent',
     subject: 'Reminder | 360 Degree Feedback for {{Participant Name}} is pending',
     body: `Dear {{Respondent Name}},
@@ -174,7 +174,7 @@ ${signature}`,
   {
     templateId: 'stage-deadline-reminder',
     phase: 'Documents',
-    trigger: 'Pre-work deadline approaching, one or more items pending',
+    trigger: 'Automatic at T-3 and T-1 before each document deadline, if pending',
     recipient: 'Participant',
     subject: 'Reminder | Complete your DC pre-work by {{Prework Deadline}}',
     body: `Dear {{Participant Name}},
@@ -194,14 +194,14 @@ ${signature}`,
   {
     templateId: 'report-360-released',
     phase: 'Reports',
-    trigger: 'TD Admin switches on 360 report visibility for a participant',
+    trigger: 'TD Admin switches on 360° Feedback Report visibility for a participant',
     recipient: 'Participant',
-    subject: 'Your 360 Degree Feedback Report is now available',
+    subject: 'Your 360° Feedback Report is now available',
     body: `Dear {{Participant Name}},
 
 Thank you for participating in the 360 Degree Feedback process.
 
-Your 360 Degree Feedback Report is now available to view and download on the Bajaj Auto 360/DC Tool under My Reports.
+Your 360° Feedback Report is now available to view and download on the Bajaj Auto 360/DC Tool under My Reports.
 
 As you read the report:
 1. Please go through the How to Read This Report pages first.
@@ -249,7 +249,7 @@ ${signature}`,
   {
     templateId: 'low-response-alert',
     phase: '360 Cycle',
-    trigger: 'Three days before cutoff, minimum response requirements are not met',
+    trigger: 'Automatic at T-3 before the 360 cutoff, if thresholds are not met',
     recipient: 'Participant',
     subject: 'Action needed | Your 360 may not generate a complete report',
     body: `Dear {{Participant Name}},
@@ -288,7 +288,7 @@ ${signature}`,
   {
     templateId: 'daily-360-status',
     phase: '360 Cycle',
-    trigger: 'Daily from launch until the window closes while responses are outstanding',
+    trigger: 'Automatic daily from launch until cutoff while responses are outstanding',
     recipient: 'Participant',
     subject: 'Your 360 status | {{Responded Count}} of {{Respondent Count}} responses received',
     body: `Dear {{Participant Name}},

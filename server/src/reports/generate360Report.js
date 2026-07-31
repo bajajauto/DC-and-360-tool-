@@ -1,7 +1,9 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { getBehaviourIds, getSurveySections, SURVEY_SECTIONS } from '../../../src/data/surveyConfig.js'
+import Docxtemplater from 'docxtemplater'
+import PizZip from 'pizzip'
+import { SURVEY_SECTIONS, getBehaviourIds, getSurveySections } from '../../../src/data/surveyConfig.js'
 import { httpError } from '../utils/httpError.js'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -12,6 +14,16 @@ const serverRoot = path.resolve(__dirname, '..', '..')
 const reportsDirectory = process.env.REPORTS_DIR
   ? path.resolve(process.env.REPORTS_DIR)
   : path.join(serverRoot, 'generated', 'reports')
+// Templates ship with the deployment, so these stay relative to the app directory.
+const pptxTemplatePath = path.join(serverRoot, 'templates', '360-report', 'template.pptx')
+const htmlTemplatePath = path.join(serverRoot, 'templates', '360-report', 'template.html')
+
+let cachedHtmlTemplate = null
+
+async function loadHtmlTemplate() {
+  if (!cachedHtmlTemplate) cachedHtmlTemplate = await fs.readFile(htmlTemplatePath, 'utf8')
+  return cachedHtmlTemplate
+}
 
 function hasCutoffPassed(cutoff, now = new Date()) {
   if (!cutoff) return false
@@ -20,7 +32,9 @@ function hasCutoffPassed(cutoff, now = new Date()) {
   return now > endOfCutoffDay
 }
 
-const GROUP_KEYS = ['self', 'others', 'dr', 'rm', 'skip', 'peer', 'ic']
+// self/rm/skip always show with >=1 respondent; others/dr/peer need >=2 (confidentiality, Rule 2)
+const GROUP_KEYS = ['self', 'others', 'rm', 'skip', 'dr', 'peer']
+const ALWAYS_VISIBLE_GROUPS = new Set(['self', 'rm', 'skip'])
 
 const RELATIONSHIP_GROUPS = {
   SELF: 'self',
@@ -34,8 +48,6 @@ const RELATIONSHIP_GROUPS = {
   'Peer / Internal Customer': 'peer',
   DIRECT_REPORT: 'dr',
   'Direct Report': 'dr',
-  INTERNAL_CUSTOMER: 'ic',
-  'Internal Customer': 'ic',
 }
 
 const COMPETENCY_OVERVIEW_CODES = {
@@ -84,8 +96,9 @@ function formatMonth(date = new Date()) {
   return date.toLocaleString('en-IN', { month: 'long', year: 'numeric' })
 }
 
+// Rule 2: suppressed cells are blank, never 0 or a dash.
 function formatScore(value) {
-  if (value === null || value === undefined || Number.isNaN(value)) return '-'
+  if (value === null || value === undefined || Number.isNaN(value)) return ''
   return Number(value).toFixed(1)
 }
 
@@ -95,15 +108,23 @@ function average(values) {
   return valid.reduce((sum, value) => sum + value, 0) / valid.length
 }
 
-function scoreGap(selfScore, othersScore) {
-  if (selfScore === null || othersScore === null) return '-'
+// Inline SVG rather than a Unicode glyph: the template's fonts are subsetted to the
+// characters used in the original design, so an arrow character risks silently not
+// rendering. A vector shape renders regardless of font coverage.
+const GAP_ARROW_UP = '▲'
+const GAP_ARROW_DOWN = '▼'
+
+// Rule 3: gap arrows, threshold 0.75, only when Others is itself shown.
+function gapArrow(selfScore, othersScore) {
+  if (selfScore === null || othersScore === null) return ''
   const gap = selfScore - othersScore
-  if (Math.abs(gap) < 0.05) return '0.0'
-  return `${gap > 0 ? '+' : ''}${gap.toFixed(1)}`
+  if (gap >= 0.75) return GAP_ARROW_UP
+  if (-gap >= 0.75) return GAP_ARROW_DOWN
+  return ''
 }
 
 function scoreIsVisible(group, respondentCount) {
-  if (['self', 'rm', 'skip', 'others'].includes(group)) return respondentCount > 0
+  if (ALWAYS_VISIBLE_GROUPS.has(group)) return respondentCount > 0
   return respondentCount >= 2
 }
 
@@ -113,6 +134,8 @@ function getTaskRating(task, behaviourId) {
   return typeof value === 'number' ? value : null
 }
 
+// Rule 1 (Others aggregation) + Rule 2 (suppression). Skip/BU Head NA (Rule 4) is
+// handled by the caller, which only passes seniorLeader-flagged behaviours here for skip.
 function getScore(tasks, behaviourIds, group) {
   const scopedTasks = group === 'others'
     ? tasks.filter((task) => relationshipGroup(task.relationship) !== 'self')
@@ -135,6 +158,15 @@ function getScore(tasks, behaviourIds, group) {
   return average(values)
 }
 
+// Rule 1: competency overall = mean of that competency's per-statement group means
+// (computed first at statement level), not a flat mean of every raw rating.
+function getCompetencyOverall(tasks, behaviourIds, group) {
+  const statementMeans = behaviourIds
+    .map((behaviourId) => getScore(tasks, [behaviourId], group))
+    .filter((value) => value !== null)
+  return average(statementMeans)
+}
+
 function countByGroup(items, getRelationship) {
   return items.reduce((counts, item) => {
     const group = relationshipGroup(getRelationship(item))
@@ -143,62 +175,74 @@ function countByGroup(items, getRelationship) {
   }, {})
 }
 
-function collectSectionComments(tasks, sectionId, key, group = 'others') {
+// Autofilled from respondent free text, per the product decision to not require a
+// separate TD-coach authoring step: pool non-self respondents for start/stop/continue,
+// and use the participant's own self-form text for the "self reflections" box.
+function collectSectionComments(tasks, sectionId, key) {
   const comments = []
-
   for (const task of tasks) {
-    const taskGroup = relationshipGroup(task.relationship)
-    if (group === 'others' && taskGroup === 'self') continue
-    if (group !== 'others' && taskGroup !== group) continue
-
+    if (relationshipGroup(task.relationship) === 'self') continue
     const value = task.responses?.[0]?.sectionSsc?.[sectionId]?.[key]
-    if (typeof value === 'string' && value.trim()) {
-      comments.push(value.trim())
-    }
+    if (typeof value === 'string' && value.trim()) comments.push(value.trim())
   }
+  if (!comments.length) return ''
+  return [...new Set(comments)].join(' ')
+}
 
-  if (!comments.length) return '-'
-  return [...new Set(comments)].join('; ')
+function collectSelfReflection(tasks, sectionId) {
+  const selfTask = tasks.find((task) => relationshipGroup(task.relationship) === 'self')
+  const sectionSsc = selfTask?.responses?.[0]?.sectionSsc?.[sectionId]
+  if (!sectionSsc) return ''
+  return ['start', 'stop', 'continue']
+    .map((key) => (typeof sectionSsc[key] === 'string' ? sectionSsc[key].trim() : ''))
+    .filter(Boolean)
+    .join(' ')
 }
 
 function buildReportTokens(participant) {
   const submittedTasks = participant.feedbackTasks.filter((task) => task.status === 'SUBMITTED')
   const nominatedCounts = countByGroup(participant.nominees, (nominee) => nominee.relationship)
   const respondedCounts = countByGroup(submittedTasks, (task) => task.relationship)
+  const peerIcNom = nominatedCounts.peer || 0
+  const peerIcResp = respondedCounts.peer || 0
+  const totalNom = (nominatedCounts.rm || 0) + (nominatedCounts.skip || 0) + peerIcNom + (nominatedCounts.dr || 0)
+  const totalResp = submittedTasks.length
+
   const tokens = {
-    ticket_id: participant.user.employeeId || '-',
-    cohort: participant.cohort?.name || '-',
+    ticket_id: participant.user.employeeId || '',
+    cohort: participant.cohort?.name || '',
     report_month: formatMonth(),
-    participant_name: participant.user.name || '-',
-    designation: participant.user.designation || '-',
-    business_unit: participant.user.businessUnit || '-',
-    reporting_manager: participant.masterData?.reportingManagerName || '-',
-    skip_manager: participant.masterData?.skipManagerName || '-',
-    bu_head: participant.masterData?.buHeadName || '-',
-    buhr: participant.masterData?.buhrName || '-',
+    participant_name: participant.user.name || '',
     mix_self_resp: String(respondedCounts.self || 0),
     mix_rm_resp: String(respondedCounts.rm || 0),
+    mix_skip_nom: String(nominatedCounts.skip || 0),
     mix_skip_resp: String(respondedCounts.skip || 0),
-    mix_peer_ic_resp: String((respondedCounts.peer || 0) + (respondedCounts.ic || 0)),
+    mix_peer_ic_nom: String(peerIcNom),
+    mix_peer_ic_resp: String(peerIcResp),
+    mix_dr_nom: String(nominatedCounts.dr || 0),
     mix_dr_resp: String(respondedCounts.dr || 0),
-    mix_total_resp: String(submittedTasks.length),
+    mix_total_nom: String(totalNom),
+    mix_total_resp: String(totalResp),
   }
 
   BEHAVIOURS.forEach((behaviour, index) => {
     const key = `s${String(index + 1).padStart(2, '0')}`
     for (const group of GROUP_KEYS) {
-      tokens[`${key}_${group}`] = formatScore(getScore(submittedTasks, [behaviour.id], group))
+      if (group === 'skip' && !behaviour.seniorLeader) {
+        tokens[`${key}_${group}`] = 'NA' // Rule 4: outside Skip/BU Head's 15-statement subset
+      } else {
+        tokens[`${key}_${group}`] = formatScore(getScore(submittedTasks, [behaviour.id], group))
+      }
     }
   })
 
   for (const section of SURVEY_SECTIONS) {
     const sectionNumber = SECTION_NUMBER_BY_ID[section.id]
     if (!sectionNumber) continue
-
     tokens[`ssc_sec${sectionNumber}_start`] = collectSectionComments(submittedTasks, section.id, 'start')
     tokens[`ssc_sec${sectionNumber}_stop`] = collectSectionComments(submittedTasks, section.id, 'stop')
     tokens[`ssc_sec${sectionNumber}_continue`] = collectSectionComments(submittedTasks, section.id, 'continue')
-    tokens[`ssc_sec${sectionNumber}_self`] = collectSectionComments(submittedTasks, section.id, 'continue', 'self')
+    tokens[`ssc_sec${sectionNumber}_self`] = collectSelfReflection(submittedTasks, section.id)
   }
 
   for (const section of SURVEY_SECTIONS) {
@@ -207,23 +251,26 @@ function buildReportTokens(participant) {
       if (!overviewCode) continue
 
       const behaviourIds = competency.behaviours.map((behaviour) => behaviour.id)
-      const selfScore = getScore(submittedTasks, behaviourIds, 'self')
-      const othersScore = getScore(submittedTasks, behaviourIds, 'others')
+      const seniorLeaderBehaviourIds = competency.behaviours.filter((behaviour) => behaviour.seniorLeader).map((behaviour) => behaviour.id)
+
+      const selfScore = getCompetencyOverall(submittedTasks, behaviourIds, 'self')
+      const othersScore = getCompetencyOverall(submittedTasks, behaviourIds, 'others')
       tokens[`ov_${overviewCode}_self`] = formatScore(selfScore)
       tokens[`ov_${overviewCode}_others`] = formatScore(othersScore)
-      tokens[`ov_${overviewCode}_gap`] = scoreGap(selfScore, othersScore)
+      tokens[`ov_${overviewCode}_gap`] = gapArrow(selfScore, othersScore)
+
+      tokens[`${overviewCode}_ov_self`] = tokens[`ov_${overviewCode}_self`]
+      tokens[`${overviewCode}_ov_others`] = tokens[`ov_${overviewCode}_others`]
+      tokens[`${overviewCode}_ov_rm`] = formatScore(getCompetencyOverall(submittedTasks, behaviourIds, 'rm'))
+      tokens[`${overviewCode}_ov_skip`] = seniorLeaderBehaviourIds.length
+        ? formatScore(getCompetencyOverall(submittedTasks, seniorLeaderBehaviourIds, 'skip'))
+        : 'NA'
+      tokens[`${overviewCode}_ov_dr`] = formatScore(getCompetencyOverall(submittedTasks, behaviourIds, 'dr'))
+      tokens[`${overviewCode}_ov_peer`] = formatScore(getCompetencyOverall(submittedTasks, behaviourIds, 'peer'))
     }
   }
 
-  return {
-    tokens,
-    nominatedCounts: [
-      nominatedCounts.skip || 0,
-      (nominatedCounts.peer || 0) + (nominatedCounts.ic || 0),
-      nominatedCounts.dr || 0,
-    ],
-    scoreFallback: '-',
-  }
+  return tokens
 }
 
 export async function getParticipantForReport(db, participantId) {
@@ -271,57 +318,244 @@ export async function getParticipantForReport(db, participantId) {
     return requiredIds.some((id) => !Number.isFinite(ratings[id]) || ratings[id] < 1 || ratings[id] > 4)
   })
   if (incompleteTasks.length && !hasCutoffPassed(participant.cohort?.threeSixtyCutoff)) {
-    throw httpError(409, `360 report cannot be generated: ${incompleteTasks.length} respondent${incompleteTasks.length === 1 ? ' has' : 's have'} not submitted all required ratings`)
+    throw httpError(409, `360° Feedback Report cannot be generated: ${incompleteTasks.length} respondent${incompleteTasks.length === 1 ? ' has' : 's have'} not submitted all required ratings`)
   }
 
   return participant
 }
 
-function escapeHtml(value) {
-  return String(value ?? '-').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character])
+const PDF = {
+  ink: '#34342f',
+  brown: '#a55f3e',
+  tan: '#c89b76',
+  cream: '#fbf3d6',
+  pale: '#f0dfb5',
+  green: '#a8bd61',
+  white: '#ffffff',
 }
 
-function scoreCell(tokens, index, group) {
-  return `<td>${escapeHtml(tokens[`s${String(index).padStart(2, '0')}_${group}`])}</td>`
+function addPage(doc, title, eyebrow = '') {
+  doc.addPage({ size: 'A4', margin: 46, layout: 'portrait' })
+  doc.rect(0, 0, doc.page.width, doc.page.height).fill(PDF.cream)
+  if (eyebrow) doc.fillColor(PDF.brown).font('Helvetica-Bold').fontSize(10).text(eyebrow.toUpperCase(), 46, 42)
+  doc.fillColor(PDF.white).rect(46, 66, doc.page.width - 92, 36).fill(PDF.green)
+  doc.fillColor(PDF.white).font('Helvetica-Bold').fontSize(17).text(title, 58, 76, { width: doc.page.width - 116 })
+  doc.fillColor('#795f50').font('Helvetica').fontSize(7)
+    .text('Bajaj Auto Ltd · 360 Feedback Confidential Report', 46, doc.page.height - 30, { width: doc.page.width - 92 })
+  doc.moveTo(46, doc.page.height - 35).lineTo(doc.page.width - 46, doc.page.height - 35).strokeColor(PDF.tan).stroke()
 }
 
-function reportHtml(participant, replacements) {
-  const { tokens } = replacements
+function textBlock(doc, text, x, y, width, options = {}) {
+  doc.fillColor(options.color || PDF.ink)
+    .font(options.bold ? 'Helvetica-Bold' : 'Helvetica')
+    .fontSize(options.size || 10)
+    .text(String(text || ''), x, y, { width, lineGap: options.lineGap ?? 3 })
+}
+
+function drawTable(doc, columns, rows, startY, options = {}) {
+  const x = 46
+  const width = doc.page.width - 92
+  const widths = columns.map((column) => column.width * width)
+  const headerHeight = options.headerHeight || 28
+  let y = startY
+
+  doc.rect(x, y, width, headerHeight).fill(PDF.tan)
+  let cellX = x
+  columns.forEach((column, index) => {
+    textBlock(doc, column.label, cellX + 5, y + 8, widths[index] - 10, { size: 7, bold: true, color: PDF.ink })
+    cellX += widths[index]
+  })
+  y += headerHeight
+
+  rows.forEach((row, rowIndex) => {
+    const rowHeight = Math.max(options.rowHeight || 30, ...row.map((value, index) =>
+      doc.heightOfString(String(value ?? ''), { width: widths[index] - 10 }) + 12,
+    ))
+    if (y + rowHeight > doc.page.height - 48) return
+    if (rowIndex % 2) doc.rect(x, y, width, rowHeight).fill('#ead8a8')
+    cellX = x
+    row.forEach((value, index) => {
+      textBlock(doc, value, cellX + 5, y + 6, widths[index] - 10, {
+        size: index === 0 ? 7.3 : 8,
+        bold: index === 0,
+      })
+      cellX += widths[index]
+    })
+    doc.rect(x, y, width, rowHeight).strokeColor('#7d6c5b').lineWidth(0.35).stroke()
+    y += rowHeight
+  })
+  return y
+}
+
+function drawCover(doc, tokens) {
+  doc.addPage({ size: 'A4', margin: 0 })
+  doc.rect(0, 0, doc.page.width, doc.page.height).fill(PDF.brown)
+  doc.rect(0, doc.page.height * 0.62, doc.page.width, doc.page.height * 0.38).fill(PDF.green)
+  textBlock(doc, '360° FEEDBACK\nREPORT', 54, 150, 480, { size: 35, bold: true, color: PDF.white, lineGap: 1 })
+  textBlock(doc, tokens.participant_name, 56, 270, 470, { size: 22, bold: true, color: PDF.white })
+  textBlock(doc, `Employee ID  ${tokens.ticket_id}`, 56, 332, 230, { size: 10, color: PDF.white })
+  textBlock(doc, `Cohort  ${tokens.cohort}`, 300, 332, 240, { size: 10, color: PDF.white })
+  textBlock(doc, `Report period  ${tokens.report_month}`, 56, 360, 350, { size: 10, color: PDF.white })
+  textBlock(doc, 'CONFIDENTIAL DEVELOPMENT REPORT', 56, 760, 400, { size: 9, bold: true, color: PDF.white })
+}
+
+function drawRespondentMix(doc, tokens) {
+  addPage(doc, 'Who contributed', 'Your respondent mix')
+  const items = [
+    ['Self', tokens.mix_self_resp],
+    ['Reporting Manager', tokens.mix_rm_resp],
+    ['Skip Manager / BU Head', tokens.mix_skip_resp],
+    ['Peers / Internal Customers', tokens.mix_peer_ic_resp],
+    ['Direct Reports', tokens.mix_dr_resp],
+    ['Total responses', tokens.mix_total_resp],
+  ]
+  items.forEach(([label, value], index) => {
+    const column = index % 2
+    const row = Math.floor(index / 2)
+    const x = 46 + column * 252
+    const y = 138 + row * 150
+    doc.roundedRect(x, y, 230, 120, 5).fillAndStroke(PDF.pale, PDF.tan)
+    textBlock(doc, value, x + 18, y + 20, 190, { size: 27, bold: true, color: PDF.brown })
+    textBlock(doc, label, x + 18, y + 67, 190, { size: 10, bold: true })
+  })
+}
+
+function drawOverview(doc, tokens) {
+  addPage(doc, 'Self vs Others', 'Feedback overview')
+  textBlock(doc, 'Compare your self-rating with the average from all other respondents. Arrows indicate a gap of 0.75 or more.', 46, 122, 500, { size: 9 })
+  const competencies = [
+    ['gi', 'Generates Ideas'], ['spc', 'Solves Problems Creatively'], ['cipc', 'Champions Improvement & Positive Change'],
+    ['dep', 'Develops and Engages People'], ['amt', 'Aligns and Motivates Team'], ['cai', 'Collaborates with All Interfaces'],
+    ['icex', 'Inculcates a Culture of Excellence'], ['acfs', 'Anticipates Changes & Formulates Strategy'],
+  ]
+  const rows = competencies.map(([code, label]) => {
+    const self = tokens[`ov_${code}_self`]
+    const others = tokens[`ov_${code}_others`]
+    const gap = self && others ? Number(self) - Number(others) : null
+    return [label, self, others, gap === null || Math.abs(gap) < 0.75 ? '' : gap > 0 ? '▲' : '▼']
+  })
+  drawTable(doc, [
+    { label: 'Competency', width: 0.55 },
+    { label: 'Self', width: 0.15 },
+    { label: 'Others', width: 0.15 },
+    { label: 'Gap', width: 0.15 },
+  ], rows, 158, { rowHeight: 40 })
+}
+
+function drawCompetencyPages(doc, tokens) {
   let behaviourIndex = 0
-  const sections = SURVEY_SECTIONS.map((section, sectionIndex) => {
-    const competencyPages = section.competencies.map((competency) => {
+  SURVEY_SECTIONS.forEach((section, sectionIndex) => {
+    section.competencies.forEach((competency) => {
+      addPage(doc, `${competency.title} (${competency.shortCode})`, `Section ${sectionIndex + 1}: ${section.title}`)
       const rows = competency.behaviours.map((behaviour) => {
         behaviourIndex += 1
-        return `<tr><th>${escapeHtml(behaviour.text)}</th>${['self', 'others', 'rm', 'skip', 'peer', 'dr', 'ic'].map((group) => scoreCell(tokens, behaviourIndex, group)).join('')}</tr>`
-      }).join('')
-      return `<section class="page"><div class="page-no">${String(sectionIndex + 7).padStart(2, '0')}</div><p class="eyebrow">SECTION ${sectionIndex + 1}: ${escapeHtml(section.title)}</p><h2>${escapeHtml(competency.title)} <span>(${escapeHtml(competency.shortCode)})</span></h2><p class="intro">Scores are aggregated by respondent group. A dash means the confidentiality threshold was not met.</p><table><thead><tr><th>Behaviour</th><th>Self</th><th>Others</th><th>Reporting Manager</th><th>Skip Manager / BU Head</th><th>Peers</th><th>Direct Reports</th><th>Internal Customers</th></tr></thead><tbody>${rows}</tbody></table></section>`
-    }).join('')
-    const n = sectionIndex + 1
-    return `${competencyPages}<section class="page feedback"><div class="page-no">${String(sectionIndex + 15).padStart(2, '0')}</div><p class="eyebrow">OVERALL FEEDBACK ON ${escapeHtml(section.title).toUpperCase()}</p><h2>Start. Stop. Continue.</h2><div class="feedback-grid"><article><h3>Start doing</h3><p>${escapeHtml(tokens[`ssc_sec${n}_start`])}</p></article><article><h3>Stop doing</h3><p>${escapeHtml(tokens[`ssc_sec${n}_stop`])}</p></article><article><h3>Continue doing</h3><p>${escapeHtml(tokens[`ssc_sec${n}_continue`])}</p></article><article><h3>Self reflections</h3><p>${escapeHtml(tokens[`ssc_sec${n}_self`])}</p></article></div></section>`
-  }).join('')
+        const key = `s${String(behaviourIndex).padStart(2, '0')}`
+        return [
+          behaviour.text,
+          tokens[`${key}_self`],
+          tokens[`${key}_others`],
+          tokens[`${key}_rm`],
+          tokens[`${key}_skip`],
+          tokens[`${key}_peer`],
+          tokens[`${key}_dr`],
+        ]
+      })
+      drawTable(doc, [
+        { label: 'Behaviour', width: 0.4 },
+        { label: 'Self', width: 0.1 },
+        { label: 'Others', width: 0.1 },
+        { label: 'RM', width: 0.1 },
+        { label: 'Skip / BU', width: 0.1 },
+        { label: 'Peers', width: 0.1 },
+        { label: 'Directs', width: 0.1 },
+      ], rows, 126, { rowHeight: 54 })
+    })
 
-  const overviewRows = [
-    ['gi', 'Generates Ideas'], ['spc', 'Solves Problems Creatively'], ['cipc', 'Champions Improvement & Positive Change'],
-    ['dep', 'Develops and Engages People'], ['amt', 'Aligns and Motivates Team'], ['cai', 'Collaborate with All Interfaces'],
-    ['icex', 'Inculcates a Culture of Excellence'], ['acfs', 'Anticipates Changes & Formulates Strategy'],
-  ].map(([code, label]) => `<tr><th>${label}</th><td>${escapeHtml(tokens[`ov_${code}_self`])}</td><td>${escapeHtml(tokens[`ov_${code}_others`])}</td><td>${escapeHtml(tokens[`ov_${code}_gap`])}</td></tr>`).join('')
-
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${escapeHtml(tokens.participant_name)} — 360 Feedback Report</title><style>
-  :root{font-family:Arial,Helvetica,sans-serif;color:#34342f;background:#1f1f1b}*{box-sizing:border-box}body{margin:0}.page{position:relative;width:210mm;min-height:297mm;margin:10mm auto;padding:18mm 16mm 16mm;background-color:#fbf3d6;background-image:radial-gradient(#9b8b5b18 .55px,transparent .7px),radial-gradient(#fff8df80 .7px,transparent .9px);background-position:0 0,4px 5px;background-size:7px 7px,9px 9px;page-break-after:always;overflow:hidden;box-shadow:0 4px 24px #0008}.page:last-child{page-break-after:auto}.page:after{content:'Bajaj Auto Ltd · 360 Feedback Confidential Report';position:absolute;left:16mm;right:16mm;bottom:8mm;border-top:1px solid #bd805d;padding-top:3mm;color:#795f50;font-size:8pt}.cover{color:#fff;background:linear-gradient(145deg,#76472f,#bb7754 55%,#a7ba60)}.cover:after{color:#fff4d7;border-color:#f4d8b5}.cover h1,.page h2,.eyebrow{font-family:Impact,'Arial Narrow',Arial,sans-serif;text-transform:uppercase}.cover h1{font-size:36pt;line-height:1.02;margin:75mm 0 8mm}.cover .name{font-size:22pt;font-weight:700}.meta{display:grid;grid-template-columns:1fr 1fr;gap:5mm;margin-top:15mm}.meta div{border-top:1px solid #eed6b9;padding-top:3mm}.page-no{position:absolute;right:16mm;top:12mm;color:#776f5d;font-weight:700}.eyebrow{display:inline-block;color:#b87450;font-size:22pt;font-weight:800;letter-spacing:-.03em;margin:0 0 6mm}.page h2{font-size:17pt;color:#fff;margin:0 0 4mm;padding:3mm 4mm;background:#a8bd61}.page h2 span{font-size:12pt;color:#fff}.intro{color:#615b4e;line-height:1.55;max-width:165mm;font-style:italic}table{width:100%;border-collapse:collapse;margin-top:6mm;font-size:8pt}th,td{border:0;border-right:1px solid #443b31;padding:2.6mm;text-align:center}th:first-child{text-align:left;width:34%}thead th{background:#c89b76;color:#29251f;border-top:1px solid #443b31;border-bottom:1px solid #443b31;font-weight:500}tbody tr:nth-child(even){background:#ead8a8aa}tbody tr:last-child{border-bottom:1px solid #443b31}.hero{margin:20mm 0 12mm;font-family:Georgia,serif;font-size:28pt;line-height:1.16;color:#9a5e42}.callout{padding:8mm;background:#efe0b5aa;border-left:4px solid #a8bd61;line-height:1.7}.mix{display:grid;grid-template-columns:repeat(3,1fr);gap:5mm;margin-top:12mm}.mix article{padding:7mm;border:1px solid #c9a77d;background:#f7e9c4aa}.mix strong{display:block;font-size:25pt;color:#a55f3e}.feedback-grid{display:grid;grid-template-columns:1fr 1fr;gap:7mm;margin-top:12mm}.feedback article{min-height:72mm;padding:8mm;background:#f0dfb5aa;border-top:4px solid #a8bd61}.feedback h3{color:#9b5d3d}.feedback p{white-space:pre-wrap;line-height:1.65}.questions{display:grid;grid-template-columns:1fr 1fr;gap:7mm}.questions article{min-height:58mm;padding:7mm;border:1px solid #caa881;background:#f8eccbaa}.questions h3{color:#95583c}@media print{body{background:#fff}.page{margin:0;box-shadow:none}@page{size:A4;margin:0}}@media(max-width:850px){.page{width:100%;margin:0;min-height:100vh}.feedback-grid,.questions{grid-template-columns:1fr}}
-  </style></head><body>
-  <section class="page cover"><h1>360° Feedback<br>Report</h1><div class="name">${escapeHtml(tokens.participant_name)}</div><div class="meta"><div>Employee ID<br><strong>${escapeHtml(tokens.ticket_id)}</strong></div><div>Cohort<br><strong>${escapeHtml(tokens.cohort)}</strong></div><div>Designation<br><strong>${escapeHtml(tokens.designation)}</strong></div><div>Business Unit<br><strong>${escapeHtml(tokens.business_unit)}</strong></div><div>Reporting Manager<br><strong>${escapeHtml(tokens.reporting_manager)}</strong></div><div>Report period<br><strong>${escapeHtml(tokens.report_month)}</strong></div></div></section>
-  <section class="page"><div class="page-no">02</div><p class="eyebrow">Welcome</p><div class="hero">Feedback is most useful when it becomes a thoughtful conversation—and then deliberate action.</div><div class="callout">This report brings together your self-perception and aggregated feedback from the people you work with. It is developmental and will be shared with your manager and HR team. Look for themes, strengths to use deliberately, and one or two focused growth priorities.</div></section>
-  <section class="page"><div class="page-no">03</div><p class="eyebrow">How to read this report</p><h2>Rating scale</h2><table><thead><tr><th>Rating</th><th>1</th><th>2</th><th>3</th><th>4</th><th>NA</th></tr></thead><tbody><tr><th>Meaning</th><td>Rarely</td><td>Occasionally</td><td>Often</td><td>Almost Always</td><td>Not observed</td></tr></tbody></table><div class="callout" style="margin-top:15mm">Individual responses are never shown. Scores appear only as aggregates. Peer, Direct Report and Internal Customer scores require at least two respondents; Self, Reporting Manager and Skip Manager may appear with one.</div></section>
-  <section class="page"><div class="page-no">04</div><p class="eyebrow">Your respondent mix</p><h2>Who contributed</h2><div class="mix"><article><strong>${escapeHtml(tokens.mix_self_resp)}</strong>Self</article><article><strong>${escapeHtml(tokens.mix_rm_resp)}</strong>Reporting Manager</article><article><strong>${escapeHtml(tokens.mix_skip_resp)}</strong>Skip Manager / BU Head</article><article><strong>${escapeHtml(tokens.mix_peer_ic_resp)}</strong>Peers / Internal Customers</article><article><strong>${escapeHtml(tokens.mix_dr_resp)}</strong>Direct Reports</article><article><strong>${escapeHtml(tokens.mix_total_resp)}</strong>Total responses</article></div></section>
-  <section class="page"><div class="page-no">05</div><p class="eyebrow">Feedback overview</p><h2>Self vs Others</h2><p class="intro">Compare your self-rating with the average from all other respondents. Positive gaps mean your self-rating is higher.</p><table><thead><tr><th>Competency</th><th>Self</th><th>Others</th><th>Gap</th></tr></thead><tbody>${overviewRows}</tbody></table></section>
-  ${sections}
-  <section class="page"><p class="eyebrow">Your reflection workbook</p><h2>Turn insight into action</h2><div class="questions">${['What stood out when I first read this report?','Where does the feedback match how I see myself?','Where does it differ, and what might explain the gap?','Which 2–3 strengths will I use more deliberately?','Which 2–3 areas will I develop over the next 9–12 months?','What specific actions will I take, and by when?','Who will I ask for support?','When will I review my progress?'].map((question, index) => `<article><h3>${index + 1}. ${question}</h3></article>`).join('')}</div></section>
-  </body></html>`
+    const number = SECTION_NUMBER_BY_ID[section.id]
+    addPage(doc, 'Start. Stop. Continue.', `Overall feedback on ${section.title}`)
+    const cards = [
+      ['Start doing', tokens[`ssc_sec${number}_start`]],
+      ['Stop doing', tokens[`ssc_sec${number}_stop`]],
+      ['Continue doing', tokens[`ssc_sec${number}_continue`]],
+      ['Self reflections', tokens[`ssc_sec${number}_self`]],
+    ]
+    cards.forEach(([title, value], index) => {
+      const column = index % 2
+      const row = Math.floor(index / 2)
+      const x = 46 + column * 252
+      const y = 128 + row * 282
+      doc.roundedRect(x, y, 230, 250, 4).fillAndStroke(PDF.pale, PDF.tan)
+      textBlock(doc, title, x + 15, y + 16, 200, { size: 11, bold: true, color: PDF.brown })
+      textBlock(doc, value || 'No response provided.', x + 15, y + 45, 200, { size: 8.5, lineGap: 4 })
+    })
+  })
 }
 
-async function renderHtml(participant, replacements, outputPath) {
+async function renderPdf(tokens, outputPath) {
   await fs.mkdir(path.dirname(outputPath), { recursive: true })
-  await fs.writeFile(outputPath, reportHtml(participant, replacements), 'utf8')
+  const doc = new PDFDocument({ autoFirstPage: false, compress: true, info: { Title: '360° Feedback Report' } })
+  const chunks = []
+  doc.on('data', (chunk) => chunks.push(chunk))
+  const completed = new Promise((resolve, reject) => {
+    doc.on('end', resolve)
+    doc.on('error', reject)
+  })
+
+  drawCover(doc, tokens)
+  addPage(doc, 'Welcome', '360 feedback')
+  textBlock(doc, 'Feedback is most useful when it becomes a thoughtful conversation—and then deliberate action.', 62, 155, 470, { size: 24, bold: true, color: PDF.brown, lineGap: 8 })
+  doc.roundedRect(62, 330, 470, 170, 5).fill(PDF.pale)
+  textBlock(doc, 'This report brings together your self-perception and aggregated feedback from the people you work with. Look for themes, strengths to use deliberately, and one or two focused growth priorities.', 86, 365, 422, { size: 12, lineGap: 7 })
+  addPage(doc, 'Rating scale', 'How to read this report')
+  drawTable(doc, [
+    { label: 'Rating', width: 0.2 }, { label: '1', width: 0.16 }, { label: '2', width: 0.16 },
+    { label: '3', width: 0.16 }, { label: '4', width: 0.16 }, { label: 'NA', width: 0.16 },
+  ], [['Meaning', 'Rarely', 'Occasionally', 'Often', 'Almost Always', 'Not observed']], 145, { rowHeight: 58 })
+  textBlock(doc, 'Individual responses are never shown. Peer and Direct Report scores require at least two respondents; Self, Reporting Manager and Skip Manager may appear with one.', 62, 285, 470, { size: 11, lineGap: 6 })
+  drawRespondentMix(doc, tokens)
+  drawOverview(doc, tokens)
+  drawCompetencyPages(doc, tokens)
+
+  doc.end()
+  await completed
+  await fs.writeFile(outputPath, Buffer.concat(chunks))
+}
+
+async function renderPptx(tokens, outputPath) {
+  await fs.mkdir(path.dirname(outputPath), { recursive: true })
+  const template = await fs.readFile(pptxTemplatePath)
+  const zip = new PizZip(template)
+  const document = new Docxtemplater(zip, {
+    delimiters: { start: '{{', end: '}}' },
+    paragraphLoop: true,
+    linebreaks: true,
+    nullGetter: () => '',
+  })
+
+  document.render(tokens)
+  const output = document.getZip().generate({
+    type: 'nodebuffer',
+    compression: 'DEFLATE',
+  })
+  await fs.writeFile(outputPath, output)
+}
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (character) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  })[character])
+}
+
+export async function get360ReportPreviewHtml(db, participantId) {
+  const participant = await getParticipantForReport(db, participantId)
+  const tokens = buildReportTokens(participant)
+  const template = await loadHtmlTemplate()
+
+  return template.replace(/\{\{([a-z0-9_]+)\}\}/gi, (_match, tokenName) => escapeHtml(tokens[tokenName]))
 }
 
 async function saveReportRecord(db, participant, outputPath) {
@@ -356,11 +590,11 @@ async function saveReportRecord(db, participant, outputPath) {
 
 export async function generate360ReportForParticipant(db, participantId) {
   const participant = await getParticipantForReport(db, participantId)
-  const fileName = `${participantSlug(participant)}-360-report.html`
+  const fileName = `${participantSlug(participant)}-360-report.pptx`
   const outputPath = path.join(reportsDirectory, fileName)
-  const replacements = buildReportTokens(participant)
+  const tokens = buildReportTokens(participant)
 
-  await renderHtml(participant, replacements, outputPath)
+  await renderPptx(tokens, outputPath)
   const report = await saveReportRecord(db, participant, outputPath)
 
   await db.participant.update({
@@ -389,7 +623,7 @@ export async function getOrGenerate360Report(db, participantId) {
     orderBy: { updatedAt: 'desc' },
   })
 
-  if (existing?.fileUrl && path.extname(existing.fileUrl).toLowerCase() === '.html') {
+  if (existing?.fileUrl && path.extname(existing.fileUrl).toLowerCase() === '.pptx') {
     try {
       await fs.access(existing.fileUrl)
       return {
@@ -402,5 +636,5 @@ export async function getOrGenerate360Report(db, participantId) {
     }
   }
 
-  throw httpError(404, 'This 360 report has not been generated by Talent Development.')
+  throw httpError(404, 'This 360° Feedback Report has not been generated by Talent Development.')
 }

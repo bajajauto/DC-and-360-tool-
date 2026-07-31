@@ -8,17 +8,6 @@ import {
   hashMagicToken,
 } from '../utils/magicLinks.js'
 
-const STAGE_ORDER = [
-  'APPLICATION_PROFILE',
-  'ROLE_INTERVIEW',
-  'PHOTOGRAPH',
-  'PRE_WORK',
-  'NOMINEES_360',
-  'FEEDBACK_360',
-  'DC_ASSESSMENTS',
-  'COMPLETED',
-]
-
 const STAGE_ITEMS = [
   { stage: 'ROLE_INTERVIEW', deadlineField: 'roleInterviewDeadline', label: 'Role Interview' },
   { stage: 'PHOTOGRAPH', deadlineField: 'photoDeadline', label: 'Photograph' },
@@ -53,23 +42,83 @@ async function alreadyQueuedEver(db, templateId, entity, entityId) {
   return Boolean(existing)
 }
 
+function relationshipSummary(tasks) {
+  const stats = (relationship) => {
+    const group = tasks.filter((task) => task.relationship === relationship)
+    return { count: group.length, responded: group.filter((task) => task.status === 'SUBMITTED').length }
+  }
+  const self = stats('SELF')
+  const rm = stats('REPORTING_MANAGER')
+  const skip = stats('SKIP_MANAGER')
+  const dr = stats('DIRECT_REPORT')
+  const peer = stats('PEER')
+  const below = [
+    self.responded < 1 && 'Self',
+    rm.count > 0 && rm.responded < 1 && 'Reporting Manager',
+    skip.count > 0 && skip.responded < 1 && 'Skip / BU Head',
+    dr.count > 0 && dr.responded < 2 && 'Direct Reports',
+    peer.count > 0 && peer.responded < 2 && 'Peers / Stakeholders',
+  ].filter(Boolean)
+  return { self, rm, skip, dr, peer, below }
+}
+
+function responseStatusContext(participant) {
+  const tasks = participant.feedbackTasks || []
+  const summary = relationshipSummary(tasks)
+  const responded = tasks.filter((task) => task.status === 'SUBMITTED').length
+  const pendingNames = tasks
+    .filter((task) => task.relationship !== 'SELF' && task.status !== 'SUBMITTED')
+    .map((task) => task.nominee?.name || task.respondent?.name)
+    .filter(Boolean)
+    .join(', ')
+  const status = (count, minimum) => count >= minimum ? 'Minimum met' : 'Below minimum'
+  return {
+    'Participant Name': participant.user.name,
+    '360 Cutoff': formatDate(participant.cohort.threeSixtyCutoff),
+    'Days Remaining': participant.cohort.threeSixtyCutoff ? String(Math.max(0, daysUntil(participant.cohort.threeSixtyCutoff))) : '',
+    'Respondent Count': String(tasks.length),
+    'Responded Count': String(responded),
+    'Groups Below Threshold': summary.below.join(', ') || 'None',
+    'Pending Respondent Names': pendingNames || 'None',
+    'Self Responded': String(summary.self.responded),
+    'Self Status': status(summary.self.responded, 1),
+    'RM Count': String(summary.rm.count),
+    'RM Responded': String(summary.rm.responded),
+    'RM Status': status(summary.rm.responded, 1),
+    'Skip Count': String(summary.skip.count),
+    'Skip Responded': String(summary.skip.responded),
+    'Skip Status': status(summary.skip.responded, 1),
+    'DR Count': String(summary.dr.count),
+    'DR Responded': String(summary.dr.responded),
+    'DR Status': summary.dr.count ? status(summary.dr.responded, 2) : 'Not applicable',
+    'Peer Count': String(summary.peer.count),
+    'Peer Responded': String(summary.peer.responded),
+    'Peer Status': status(summary.peer.responded, 2),
+  }
+}
+
 // Role Interview / Photograph / Pre-Work deadline reminders (Section 8: T-3, T-1)
 async function sendStageDeadlineReminders(db) {
   for (const item of STAGE_ITEMS) {
-    const notDoneStages = STAGE_ORDER.slice(0, STAGE_ORDER.indexOf(item.stage) + 1)
     const participants = await db.participant.findMany({
-      where: { stage: { in: notDoneStages } },
       include: { user: true, cohort: true },
     })
 
     for (const participant of participants) {
+      const complete = item.stage === 'ROLE_INTERVIEW'
+        ? participant.roleInterview?.status === 'submitted'
+        : item.stage === 'PRE_WORK'
+          ? participant.preWork?.status === 'submitted'
+          : Boolean(participant.photoUrl)
+      if (complete) continue
       const deadline = participant.cohort[item.deadlineField]
       if (!deadline) continue
 
       const diff = daysUntil(deadline)
       if (diff !== 3 && diff !== 1) continue
 
-      if (await alreadyQueuedToday(db, 'stage-deadline-reminder', 'Participant', participant.id)) continue
+      const scheduleEntityId = `${participant.id}:${item.stage}`
+      if (await alreadyQueuedToday(db, 'stage-deadline-reminder', 'ParticipantTask', scheduleEntityId)) continue
 
       await queueEmail({
         templateId: 'stage-deadline-reminder',
@@ -84,11 +133,36 @@ async function sendStageDeadlineReminders(db) {
           'Pending Items': item.label,
           'Prework Deadline': formatDate(deadline),
         },
-        entity: 'Participant',
-        entityId: participant.id,
+        entity: 'ParticipantTask',
+        entityId: scheduleEntityId,
         metadata: { item: item.label, daysRemaining: diff },
       }, db)
     }
+  }
+}
+
+// Nomination reminders at T-3 and T-1 while the list is not submitted.
+async function sendNominationReminders(db) {
+  const participants = await db.participant.findMany({
+    include: { user: true, cohort: true, nominees: true },
+  })
+  for (const participant of participants) {
+    const deadline = participant.cohort.nominationDeadline
+    if (!deadline || ![3, 1].includes(daysUntil(deadline))) continue
+    const submitted = participant.nominees.length > 0 && participant.nominees.every((nominee) => nominee.status === 'SUBMITTED')
+    if (submitted || await alreadyQueuedToday(db, 'nom-reminder', 'Participant', participant.id)) continue
+    await queueEmail({
+      templateId: 'nom-reminder',
+      toEmail: participant.user.email,
+      toName: participant.user.name,
+      context: {
+        'Participant Name': participant.user.name,
+        'Nomination Deadline': formatDate(deadline),
+      },
+      entity: 'Participant',
+      entityId: participant.id,
+      metadata: { daysRemaining: daysUntil(deadline) },
+    }, db)
   }
 }
 
@@ -111,9 +185,12 @@ async function sendRespondentReminders(db) {
     const daysSinceLaunch = Math.floor((now - task.createdAt) / 86400000)
     if (daysSinceLaunch < 1) continue
 
-    if (daysSinceLaunch % 2 !== 0) continue
+    const remaining = task.dueAt ? daysUntil(task.dueAt) : null
+    const isFinalReminder = remaining === 1
+    if (!isFinalReminder && daysSinceLaunch % 2 !== 0) continue
+    const templateId = isFinalReminder ? 'resp-reminder' : 'resp-recurring-reminder'
 
-    if (await alreadyQueuedToday(db, 'resp-recurring-reminder', 'FeedbackTask', task.id)) continue
+    if (await alreadyQueuedToday(db, templateId, 'FeedbackTask', task.id)) continue
 
     const toEmail = task.nominee?.email || task.respondent?.email
     const toName = task.nominee?.name || task.respondent?.name
@@ -141,7 +218,7 @@ async function sendRespondentReminders(db) {
     })
 
     await queueEmail({
-      templateId: 'resp-recurring-reminder',
+      templateId,
       toEmail,
       toName,
       context: {
@@ -156,6 +233,48 @@ async function sendRespondentReminders(db) {
       entity: 'FeedbackTask',
       entityId: task.id,
     }, db)
+  }
+}
+
+// Participant status runs daily while at least one response is outstanding.
+async function sendDailyStatusAndLowResponseAlerts(db) {
+  const participants = await db.participant.findMany({
+    where: { stage: 'FEEDBACK_360' },
+    include: {
+      user: true,
+      cohort: true,
+      feedbackTasks: { include: { nominee: true, respondent: true } },
+    },
+  })
+  for (const participant of participants) {
+    const tasks = participant.feedbackTasks
+    if (!tasks.length || tasks.every((task) => task.status === 'SUBMITTED')) continue
+    const cutoff = participant.cohort.threeSixtyCutoff
+    if (cutoff && daysUntil(cutoff) < 0) continue
+    const context = responseStatusContext(participant)
+
+    if (!await alreadyQueuedToday(db, 'daily-360-status', 'Participant', participant.id)) {
+      await queueEmail({
+        templateId: 'daily-360-status',
+        toEmail: participant.user.email,
+        toName: participant.user.name,
+        context,
+        entity: 'Participant',
+        entityId: participant.id,
+      }, db)
+    }
+
+    if (cutoff && daysUntil(cutoff) === 3 && relationshipSummary(tasks).below.length
+      && !await alreadyQueuedEver(db, 'low-response-alert', 'Participant', participant.id)) {
+      await queueEmail({
+        templateId: 'low-response-alert',
+        toEmail: participant.user.email,
+        toName: participant.user.name,
+        context,
+        entity: 'Participant',
+        entityId: participant.id,
+      }, db)
+    }
   }
 }
 
@@ -199,11 +318,16 @@ async function sendThreeSixtyClosedNotices(db) {
 
 export async function runNotificationScheduler() {
   await sendStageDeadlineReminders(prisma)
+  await sendNominationReminders(prisma)
   await sendRespondentReminders(prisma)
+  await sendDailyStatusAndLowResponseAlerts(prisma)
   await sendThreeSixtyClosedNotices(prisma)
 }
 
 export function startNotificationScheduler() {
+  runNotificationScheduler().catch((error) => {
+    console.error('Initial notification scheduler run failed:', error)
+  })
   cron.schedule('0 */6 * * *', () => {
     runNotificationScheduler().catch((error) => {
       console.error('Notification scheduler run failed:', error)

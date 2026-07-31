@@ -5,7 +5,7 @@ import { asyncHandler } from '../middleware/asyncHandler.js'
 import { httpError } from '../utils/httpError.js'
 import { deriveTaskStatus, taskCompletionPercent, toParticipantSummary } from '../utils/mappers.js'
 import { hashPassword } from '../utils/passwords.js'
-import { queueEmail } from '../notifications/service.js'
+import { createQueuedEmail, sendEmail } from '../notifications/service.js'
 
 export const cohortsRouter = Router()
 
@@ -118,6 +118,8 @@ cohortsRouter.post('/', asyncHandler(async (req, res) => {
   const { participants: _rows, ...cohortData } = payload
   const passwordHash = await hashPassword(process.env.MOCK_USER_PASSWORD || 'Welcome@123')
 
+  const pendingEmailIds = []
+
   const cohort = await prisma.$transaction(async (tx) => {
     const created = await tx.cohort.create({ data: { ...cohortData, slug } })
     for (const row of participants) {
@@ -136,10 +138,13 @@ cohortsRouter.post('/', asyncHandler(async (req, res) => {
         update: { name: row.buhr.name, employeeId: row.buhr.employeeId, businessUnit: row.businessUnit, roles: ['BUHR'] },
         create: { name: row.buhr.name, email: row.buhr.email.toLowerCase(), employeeId: row.buhr.employeeId, businessUnit: row.businessUnit, passwordHash, roles: ['BUHR'] },
       })
-      await queueEmail({ templateId: 'welcome', toEmail: user.email, toName: user.name, context: { 'Participant Name': user.name, 'Participant Email': user.email, 'Participant Password': process.env.MOCK_USER_PASSWORD || 'Welcome@123', 'Login Link': process.env.APP_URL || 'http://localhost:5173', Cohort: created.name, 'Financial Year': financialYear(created.eventStart), 'Prework Deadline': created.preWorkDeadline?.toLocaleDateString('en-GB') || 'TBD' }, entity: 'Participant', entityId: participant.id }, tx)
+      const welcomeEmail = await createQueuedEmail({ templateId: 'welcome', toEmail: user.email, toName: user.name, context: { 'Participant Name': user.name, 'Participant Email': user.email, 'Participant Password': process.env.MOCK_USER_PASSWORD || 'Welcome@123', 'Login Link': process.env.APP_URL || 'http://localhost:5173', Cohort: created.name, 'Financial Year': financialYear(created.eventStart), 'Prework Deadline': created.preWorkDeadline?.toLocaleDateString('en-GB') || 'TBD' }, entity: 'Participant', entityId: participant.id }, tx)
+      pendingEmailIds.push(welcomeEmail.id)
     }
     return tx.cohort.findUnique({ where: { id: created.id }, include: { _count: { select: { participants: true } } } })
   })
+
+  await Promise.all(pendingEmailIds.map((id) => sendEmail(id)))
 
   res.status(201).json({ data: toCohortDto(cohort) })
 }))
@@ -172,7 +177,7 @@ cohortsRouter.get('/:cohortId/participants', asyncHandler(async (req, res) => {
       user: true,
       nominees: true,
       feedbackTasks: true,
-      reports: { where: { type: '360' }, orderBy: { updatedAt: 'desc' }, take: 1 },
+      reports: { orderBy: { updatedAt: 'desc' } },
       assessorReviews: { orderBy: { updatedAt: 'desc' }, take: 1 },
     },
   })
@@ -182,13 +187,26 @@ cohortsRouter.get('/:cohortId/participants', asyncHandler(async (req, res) => {
       const summary = toParticipantSummary(participant)
       const nomineesSubmitted = participant.nominees.length > 0 && participant.nominees.every((nominee) => nominee.status === 'SUBMITTED')
       const allResponsesComplete = summary.totalResponses > 0 && summary.responses === summary.totalResponses
+      const latest360Report = participant.reports.find((report) => report.type.toLowerCase() === '360') || null
       const taskStatus = deriveTaskStatus(participant, {
         allResponsesComplete,
         nomineesSubmitted,
-        latestReport: participant.reports[0] || null,
+        latestReport: latest360Report,
         latestAssessorReview: participant.assessorReviews[0] || null,
       })
-      return { ...summary, taskStatus, taskCompletionPercent: taskCompletionPercent(taskStatus) }
+      return {
+        ...summary,
+        nominationsSubmitted: nomineesSubmitted,
+        reports: participant.reports.map((report) => ({
+          id: report.id,
+          type: report.type.toLowerCase(),
+          status: report.status.toLowerCase(),
+          generatedAt: report.generatedAt?.toISOString() || null,
+          releasedAt: report.releasedAt?.toISOString() || null,
+        })),
+        taskStatus,
+        taskCompletionPercent: taskCompletionPercent(taskStatus),
+      }
     }),
   })
 }))
@@ -217,11 +235,13 @@ cohortsRouter.post('/:cohortId/participants', asyncHandler(async (req, res) => {
       data: { userId: user.id, cohortId: cohort.id, masterData: {}, stage: 'APPLICATION_PROFILE', progress: 0, reportStatus: 'WAITING', lastActivityAt: new Date() },
       include: { user: true, nominees: true, feedbackTasks: true },
     })
-    await queueEmail({ templateId: 'welcome', toEmail: user.email, toName: user.name, context: { 'Participant Name': user.name, 'Participant Email': user.email, 'Participant Password': process.env.MOCK_USER_PASSWORD || 'Welcome@123', 'Login Link': process.env.APP_URL || 'http://localhost:5173', Cohort: cohort.name, 'Financial Year': financialYear(cohort.eventStart), 'Prework Deadline': cohort.preWorkDeadline?.toLocaleDateString('en-GB') || 'TBD' }, entity: 'Participant', entityId: created.id }, tx)
-    return created
+    const welcomeEmail = await createQueuedEmail({ templateId: 'welcome', toEmail: user.email, toName: user.name, context: { 'Participant Name': user.name, 'Participant Email': user.email, 'Participant Password': process.env.MOCK_USER_PASSWORD || 'Welcome@123', 'Login Link': process.env.APP_URL || 'http://localhost:5173', Cohort: cohort.name, 'Financial Year': financialYear(cohort.eventStart), 'Prework Deadline': cohort.preWorkDeadline?.toLocaleDateString('en-GB') || 'TBD' }, entity: 'Participant', entityId: created.id }, tx)
+    return { created, welcomeEmailId: welcomeEmail.id }
   })
 
-  res.status(201).json({ data: toParticipantSummary(participant) })
+  await sendEmail(participant.welcomeEmailId)
+
+  res.status(201).json({ data: toParticipantSummary(participant.created) })
 }))
 
 cohortsRouter.delete('/:cohortId/participants/:participantId', asyncHandler(async (req, res) => {
