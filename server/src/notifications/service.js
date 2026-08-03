@@ -18,7 +18,6 @@ export async function ensureNotificationTemplates(db = prisma) {
         recipient: template.recipient,
         subject: template.subject,
         body: template.body,
-        active: true,
       },
       create: template,
     })
@@ -186,12 +185,15 @@ export async function createQueuedEmail({
 }
 
 export async function queueEmail(params, db = prisma) {
+  const template = await db.notificationTemplate.findUnique({ where: { templateId: params.templateId } })
+  if (template && !template.active) return null
   const email = await createQueuedEmail(params, db)
   return deliverEmail(email, db)
 }
 
-export async function sendEmail(outboxId) {
-  const email = await prisma.emailOutbox.findUnique({ where: { id: outboxId } })
+export async function sendEmail(outboxId, { force = false } = {}) {
+  const email = await prisma.emailOutbox.findUnique({ where: { id: outboxId }, include: { template: true } })
   if (!email) throw new Error('Email not found')
+  if (!force && email.template && !email.template.active) return email
   return deliverEmail(email)
 }

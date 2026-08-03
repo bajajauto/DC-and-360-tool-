@@ -5,6 +5,7 @@ import {
   Eye,
   FileText,
   Search,
+  Save,
   Send,
   Users,
 } from 'lucide-react'
@@ -77,7 +78,7 @@ const exportCards = [
     icon: FileText,
     title: 'Cohort Master Tracker',
     desc: 'One row per participant with status across every stage.',
-    cols: 'Ticket ID, Name, BU, Details, Nominations, Pre-Work, Photo, 360 %, OB Sheet, Reports',
+    cols: 'Ticket ID, Name, BU, Details, Nominations, Self Reflection, Photo, 360 %, OB Sheet, Reports',
     best: 'Weekly cohort health checks',
   },
   {
@@ -250,6 +251,9 @@ function TemplateText({ text }) {
 
 export function NotificationTemplates() {
   const [templates, setTemplates] = useState([])
+  const [automationDraft, setAutomationDraft] = useState({})
+  const [savingSettings, setSavingSettings] = useState(false)
+  const [settingsNotice, setSettingsNotice] = useState('')
   const [selected, setSelected] = useState(null)
   const [recipients, setRecipients] = useState([])
   const [selectedRecipientIds, setSelectedRecipientIds] = useState([])
@@ -270,6 +274,7 @@ export function NotificationTemplates() {
       .then((templateResult) => {
         const rows = templateResult.data || []
         setTemplates(rows)
+        setAutomationDraft(Object.fromEntries(rows.map((template) => [template.templateId, template.active])))
         setSelected(rows.find((template) => template.templateId === 'resp-invite') || rows[0] || null)
       })
       .catch((err) => setError(err.message))
@@ -306,6 +311,17 @@ export function NotificationTemplates() {
   }, [selected])
 
   const phases = [...new Set(templates.map((template) => template.phase))]
+  const settingsChanged = templates.some((template) => automationDraft[template.templateId] !== template.active)
+
+  useEffect(() => {
+    if (!settingsChanged) return undefined
+    const warnBeforeLeaving = (event) => {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', warnBeforeLeaving)
+    return () => window.removeEventListener('beforeunload', warnBeforeLeaving)
+  }, [settingsChanged])
   const visibleRecipients = recipients.filter((recipient) => {
     const haystack = `${recipient.name} ${recipient.email} ${recipient.employeeId || ''} ${recipient.roles.join(' ')} ${recipient.businessUnit || ''}`.toLowerCase()
     return haystack.includes(recipientSearch.trim().toLowerCase())
@@ -349,6 +365,32 @@ export function NotificationTemplates() {
     setManualEmails((current) => current.filter((item) => item !== email))
   }
 
+  function toggleAutomation(templateId) {
+    setSettingsNotice('')
+    setAutomationDraft((current) => ({ ...current, [templateId]: !current[templateId] }))
+  }
+
+  async function saveAutomationSettings() {
+    setError('')
+    setSettingsNotice('')
+    setSavingSettings(true)
+    try {
+      const result = await api.saveNotificationAutomation(templates.map((template) => ({
+        templateId: template.templateId,
+        automatic: Boolean(automationDraft[template.templateId]),
+      })))
+      const rows = result.data || []
+      setTemplates(rows)
+      setAutomationDraft(Object.fromEntries(rows.map((template) => [template.templateId, template.active])))
+      setSelected((current) => rows.find((template) => template.templateId === current?.templateId) || current)
+      setSettingsNotice('Email automation settings saved.')
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSavingSettings(false)
+    }
+  }
+
   async function handleSend() {
     setError('')
     setNotice('')
@@ -374,9 +416,10 @@ export function NotificationTemplates() {
     <Page
       eyebrow="Talent Development / Communications"
       title="Email Centre"
-      subtitle="Choose an approved system email, select recipients, review the message, and send it immediately."
+      subtitle="Choose which emails run automatically, or keep them available for manual sending."
     >
       {error && <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+      {settingsNotice && <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{settingsNotice}</div>}
       {!loading && !templates.length && !error && <Card><p className="text-sm text-slate-500">No system emails configured yet.</p></Card>}
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_500px]">
         <div className="space-y-4">
@@ -385,13 +428,19 @@ export function NotificationTemplates() {
               <CardHeader title={phase} />
               <div className="overflow-hidden rounded-xl border border-[#d5dce5]">
                 <table className="w-full border-collapse bg-white text-left text-[13px]">
-                  <thead className="bg-[#ebf2fa]"><tr>{['Trigger', 'Recipient', 'Subject', ''].map((label) => <th key={label} className="border-b border-[#d5dce5] px-3 py-2.5 text-[11px] font-bold uppercase tracking-wide text-slate-600">{label}</th>)}</tr></thead>
+                  <thead className="bg-[#ebf2fa]"><tr>{['Trigger', 'Recipient', 'Subject', 'Delivery', ''].map((label) => <th key={label} className="border-b border-[#d5dce5] px-3 py-2.5 text-[11px] font-bold uppercase tracking-wide text-slate-600">{label}</th>)}</tr></thead>
                   <tbody>
                     {templates.filter((template) => template.phase === phase).map((template) => (
                       <tr key={template.id} className="hover:bg-[#f4f7fb]">
                         <td className="border-b border-[#d5dce5] px-3 py-3 font-semibold">{template.trigger}</td>
                         <td className="border-b border-[#d5dce5] px-3 py-3"><span className="rounded-full border border-[#d5dce5] bg-[#f1f5fa] px-3 py-1 text-xs text-slate-600">{template.recipient}</span></td>
                         <td className="border-b border-[#d5dce5] px-3 py-3 text-slate-600">{template.subject}</td>
+                        <td className="border-b border-[#d5dce5] px-3 py-3">
+                          <button type="button" role="switch" aria-checked={Boolean(automationDraft[template.templateId])} aria-label={`Set ${template.trigger} delivery to ${automationDraft[template.templateId] ? 'manual' : 'automatic'}`} onClick={() => toggleAutomation(template.templateId)} className="inline-flex min-w-[126px] items-center gap-3 whitespace-nowrap rounded-lg px-1 py-1 focus:outline-none focus:ring-2 focus:ring-[#9dbce5] focus:ring-offset-2">
+                            <span className={`relative inline-block h-6 w-11 shrink-0 rounded-full transition-colors ${automationDraft[template.templateId] ? 'bg-[#1e5fba]' : 'bg-slate-300'}`}><span className={`absolute left-1 top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${automationDraft[template.templateId] ? 'translate-x-5' : 'translate-x-0'}`} /></span>
+                            <span className={`min-w-[62px] text-left text-xs font-semibold ${automationDraft[template.templateId] ? 'text-[#1e5fba]' : 'text-slate-600'}`}>{automationDraft[template.templateId] ? 'Automatic' : 'Manual'}</span>
+                          </button>
+                        </td>
                         <td className="border-b border-[#d5dce5] px-3 py-3 text-right"><button onClick={() => setSelected(template)} className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-[#1e5fba] hover:bg-[#ebf2fa]"><Eye size={13} />Compose</button></td>
                       </tr>
                     ))}
@@ -454,6 +503,15 @@ export function NotificationTemplates() {
           </Card>
         )}
       </div>
+      {settingsChanged && (
+        <div className="fixed bottom-5 left-1/2 z-50 flex w-[min(92vw,620px)] -translate-x-1/2 items-center justify-between gap-4 rounded-2xl border border-amber-300 bg-white px-5 py-4 shadow-[0_12px_40px_rgba(15,23,42,.22)]">
+          <div>
+            <p className="text-sm font-bold text-slate-800">You have unsaved email settings</p>
+            <p className="mt-0.5 text-xs text-slate-500">Save before leaving this page so the automation changes take effect.</p>
+          </div>
+          <button type="button" onClick={saveAutomationSettings} disabled={savingSettings} className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-[#1e5fba] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#0e3f87] disabled:opacity-50"><Save size={15} />{savingSettings ? 'Saving…' : 'Save Settings'}</button>
+        </div>
+      )}
     </Page>
   )
 }

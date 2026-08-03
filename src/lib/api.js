@@ -142,6 +142,9 @@ export const api = {
 
   getNotificationTemplates: () => apiFetch('/api/notifications/templates'),
 
+  saveNotificationAutomation: (templates) =>
+    apiFetch('/api/notifications/templates/automation', { method: 'PUT', body: JSON.stringify({ templates }) }),
+
   getNotificationRecipients: (templateId) => apiFetch(`/api/notifications/recipients?templateId=${encodeURIComponent(templateId || '')}`),
 
   sendNotification: (payload) =>

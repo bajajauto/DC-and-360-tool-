@@ -139,7 +139,7 @@ cohortsRouter.post('/', asyncHandler(async (req, res) => {
         create: { name: row.buhr.name, email: row.buhr.email.toLowerCase(), employeeId: row.buhr.employeeId, businessUnit: row.businessUnit, passwordHash, roles: ['BUHR'] },
       })
       const welcomeEmail = await createQueuedEmail({ templateId: 'welcome', toEmail: user.email, toName: user.name, context: { 'Participant Name': user.name, 'Participant Email': user.email, 'Participant Password': process.env.MOCK_USER_PASSWORD || 'Welcome@123', 'Login Link': process.env.APP_URL || 'http://localhost:5173', Cohort: created.name, 'Financial Year': financialYear(created.eventStart), 'Prework Deadline': created.preWorkDeadline?.toLocaleDateString('en-GB') || 'TBD' }, entity: 'Participant', entityId: participant.id }, tx)
-      pendingEmailIds.push(welcomeEmail.id)
+      if (welcomeEmail) pendingEmailIds.push(welcomeEmail.id)
     }
     return tx.cohort.findUnique({ where: { id: created.id }, include: { _count: { select: { participants: true } } } })
   })
@@ -236,10 +236,10 @@ cohortsRouter.post('/:cohortId/participants', asyncHandler(async (req, res) => {
       include: { user: true, nominees: true, feedbackTasks: true },
     })
     const welcomeEmail = await createQueuedEmail({ templateId: 'welcome', toEmail: user.email, toName: user.name, context: { 'Participant Name': user.name, 'Participant Email': user.email, 'Participant Password': process.env.MOCK_USER_PASSWORD || 'Welcome@123', 'Login Link': process.env.APP_URL || 'http://localhost:5173', Cohort: cohort.name, 'Financial Year': financialYear(cohort.eventStart), 'Prework Deadline': cohort.preWorkDeadline?.toLocaleDateString('en-GB') || 'TBD' }, entity: 'Participant', entityId: created.id }, tx)
-    return { created, welcomeEmailId: welcomeEmail.id }
+    return { created, welcomeEmailId: welcomeEmail?.id || null }
   })
 
-  await sendEmail(participant.welcomeEmailId)
+  if (participant.welcomeEmailId) await sendEmail(participant.welcomeEmailId)
 
   res.status(201).json({ data: toParticipantSummary(participant.created) })
 }))

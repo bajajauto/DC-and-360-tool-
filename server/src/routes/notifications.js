@@ -19,6 +19,13 @@ const bulkSendSchema = z.object({
   })).min(1).max(500),
 })
 
+const automationSettingsSchema = z.object({
+  templates: z.array(z.object({
+    templateId: z.string().trim().min(1),
+    automatic: z.boolean(),
+  })).min(1).max(100),
+})
+
 const MAGIC_LINK_TEMPLATES = new Set(['resp-invite', 'resp-reminder', 'resp-recurring-reminder'])
 const RESPONDENT_TEMPLATES = new Set([...MAGIC_LINK_TEMPLATES, 'respondent-thank-you'])
 const PLACEHOLDER_RE = /\{\{[^}]+\}\}/g
@@ -79,7 +86,7 @@ function buildParticipantContext(participant, recipientName) {
     'DC Dates': cohort?.eventStart && cohort?.eventEnd ? `${dateLabel(cohort.eventStart)} - ${dateLabel(cohort.eventEnd)}` : dateLabel(cohort?.eventStart),
     'Nomination Deadline': dateLabel(cohort?.nominationDeadline),
     'Prework Deadline': dateLabel(cohort?.preWorkDeadline),
-    'Pending Items': 'Role Interview Form, Photograph, Pre-work Form',
+    'Pending Items': 'Role Interview Form, Photograph, Self Reflection Form',
     '360 Cutoff': dateLabel(cohort?.threeSixtyCutoff),
     'Days Remaining': daysRemaining(cohort?.threeSixtyCutoff),
     'Respondent Count': String(tasks.length),
@@ -230,6 +237,26 @@ notificationsRouter.get('/templates', asyncHandler(async (req, res) => {
   res.json({ data: templates.map(toTemplateDto) })
 }))
 
+notificationsRouter.put('/templates/automation', asyncHandler(async (req, res) => {
+  const payload = automationSettingsSchema.parse(req.body)
+  const templateIds = [...new Set(payload.templates.map((template) => template.templateId))]
+  const existing = await prisma.notificationTemplate.findMany({
+    where: { templateId: { in: templateIds } },
+    select: { templateId: true },
+  })
+  if (existing.length !== templateIds.length) throw httpError(400, 'One or more notification templates do not exist')
+
+  await prisma.$transaction(payload.templates.map((template) => prisma.notificationTemplate.update({
+    where: { templateId: template.templateId },
+    data: { active: template.automatic },
+  })))
+
+  const templates = await prisma.notificationTemplate.findMany({
+    orderBy: [{ phase: 'asc' }, { trigger: 'asc' }],
+  })
+  res.json({ data: templates.map(toTemplateDto) })
+}))
+
 notificationsRouter.get('/recipients', asyncHandler(async (req, res) => {
   const templateId = String(req.query.templateId || '')
   if (RESPONDENT_TEMPLATES.has(templateId)) {
@@ -365,7 +392,7 @@ notificationsRouter.post('/send', asyncHandler(async (req, res) => {
         metadata: { source: 'template-compose', templateTrigger: template.trigger, context: recipient.context },
       },
     })
-    const sent = await sendEmail(deliveryRecord.id)
+    const sent = await sendEmail(deliveryRecord.id, { force: true })
     results.push(toEmailDto(sent))
   }
 
