@@ -92,6 +92,16 @@ model EmployeeDirectoryEntry {
   @@index([email])
 }
 
+model EmployeeDirectoryImport {
+  id           String   @id
+  fileName     String
+  total        Int
+  withEmail    Int
+  withoutEmail Int
+  uploadedAt   DateTime @default(now())
+  uploadedById String?
+}
+
 model Cohort {
   id           String        @id @default(cuid())
   slug         String        @unique

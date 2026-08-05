@@ -46,6 +46,7 @@ const updateCohortSchema = createCohortSchema.omit({ participants: true }).parti
 const addParticipantSchema = participantImportSchema
 
 const employeeDirectoryImportSchema = z.object({
+  fileName: z.string().trim().min(1).max(255),
   entries: z.array(z.object({
     employeeId: z.string().trim().min(1),
     name: z.string().trim().min(1),
@@ -226,6 +227,26 @@ cohortsRouter.patch('/:cohortId', asyncHandler(async (req, res) => {
   res.json({ data: toCohortDto(cohort) })
 }))
 
+cohortsRouter.get('/employee-directory/status', asyncHandler(async (_req, res) => {
+  const [metadata, aggregate] = await Promise.all([
+    prisma.employeeDirectoryImport.findUnique({ where: { id: 'current' } }),
+    prisma.employeeDirectoryEntry.aggregate({
+      _count: { _all: true, email: true },
+      _max: { updatedAt: true },
+    }),
+  ])
+  const total = aggregate._count._all
+  res.json({
+    data: total ? {
+      fileName: metadata?.fileName || null,
+      total,
+      withEmail: aggregate._count.email,
+      withoutEmail: total - aggregate._count.email,
+      uploadedAt: (metadata?.uploadedAt || aggregate._max.updatedAt)?.toISOString() || null,
+    } : null,
+  })
+}))
+
 cohortsRouter.post('/employee-directory/import', asyncHandler(async (req, res) => {
   const payload = employeeDirectoryImportSchema.parse(req.body)
   const entries = [...new Map(payload.entries.map((entry) => [entry.employeeId.toLowerCase(), {
@@ -235,19 +256,26 @@ cohortsRouter.post('/employee-directory/import', asyncHandler(async (req, res) =
     email: entry.email?.toLowerCase() || null,
   }])).values()]
   const now = new Date()
+  const withEmail = entries.filter((entry) => entry.email).length
 
   await prisma.$transaction(async (tx) => {
     await tx.employeeDirectoryEntry.deleteMany()
     await tx.employeeDirectoryEntry.createMany({
       data: entries.map((entry) => ({ ...entry, createdAt: now, updatedAt: now })),
     })
+    await tx.employeeDirectoryImport.upsert({
+      where: { id: 'current' },
+      update: { fileName: payload.fileName, total: entries.length, withEmail, withoutEmail: entries.length - withEmail, uploadedAt: now, uploadedById: req.auth?.userId || null },
+      create: { id: 'current', fileName: payload.fileName, total: entries.length, withEmail, withoutEmail: entries.length - withEmail, uploadedAt: now, uploadedById: req.auth?.userId || null },
+    })
   })
 
   res.json({
     data: {
       imported: entries.length,
-      withEmail: entries.filter((entry) => entry.email).length,
-      withoutEmail: entries.filter((entry) => !entry.email).length,
+      fileName: payload.fileName,
+      withEmail,
+      withoutEmail: entries.length - withEmail,
       importedAt: now.toISOString(),
     },
   })

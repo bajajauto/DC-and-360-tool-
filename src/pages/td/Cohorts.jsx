@@ -539,9 +539,18 @@ function EmployeeUploadTab() {
   const [entries, setEntries] = useState([])
   const [fileName, setFileName] = useState('')
   const [validation, setValidation] = useState(null)
+  const [currentDirectory, setCurrentDirectory] = useState(null)
+  const [loadingCurrent, setLoadingCurrent] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    api.getEmployeeDirectoryStatus()
+      .then((result) => setCurrentDirectory(result.data || null))
+      .catch((err) => setError(err.message))
+      .finally(() => setLoadingCurrent(false))
+  }, [])
 
   async function readDirectoryFile(event) {
     const file = event.target.files?.[0]
@@ -585,7 +594,17 @@ function EmployeeUploadTab() {
     setError('')
     setMessage('')
     try {
-      const result = await api.importEmployeeDirectory(entries)
+      const result = await api.importEmployeeDirectory(fileName, entries)
+      setCurrentDirectory({
+        fileName: result.data.fileName,
+        total: result.data.imported,
+        withEmail: result.data.withEmail,
+        withoutEmail: result.data.withoutEmail,
+        uploadedAt: result.data.importedAt,
+      })
+      setEntries([])
+      setFileName('')
+      setValidation(null)
       setMessage(`Employee directory updated: ${result.data.imported} records (${result.data.withEmail} with email, ${result.data.withoutEmail} without email).`)
     } catch (err) {
       setError(err.message)
@@ -596,9 +615,18 @@ function EmployeeUploadTab() {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border border-[#7ba6e0] bg-[#ebf2fa] p-4 text-sm text-[#123e77]">
-        <strong>Employee Directory.</strong> Upload the latest EC dump here after deployment. The Azure application writes it through its internal database connection, so direct PostgreSQL access is not required.
-      </div>
+      <Card>
+        <CardHeader title="Current Employee Directory" subtitle="The active directory used for employee search and nomination-level validation." />
+        {loadingCurrent ? <p className="text-sm text-slate-500">Loading current directory…</p> : currentDirectory ? (
+          <div>
+            <div className="flex items-center gap-3 rounded-xl border border-[#d5dce5] bg-[#f8fbff] p-4">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#ebf2fa] text-[#1e5fba]"><FileText size={20}/></div>
+              <div className="min-w-0"><p className="truncate text-sm font-semibold text-[#0f172a]">{currentDirectory.fileName || 'Previously uploaded employee directory'}</p><p className="mt-1 text-xs text-slate-500">{currentDirectory.uploadedAt ? `Uploaded ${new Date(currentDirectory.uploadedAt).toLocaleString('en-GB')}` : 'Upload date unavailable'}{!currentDirectory.fileName ? ' · Original filename was not stored' : ''}</p></div>
+            </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-3"><Metric label="Employees" value={currentDirectory.total}/><Metric label="With Email" value={currentDirectory.withEmail} tone="text-[#15803d]"/><Metric label="Without Email" value={currentDirectory.withoutEmail} tone="text-[#a66a10]"/></div>
+          </div>
+        ) : <p className="rounded-xl border border-dashed border-[#c2ccda] bg-[#f8fafc] px-4 py-6 text-center text-sm text-slate-500">No employee directory has been uploaded yet.</p>}
+      </Card>
       <Card>
         <CardHeader title="Update Employee Directory" subtitle="Expected columns: Users Sys Id, Full Name as per Aadhar Card, Position Position Level (Label), and Email Address." />
         {message && <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{message}</div>}
