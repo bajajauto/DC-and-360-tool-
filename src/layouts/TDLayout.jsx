@@ -22,6 +22,7 @@ const navSections = [
     items: [
       { to: '/td/dashboard', label: 'Dashboard', icon: LayoutDashboard },
       { to: '/td/cohorts', label: 'Current Cohort', icon: Users },
+      { to: '/td/employee-directory', label: 'Employee Directory', icon: Database },
       { to: '/td/reports', label: 'Report Repository', icon: FileText },
     ],
   },
@@ -29,7 +30,6 @@ const navSections = [
     label: 'Operations',
     items: [
       { to: '/td/templates', label: 'Email Centre', icon: Bell },
-      { to: '/td/employee-directory', label: 'Employee Directory', icon: Database },
       { to: '/td/outbox', label: 'Email Outbox', icon: Mail },
       { to: '/td/exports', label: 'Trackers & Exports', icon: ClipboardList },
       { to: '/td/assessor-analysis', label: 'Assessor Excel', icon: FileSpreadsheet },
