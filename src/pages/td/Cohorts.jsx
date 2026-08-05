@@ -466,46 +466,81 @@ function ParticipantsTab({ rows, generated, onManage }) {
 }
 
 function EmployeeUploadTab() {
-  const rules = [
-    'All columns mandatory except Phone. Ticket ID must be unique within the file and against existing participants.',
-    'All employee, manager, skip and BUHR email columns must contain valid email addresses.',
-    'Date of Birth must be DD-MM-YYYY and a real calendar date. Gender must be F or M.',
-    'Nothing is created until TD confirms the validation summary.',
-  ]
+  const [entries, setEntries] = useState([])
+  const [fileName, setFileName] = useState('')
+  const [validation, setValidation] = useState(null)
+  const [uploading, setUploading] = useState(false)
+  const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
+
+  async function readDirectoryFile(event) {
+    const file = event.target.files?.[0]
+    if (!file) return
+    setError('')
+    setMessage('')
+    setEntries([])
+    try {
+      const XLSX = await import('xlsx')
+      const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array' })
+      const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { defval: '' })
+      const text = (value) => String(value ?? '').trim()
+      const email = (value) => {
+        const normalized = text(value).toLowerCase()
+        return EMAIL_RE.test(normalized) ? normalized : null
+      }
+      const parsed = rows.map((row, index) => ({
+        row: index + 2,
+        employeeId: text(row['Users Sys Id']),
+        name: text(row['Full Name as per Aadhar Card']),
+        positionLevel: text(row['Position Position Level (Label)']).toUpperCase(),
+        email: email(row['Email Address']),
+      }))
+      const invalid = parsed.filter((entry) => !entry.employeeId || !entry.name || !entry.positionLevel)
+      if (invalid.length) throw new Error(`${invalid.length} row${invalid.length === 1 ? '' : 's'} are missing Ticket ID, name, or position level. First affected row: ${invalid[0].row}.`)
+      const unique = [...new Map(parsed.map((entry) => [entry.employeeId.toLowerCase(), entry])).values()]
+      setEntries(unique.map(({ row: _row, ...entry }) => entry))
+      setFileName(file.name)
+      setValidation({ total: unique.length, withEmail: unique.filter((entry) => entry.email).length, withoutEmail: unique.filter((entry) => !entry.email).length })
+    } catch (err) {
+      setFileName('')
+      setValidation(null)
+      setError(err.message || 'Unable to read the employee directory workbook.')
+    }
+  }
+
+  async function uploadDirectory() {
+    if (!entries.length) return
+    if (!window.confirm(`Replace the Azure employee directory with ${entries.length} records from ${fileName}?`)) return
+    setUploading(true)
+    setError('')
+    setMessage('')
+    try {
+      const result = await api.importEmployeeDirectory(entries)
+      setMessage(`Employee directory updated: ${result.data.imported} records (${result.data.withEmail} with email, ${result.data.withoutEmail} without email).`)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setUploading(false)
+    }
+  }
 
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-[#7ba6e0] bg-[#ebf2fa] p-4 text-sm text-[#123e77]">
-        <strong>This one upload powers cohort setup.</strong> Participant logins and BUHR visibility are created from it. Participants enter the name and email address for every 360 nominee themselves.
-      </div>
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader title="Step 1: Download Template" subtitle="One row per participant with the full employee master columns." />
-          <p className="mb-4 text-sm leading-6 text-slate-600">Columns include Ticket ID, Name, Email, Sector, BU, Function, BUHR, Manager, Skip / BU Head, Date of Birth, Gender and Phone.</p>
-          <button className="inline-flex items-center gap-2 rounded-lg bg-[#1e5fba] px-4 py-2 text-sm font-semibold text-white hover:bg-[#0e3f87]">
-            <Download size={15} />
-            Download Employee Details Template
-          </button>
-        </Card>
-        <Card>
-          <CardHeader title="Step 2: Upload Filled File" subtitle="Excel or CSV. Rows are validated before account creation." />
-          <button className="flex w-full flex-col items-center justify-center rounded-xl border-2 border-dashed border-[#c2ccda] bg-[#f4f7fb] px-5 py-8 text-center hover:border-[#1e5fba] hover:bg-[#ebf2fa]">
-            <Upload size={30} className="mb-2 text-slate-500" />
-            <span className="font-medium text-[#0f172a]">Drop the filled file here or click to upload</span>
-            <span className="mt-1 text-xs text-slate-500">Excel (.xlsx) or CSV</span>
-          </button>
-        </Card>
+        <strong>Employee Directory.</strong> Upload the latest EC dump here after deployment. The Azure application writes it through its internal database connection, so direct PostgreSQL access is not required.
       </div>
       <Card>
-        <CardHeader title="Validation rules applied to every row" />
-        <div className="grid gap-3 md:grid-cols-2">
-          {rules.map((rule, index) => (
-            <div key={rule} className="flex gap-3 rounded-xl bg-[#f4f7fb] p-3 text-sm text-slate-600">
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#ebf2fa] text-xs font-bold text-[#1e5fba]">{index + 1}</span>
-              <span>{rule}</span>
-            </div>
-          ))}
-        </div>
+        <CardHeader title="Update Employee Directory" subtitle="Expected columns: Users Sys Id, Full Name as per Aadhar Card, Position Position Level (Label), and Email Address." />
+        {message && <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{message}</div>}
+        {error && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+        <label className="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-[#c2ccda] bg-[#f4f7fb] px-5 py-7 text-center hover:border-[#1e5fba] hover:bg-[#ebf2fa]">
+            <Upload size={30} className="mb-2 text-slate-500" />
+            <span className="font-medium text-[#0f172a]">{fileName || 'Choose EC employee dump'}</span>
+            <span className="mt-1 text-xs text-slate-500">Excel (.xlsx or .xls) · employee data is not stored as a file</span>
+            <input type="file" accept=".xlsx,.xls" onChange={readDirectoryFile} className="sr-only" />
+        </label>
+        {validation && <div className="mt-4 grid gap-3 sm:grid-cols-3"><Metric label="Employees" value={validation.total} /><Metric label="With Email" value={validation.withEmail} tone="text-[#15803d]" /><Metric label="Without Email" value={validation.withoutEmail} tone="text-[#a66a10]" /></div>}
+        <button type="button" onClick={uploadDirectory} disabled={!entries.length || uploading} className="mt-4 inline-flex items-center gap-2 rounded-lg bg-[#1e5fba] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#0e3f87] disabled:cursor-not-allowed disabled:opacity-50"><Upload size={15} />{uploading ? 'Uploading…' : 'Upload to Azure Directory'}</button>
       </Card>
     </div>
   )
@@ -917,6 +952,8 @@ export default function Cohorts({ view = 'dashboard' }) {
             </table>
           </div>
         </Card>}
+
+        {!isCurrentView && <div className="mb-5"><EmployeeUploadTab /></div>}
 
         {isCurrentView && <div className="mb-5">
           <div className="mb-4 flex flex-col gap-3 border-b border-[#d5dce5] md:flex-row md:items-center md:justify-between">

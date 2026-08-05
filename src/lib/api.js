@@ -75,6 +75,9 @@ export const api = {
   deleteCohort: (cohortId) =>
     apiFetch(`/api/cohorts/${cohortId}`, { method: 'DELETE' }),
 
+  importEmployeeDirectory: (entries) =>
+    apiFetch('/api/cohorts/employee-directory/import', { method: 'POST', body: JSON.stringify({ entries }) }),
+
   getCohortParticipants: (cohortId) => apiFetch(`/api/cohorts/${cohortId}/participants`),
 
   addCohortParticipant: (cohortId, payload) =>

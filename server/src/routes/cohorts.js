@@ -50,6 +50,15 @@ const addParticipantSchema = z.object({
   businessUnit: z.string().trim().min(1),
 })
 
+const employeeDirectoryImportSchema = z.object({
+  entries: z.array(z.object({
+    employeeId: z.string().trim().min(1),
+    name: z.string().trim().min(1),
+    positionLevel: z.string().trim().min(1),
+    email: z.string().trim().email().nullable(),
+  })).min(1).max(15000),
+})
+
 function slugify(name) {
   return name
     .toLowerCase()
@@ -161,6 +170,33 @@ cohortsRouter.patch('/:cohortId', asyncHandler(async (req, res) => {
   })
 
   res.json({ data: toCohortDto(cohort) })
+}))
+
+cohortsRouter.post('/employee-directory/import', asyncHandler(async (req, res) => {
+  const payload = employeeDirectoryImportSchema.parse(req.body)
+  const entries = [...new Map(payload.entries.map((entry) => [entry.employeeId.toLowerCase(), {
+    employeeId: entry.employeeId,
+    name: entry.name,
+    positionLevel: entry.positionLevel.toUpperCase(),
+    email: entry.email?.toLowerCase() || null,
+  }])).values()]
+  const now = new Date()
+
+  await prisma.$transaction(async (tx) => {
+    await tx.employeeDirectoryEntry.deleteMany()
+    await tx.employeeDirectoryEntry.createMany({
+      data: entries.map((entry) => ({ ...entry, createdAt: now, updatedAt: now })),
+    })
+  })
+
+  res.json({
+    data: {
+      imported: entries.length,
+      withEmail: entries.filter((entry) => entry.email).length,
+      withoutEmail: entries.filter((entry) => !entry.email).length,
+      importedAt: now.toISOString(),
+    },
+  })
 }))
 
 cohortsRouter.delete('/:cohortId', asyncHandler(async (req, res) => {
