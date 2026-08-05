@@ -11,7 +11,7 @@ import {
 const STAGE_ITEMS = [
   { stage: 'ROLE_INTERVIEW', deadlineField: 'roleInterviewDeadline', label: 'Role Interview' },
   { stage: 'PHOTOGRAPH', deadlineField: 'photoDeadline', label: 'Photograph' },
-  { stage: 'PRE_WORK', deadlineField: 'preWorkDeadline', label: 'Pre-Work' },
+  { stage: 'PRE_WORK', deadlineField: 'preWorkDeadline', label: 'Self Reflection' },
 ]
 
 function formatDate(date) {
@@ -97,7 +97,7 @@ function responseStatusContext(participant) {
   }
 }
 
-// Role Interview / Photograph / Pre-Work deadline reminders (Section 8: T-3, T-1)
+// Role Interview / Photograph / Self Reflection deadline reminders (Section 8: T-3, T-1)
 async function sendStageDeadlineReminders(db) {
   for (const item of STAGE_ITEMS) {
     const participants = await db.participant.findMany({

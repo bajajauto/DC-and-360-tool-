@@ -23,7 +23,48 @@ invitesRouter.post('/redeem', asyncHandler(async (req, res) => {
 
   if (!magicLink) throw httpError(404, 'Invite link not found')
   if (magicLink.expiresAt <= new Date()) throw httpError(410, 'Invite link has expired')
-  if (magicLink.role !== 'RESPONDENT') throw httpError(400, 'Invite link is not for a respondent')
+  const ttlSeconds = Math.max(60, Math.floor((magicLink.expiresAt.getTime() - Date.now()) / 1000))
+
+  if (magicLink.role === 'PARTICIPANT') {
+    const participantId = magicLink.payload?.participantId
+    if (!magicLink.user || !participantId) throw httpError(400, 'Participant link is incomplete')
+
+    const participant = await prisma.participant.findFirst({
+      where: { id: participantId, userId: magicLink.user.id },
+      include: { cohort: true },
+    })
+    if (!participant || !magicLink.user.roles.includes('PARTICIPANT')) throw httpError(404, 'Participant account not found')
+
+    await prisma.magicLink.update({
+      where: { id: magicLink.id },
+      data: { usedAt: magicLink.usedAt || new Date() },
+    })
+
+    const roles = magicLink.user.roles.map((role) => role.toLowerCase())
+    const authToken = signToken(
+      { sub: magicLink.user.id, roles, typ: 'user', participantId: participant.id },
+      { expiresInSeconds: ttlSeconds },
+    )
+
+    return res.json({
+      data: {
+        token: authToken,
+        role: 'participant',
+        id: magicLink.user.id,
+        name: magicLink.user.name,
+        email: magicLink.user.email,
+        employeeId: magicLink.user.employeeId,
+        designation: magicLink.user.designation,
+        bu: magicLink.user.businessUnit,
+        roles,
+        participantId: participant.id,
+        cohort: participant.cohort?.name || null,
+        expiresAt: magicLink.expiresAt.toISOString(),
+      },
+    })
+  }
+
+  if (magicLink.role !== 'RESPONDENT') throw httpError(400, 'Invite link role is not supported')
 
   const taskId = magicLink.payload?.taskId
   if (!taskId) throw httpError(400, 'Invite link is missing its feedback task')
@@ -50,7 +91,6 @@ invitesRouter.post('/redeem', asyncHandler(async (req, res) => {
 
   // Scoped token: this respondent (internal or external) may only act on this
   // one feedback task. Expiry tracks the magic link's own lifetime.
-  const ttlSeconds = Math.max(60, Math.floor((magicLink.expiresAt.getTime() - Date.now()) / 1000))
   const authToken = signToken(
     {
       sub: task.respondent?.id || null,

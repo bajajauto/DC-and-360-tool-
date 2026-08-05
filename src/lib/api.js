@@ -83,6 +83,9 @@ export const api = {
   addCohortParticipant: (cohortId, payload) =>
     apiFetch(`/api/cohorts/${cohortId}/participants`, { method: 'POST', body: JSON.stringify(payload) }),
 
+  sendBuhrParticipantCredentials: (cohortId, emails) =>
+    apiFetch(`/api/cohorts/${cohortId}/participants/buhr-credentials`, { method: 'POST', body: JSON.stringify({ emails }) }),
+
   deleteCohortParticipant: (cohortId, participantId) =>
     apiFetch(`/api/cohorts/${cohortId}/participants/${participantId}`, { method: 'DELETE' }),
 

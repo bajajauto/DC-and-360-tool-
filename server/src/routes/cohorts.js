@@ -6,6 +6,7 @@ import { httpError } from '../utils/httpError.js'
 import { deriveTaskStatus, taskCompletionPercent, toParticipantSummary } from '../utils/mappers.js'
 import { hashPassword } from '../utils/passwords.js'
 import { createQueuedEmail, sendEmail } from '../notifications/service.js'
+import { createParticipantMagicLink } from '../utils/magicLinks.js'
 
 export const cohortsRouter = Router()
 
@@ -42,13 +43,7 @@ const createCohortSchema = z.object({
 
 const updateCohortSchema = createCohortSchema.omit({ participants: true }).partial()
 
-const addParticipantSchema = z.object({
-  name: z.string().trim().min(1),
-  employeeId: z.string().trim().min(1),
-  email: emailField,
-  designation: z.string().trim().min(1),
-  businessUnit: z.string().trim().min(1),
-})
+const addParticipantSchema = participantImportSchema
 
 const employeeDirectoryImportSchema = z.object({
   entries: z.array(z.object({
@@ -57,6 +52,10 @@ const employeeDirectoryImportSchema = z.object({
     positionLevel: z.string().trim().min(1),
     email: z.string().trim().email().nullable(),
   })).min(1).max(15000),
+})
+
+const buhrCredentialEmailSchema = z.object({
+  emails: z.array(emailField).min(1).max(500),
 })
 
 function slugify(name) {
@@ -72,6 +71,45 @@ function financialYear(value) {
   const year = value.getFullYear()
   const startYear = value.getMonth() >= 3 ? year : year - 1
   return `FY ${startYear}-${String(startYear + 1).slice(-2)}`
+}
+
+function participantCredentialTable(participants) {
+  const password = process.env.MOCK_USER_PASSWORD || 'Welcome@123'
+  return participants
+    .map((participant) => `${participant.name} | ${participant.employeeId} | ${participant.email} | ${password}`)
+    .join('\n')
+}
+
+async function queueBuhrCredentialEmails(db, cohort, groups, actorId = null) {
+  const emailIds = []
+  for (const group of groups.values()) {
+    const email = await createQueuedEmail({
+      templateId: 'buhr-participant-credentials',
+      toEmail: group.email,
+      toName: group.name,
+      context: {
+        'BUHR Name': group.name,
+        'BUHR Email': group.email,
+        'BUHR Password': process.env.MOCK_USER_PASSWORD || 'Welcome@123',
+        Cohort: cohort.name,
+        'Login Link': process.env.APP_URL || 'http://localhost:5173',
+        'Participant Credentials': participantCredentialTable(group.participants),
+      },
+      entity: 'Cohort',
+      entityId: cohort.id,
+      actorId,
+      metadata: { cohortId: cohort.id, buhrEmail: group.email, participantCount: group.participants.length },
+    }, db)
+    if (email) emailIds.push(email.id)
+  }
+  return emailIds
+}
+
+function addToBuhrGroup(groups, buhr, participant) {
+  const email = buhr.email.toLowerCase()
+  const group = groups.get(email) || { name: buhr.name, employeeId: buhr.employeeId, email, participants: [] }
+  group.participants.push(participant)
+  groups.set(email, group)
 }
 
 async function uniqueSlug(base) {
@@ -128,6 +166,7 @@ cohortsRouter.post('/', asyncHandler(async (req, res) => {
   const passwordHash = await hashPassword(process.env.MOCK_USER_PASSWORD || 'Welcome@123')
 
   const pendingEmailIds = []
+  const buhrGroups = new Map()
 
   const cohort = await prisma.$transaction(async (tx) => {
     const created = await tx.cohort.create({ data: { ...cohortData, slug } })
@@ -142,14 +181,29 @@ cohortsRouter.post('/', asyncHandler(async (req, res) => {
         update: { cohortId: created.id, masterData: row.masterData, stage: 'APPLICATION_PROFILE', progress: 10, reportStatus: 'WAITING', lastActivityAt: new Date() },
         create: { userId: user.id, cohortId: created.id, masterData: row.masterData, stage: 'APPLICATION_PROFILE', progress: 10, lastActivityAt: new Date() },
       })
-      await tx.user.upsert({
-        where: { email: row.buhr.email.toLowerCase() },
-        update: { name: row.buhr.name, employeeId: row.buhr.employeeId, businessUnit: row.businessUnit, roles: ['BUHR'] },
-        create: { name: row.buhr.name, email: row.buhr.email.toLowerCase(), employeeId: row.buhr.employeeId, businessUnit: row.businessUnit, passwordHash, roles: ['BUHR'] },
-      })
-      const welcomeEmail = await createQueuedEmail({ templateId: 'welcome', toEmail: user.email, toName: user.name, context: { 'Participant Name': user.name, 'Participant Email': user.email, 'Participant Password': process.env.MOCK_USER_PASSWORD || 'Welcome@123', 'Login Link': process.env.APP_URL || 'http://localhost:5173', Cohort: created.name, 'Financial Year': financialYear(created.eventStart), 'Prework Deadline': created.preWorkDeadline?.toLocaleDateString('en-GB') || 'TBD' }, entity: 'Participant', entityId: participant.id }, tx)
+      const buhrEmail = row.buhr.email.toLowerCase()
+      const existingBuhr = await tx.user.findUnique({ where: { email: buhrEmail } })
+      if (existingBuhr) {
+        await tx.user.update({
+          where: { id: existingBuhr.id },
+          data: {
+            name: row.buhr.name,
+            employeeId: row.buhr.employeeId,
+            businessUnit: row.businessUnit,
+            roles: existingBuhr.roles.includes('BUHR') ? existingBuhr.roles : [...existingBuhr.roles, 'BUHR'],
+          },
+        })
+      } else {
+        await tx.user.create({
+          data: { name: row.buhr.name, email: buhrEmail, employeeId: row.buhr.employeeId, businessUnit: row.businessUnit, passwordHash, roles: ['BUHR'] },
+        })
+      }
+      const participantLink = await createParticipantMagicLink(tx, { userId: user.id, email: user.email, participantId: participant.id })
+      const welcomeEmail = await createQueuedEmail({ templateId: 'welcome', toEmail: user.email, toName: user.name, context: { 'Participant Name': user.name, 'Participant Email': user.email, 'Participant Password': process.env.MOCK_USER_PASSWORD || 'Welcome@123', 'Login Link': participantLink.inviteUrl, Cohort: created.name, 'Financial Year': financialYear(created.eventStart), 'Prework Deadline': created.preWorkDeadline?.toLocaleDateString('en-GB') || 'TBD' }, magicLinkId: participantLink.magicLink.id, entity: 'Participant', entityId: participant.id }, tx)
       if (welcomeEmail) pendingEmailIds.push(welcomeEmail.id)
+      addToBuhrGroup(buhrGroups, row.buhr, { name: user.name, employeeId: user.employeeId, email: user.email })
     }
+    pendingEmailIds.push(...await queueBuhrCredentialEmails(tx, created, buhrGroups, req.auth?.userId || null))
     return tx.cohort.findUnique({ where: { id: created.id }, include: { _count: { select: { participants: true } } } })
   })
 
@@ -324,23 +378,76 @@ cohortsRouter.post('/:cohortId/participants', asyncHandler(async (req, res) => {
 
   const passwordHash = await hashPassword(process.env.MOCK_USER_PASSWORD || 'Welcome@123')
   const participant = await prisma.$transaction(async (tx) => {
+    const participantUserData = {
+      name: payload.name,
+      employeeId: payload.employeeId,
+      email,
+      designation: payload.designation,
+      businessUnit: payload.businessUnit,
+    }
     const user = existing
       ? await tx.user.update({
           where: { id: existing.id },
-          data: { ...payload, email, roles: existing.roles.includes('PARTICIPANT') ? existing.roles : [...existing.roles, 'PARTICIPANT'] },
+          data: { ...participantUserData, roles: existing.roles.includes('PARTICIPANT') ? existing.roles : [...existing.roles, 'PARTICIPANT'] },
         })
-      : await tx.user.create({ data: { ...payload, email, passwordHash, roles: ['PARTICIPANT'] } })
+      : await tx.user.create({ data: { ...participantUserData, passwordHash, roles: ['PARTICIPANT'] } })
     const created = await tx.participant.create({
-      data: { userId: user.id, cohortId: cohort.id, masterData: {}, stage: 'APPLICATION_PROFILE', progress: 0, reportStatus: 'WAITING', lastActivityAt: new Date() },
+      data: { userId: user.id, cohortId: cohort.id, masterData: payload.masterData, stage: 'APPLICATION_PROFILE', progress: 0, reportStatus: 'WAITING', lastActivityAt: new Date() },
       include: { user: true, nominees: true, feedbackTasks: true },
     })
-    const welcomeEmail = await createQueuedEmail({ templateId: 'welcome', toEmail: user.email, toName: user.name, context: { 'Participant Name': user.name, 'Participant Email': user.email, 'Participant Password': process.env.MOCK_USER_PASSWORD || 'Welcome@123', 'Login Link': process.env.APP_URL || 'http://localhost:5173', Cohort: cohort.name, 'Financial Year': financialYear(cohort.eventStart), 'Prework Deadline': cohort.preWorkDeadline?.toLocaleDateString('en-GB') || 'TBD' }, entity: 'Participant', entityId: created.id }, tx)
+    const buhrEmail = payload.buhr.email.toLowerCase()
+    const existingBuhr = await tx.user.findUnique({ where: { email: buhrEmail } })
+    if (existingBuhr) {
+      await tx.user.update({
+        where: { id: existingBuhr.id },
+        data: {
+          name: payload.buhr.name,
+          employeeId: payload.buhr.employeeId,
+          businessUnit: payload.businessUnit,
+          roles: existingBuhr.roles.includes('BUHR') ? existingBuhr.roles : [...existingBuhr.roles, 'BUHR'],
+        },
+      })
+    } else {
+      await tx.user.create({
+        data: { name: payload.buhr.name, email: buhrEmail, employeeId: payload.buhr.employeeId, businessUnit: payload.businessUnit, passwordHash, roles: ['BUHR'] },
+      })
+    }
+    const participantLink = await createParticipantMagicLink(tx, { userId: user.id, email: user.email, participantId: created.id })
+    const welcomeEmail = await createQueuedEmail({ templateId: 'welcome', toEmail: user.email, toName: user.name, context: { 'Participant Name': user.name, 'Participant Email': user.email, 'Participant Password': process.env.MOCK_USER_PASSWORD || 'Welcome@123', 'Login Link': participantLink.inviteUrl, Cohort: cohort.name, 'Financial Year': financialYear(cohort.eventStart), 'Prework Deadline': cohort.preWorkDeadline?.toLocaleDateString('en-GB') || 'TBD' }, magicLinkId: participantLink.magicLink.id, entity: 'Participant', entityId: created.id }, tx)
     return { created, welcomeEmailId: welcomeEmail?.id || null }
   })
 
   if (participant.welcomeEmailId) await sendEmail(participant.welcomeEmailId)
 
   res.status(201).json({ data: toParticipantSummary(participant.created) })
+}))
+
+cohortsRouter.post('/:cohortId/participants/buhr-credentials', asyncHandler(async (req, res) => {
+  const payload = buhrCredentialEmailSchema.parse(req.body)
+  const cohort = await prisma.cohort.findUnique({
+    where: { id: req.params.cohortId },
+    include: { participants: { include: { user: true } } },
+  })
+  if (!cohort) throw httpError(404, 'Cohort not found')
+
+  const requestedEmails = new Set(payload.emails.map((email) => email.toLowerCase()))
+  const groups = new Map()
+  for (const participant of cohort.participants) {
+    const masterData = participant.masterData && typeof participant.masterData === 'object' ? participant.masterData : {}
+    const email = String(masterData.buhrEmail || '').trim().toLowerCase()
+    if (!requestedEmails.has(email)) continue
+    const legacyBuhrEmployeeId = Object.entries(masterData).find(([key]) => /buhr.*(ticket|employee).*id/i.test(key))?.[1]
+    addToBuhrGroup(groups, { name: String(masterData.buhrName || email), employeeId: String(masterData.buhrEmployeeId || legacyBuhrEmployeeId || ''), email }, {
+      name: participant.user.name,
+      employeeId: participant.user.employeeId,
+      email: participant.user.email,
+    })
+  }
+  if (!groups.size) throw httpError(400, 'No mapped participants were found for the selected BUHR accounts')
+
+  const emailIds = await prisma.$transaction((tx) => queueBuhrCredentialEmails(tx, cohort, groups, req.auth?.userId || null))
+  const emails = await Promise.all(emailIds.map((id) => sendEmail(id)))
+  res.status(201).json({ data: { emails: emails.length, buhrs: groups.size } })
 }))
 
 cohortsRouter.delete('/:cohortId/participants/:participantId', asyncHandler(async (req, res) => {

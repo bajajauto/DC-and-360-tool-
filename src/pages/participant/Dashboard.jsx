@@ -9,7 +9,7 @@ import { useUser } from '../../context/UserContext'
 // names the cohort field the real deadline is read from (see formatDeadline).
 const baseJourneySteps = [
   { id: 1, label: 'Photograph', to: '/participant/photograph', status: 'pending', deadlineKey: 'photoDeadline' },
-  { id: 2, label: 'Pre-Work', to: '/participant/pre-work', status: 'pending', deadlineKey: 'preWorkDeadline' },
+  { id: 2, label: 'Self Reflection', to: '/participant/pre-work', status: 'pending', deadlineKey: 'preWorkDeadline' },
   { id: 3, label: 'Role Interview', to: '/participant/role-interview', status: 'pending', deadlineKey: 'roleInterviewDeadline' },
   { id: 4, label: '360 Nominees', to: '/participant/360-nominees', status: 'pending', deadlineKey: 'nominationDeadline' },
   { id: 5, label: 'Self 360 Survey', to: '/participant/self-360', status: 'locked', deadlineKey: 'threeSixtyCutoff' },
@@ -25,7 +25,7 @@ function formatDeadline(cohort, key) {
 const TASK_STATUS_KEY_BY_LABEL = {
   'Role Interview': 'role',
   Photograph: 'photo',
-  'Pre-Work': 'prework',
+  'Self Reflection': 'prework',
   '360 Feedback': 'feedback',
   'DC Report': 'report',
 }
@@ -114,7 +114,7 @@ export default function Dashboard() {
   const visiblePendingTasks = []
   if (taskStatus?.prework && taskStatus.prework !== 'completed') {
     visiblePendingTasks.push({
-      title: 'Complete Pre-Work form',
+      title: 'Complete Self Reflection form',
       description: `${preWorkAnsweredCount} of 9 self-reflection questions answered`,
       to: '/participant/pre-work',
       deadline: formatDeadline(cohort, 'preWorkDeadline'),
@@ -160,7 +160,7 @@ export default function Dashboard() {
   const stageProgress = {
     'Role Interview': roleProgress,
     Photograph: taskStatus?.photo === 'completed' ? 100 : 0,
-    'Pre-Work': Math.min(100, preWorkAnsweredCount * 10),
+    'Self Reflection': Math.min(100, preWorkAnsweredCount * 10),
     'Self 360 Survey': selfSurveyStatus === 'completed' ? 100 : (selfTask?.progress ?? 0),
     '360 Nominees': nomineeProgress,
     '360 Feedback': participantData?.totalResponses

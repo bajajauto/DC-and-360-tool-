@@ -5,7 +5,7 @@ import { useUser } from '../context/UserContext'
 const navItems = [
   { to: '/participant/dashboard', label: 'Dashboard', icon: HomeIcon },
   { to: '/participant/photograph', label: 'Photograph', icon: CameraIcon },
-  { to: '/participant/pre-work', label: 'Pre-Work', icon: ClipboardIcon },
+  { to: '/participant/pre-work', label: 'Self Reflection', icon: ClipboardIcon },
   { to: '/participant/role-interview', label: 'Role Interview', icon: FileTextIcon },
   { to: '/participant/360-nominees', label: '360 Nominees', icon: UsersIcon },
   { to: '/participant/self-360', label: 'Self 360 Survey', icon: ClipboardIcon },

@@ -5,6 +5,7 @@ import { PrismaClient } from '@prisma/client'
 import { hashPassword } from '../src/utils/passwords.js'
 import { seedAccessAccounts } from './accessAccounts.js'
 import { queueEmail } from '../src/notifications/service.js'
+import { createParticipantMagicLink } from '../src/utils/magicLinks.js'
 
 const prisma = new PrismaClient()
 
@@ -100,6 +101,7 @@ async function main() {
     })
 
     if (!existingUser) {
+      const participantLink = await createParticipantMagicLink(prisma, { userId: user.id, email: user.email, participantId: participant.id })
       await queueEmail({
         templateId: 'welcome',
         toEmail: user.email,
@@ -107,9 +109,12 @@ async function main() {
         context: {
           'Participant Name': user.name,
           Cohort: cohort.name,
-          'Password Link': process.env.APP_URL || '',
+          'Participant Email': user.email,
+          'Participant Password': DEFAULT_PASSWORD,
+          'Login Link': participantLink.inviteUrl,
           'Nomination Deadline': 'the deadline set for your cohort',
         },
+        magicLinkId: participantLink.magicLink.id,
         entity: 'Participant',
         entityId: participant.id,
       })

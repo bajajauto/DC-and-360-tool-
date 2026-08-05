@@ -33,12 +33,12 @@ export default function PreWork() {
       <div className="flex items-center gap-2 text-xs text-gray-400 mb-6">
         <Link to="/participant/dashboard" className="hover:text-gray-600">Dashboard</Link>
         <span>/</span>
-        <span className="text-[#1a1f2e]">Pre-Work</span>
+        <span className="text-[#1a1f2e]">Self Reflection</span>
       </div>
 
       <div className="flex items-start justify-between mb-6">
         <div>
-          <h1 className="text-xl font-bold text-[#1a1f2e]">Pre-Work Questionnaire</h1>
+          <h1 className="text-xl font-bold text-[#1a1f2e]">Self Reflection Questionnaire</h1>
           <p className="text-sm text-gray-500 mt-0.5">10 self-reflection questions · Due 20 Jun 2025</p>
         </div>
         <div className="text-right">
@@ -63,7 +63,7 @@ export default function PreWork() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <h3 className="text-sm font-semibold text-green-800 mb-1">Pre-Work submitted</h3>
+          <h3 className="text-sm font-semibold text-green-800 mb-1">Self Reflection submitted</h3>
           <p className="text-xs text-green-600">Your self-reflection responses are locked and ready for assessors.</p>
           <Link to="/participant/dashboard" className="mt-4 inline-block text-xs text-[#1e4d8c] font-medium hover:underline">← Back to Dashboard</Link>
         </div>

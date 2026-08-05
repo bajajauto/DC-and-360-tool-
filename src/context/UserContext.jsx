@@ -50,11 +50,11 @@ function buildUserFromMagicLink(payload) {
     email,
     employeeId,
     initials: getInitials(name),
-    designation: '',
-    bu: '',
-    roles: [role],
-    participantId: null,
-    cohort: null,
+    designation: payload.designation || '',
+    bu: payload.bu || '',
+    roles: payload.roles?.length ? payload.roles : [role],
+    participantId: payload.participantId || null,
+    cohort: payload.cohort || null,
     respondentTasks,
     magicLink: { role, taskId: payload.taskId || null },
   }
@@ -104,8 +104,11 @@ export function UserProvider({ children }) {
     setUser(nextUser)
     setActiveRole(nextUser.magicLink.role)
     writeJson(SESSION_KEY, nextUser)
+    if (nextUser.participantId) {
+      refreshParticipantData(nextUser.participantId)
+    }
     return nextUser
-  }, [])
+  }, [refreshParticipantData])
 
   const logout = useCallback(() => {
     window.localStorage.removeItem(SESSION_KEY)

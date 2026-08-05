@@ -1,4 +1,4 @@
-import { ArrowRight, BriefcaseBusiness, Camera, FileText, MessageSquareText, Search, User } from 'lucide-react'
+import { ArrowRight, BriefcaseBusiness, Camera, Download, FileText, MessageSquareText, Search, User } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../../lib/api'
@@ -151,13 +151,24 @@ export default function CandidateProfiles() {
                   </div>
                 </div>
               </div>
+              <div className="mt-5 flex justify-end border-t border-[#e8edf4] pt-4">
+                <button
+                  type="button"
+                  disabled
+                  title={`Download assessor template for ${selected.name}`}
+                  className="inline-flex cursor-not-allowed items-center gap-2 rounded-lg bg-[#1e5fba] px-4 py-2 text-xs font-semibold text-white shadow-sm"
+                >
+                  <Download size={14} />
+                  Download Assessor Template
+                </button>
+              </div>
             </section>
 
             <div className="grid lg:grid-cols-2 gap-5">
               <EvidenceCard icon={Camera} title="Participant Photograph" meta="Identity evidence" to={`/assessor/candidates/${selected.id}/photograph`} />
               <EvidenceCard icon={MessageSquareText} title="Role Interview" meta={selected.roleInterview.status} to={`/assessor/candidates/${selected.id}/role-interview`} />
               <EvidenceCard icon={FileText} title="360° Feedback Report" meta={selected.report360.status} to={`/assessor/candidates/${selected.id}/360-report`} />
-              <EvidenceCard icon={BriefcaseBusiness} title="Pre-work" meta={selected.preWork.status} to={`/assessor/candidates/${selected.id}/pre-work`} />
+              <EvidenceCard icon={BriefcaseBusiness} title="Self Reflection" meta={selected.preWork.status} to={`/assessor/candidates/${selected.id}/pre-work`} />
             </div>
 
           </main>

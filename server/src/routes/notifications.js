@@ -4,6 +4,7 @@ import { prisma } from '../db.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
 import { httpError } from '../utils/httpError.js'
 import { createQueuedEmail, ensureNotificationTemplates, renderTemplate, sendEmail } from '../notifications/service.js'
+import { createParticipantMagicLink } from '../utils/magicLinks.js'
 
 export const notificationsRouter = Router()
 
@@ -377,7 +378,24 @@ notificationsRouter.post('/send', asyncHandler(async (req, res) => {
 
   const uniqueRecipients = [...new Map(payload.recipients.map((recipient) => [`${recipient.sourceType}:${recipient.sourceId || recipient.email.toLowerCase()}`, recipient])).values()]
   const resolvedRecipients = []
-  for (const recipient of uniqueRecipients) resolvedRecipients.push(await resolveRecipient(recipient))
+  for (const recipient of uniqueRecipients) {
+    resolvedRecipients.push({ ...(await resolveRecipient(recipient)), sourceType: recipient.sourceType })
+  }
+
+  if (template.templateId === 'welcome') {
+    for (const recipient of resolvedRecipients) {
+      if (recipient.sourceType !== 'user' || recipient.entity !== 'Participant' || !recipient.entityId) continue
+      const participant = await prisma.participant.findUnique({ where: { id: recipient.entityId }, include: { user: true } })
+      if (!participant) throw httpError(404, `Participant account not found for ${recipient.email}`)
+      const participantLink = await createParticipantMagicLink(prisma, {
+        userId: participant.userId,
+        email: participant.user.email,
+        participantId: participant.id,
+      })
+      recipient.context = { ...recipient.context, 'Login Link': participantLink.inviteUrl }
+      recipient.magicLinkId = participantLink.magicLink.id
+    }
+  }
 
   const personalized = resolvedRecipients.map((recipient) => {
     const personalizedSubject = renderTemplate(payload.subject, recipient.context)

@@ -19,7 +19,10 @@ export default function InviteRedeem() {
         const body = await api.redeemInvite(token)
         const user = loginFromMagicLink(body.data)
         if (!isMounted) return
-        navigate(`/respondent/feedback/${user.magicLink.taskId}`, { replace: true })
+        const destination = user.magicLink.role === 'respondent'
+          ? `/respondent/feedback/${user.magicLink.taskId}`
+          : '/participant/dashboard'
+        navigate(destination, { replace: true })
       } catch (err) {
         if (!isMounted) return
         setError(err.message)
@@ -39,7 +42,7 @@ export default function InviteRedeem() {
         <img src={bajajBrandLockup} alt="Bajaj" className="h-auto w-44 max-w-full mx-auto mb-6" />
         <h1 className="text-xl font-bold text-[#1a1f2e]">{status}</h1>
         <p className="text-sm text-gray-500 mt-2">
-          {error || 'You will be taken to your 360 feedback form in a moment.'}
+          {error || 'You will be signed in and taken to your portal in a moment.'}
         </p>
         {error && (
           <button

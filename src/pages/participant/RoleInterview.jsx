@@ -9,6 +9,9 @@ const transitionKeys = [1, 2, 3].flatMap((number) => transitionFields.map(([key]
 const shortRequiredKeys = ['currentRole', ...transitionKeys]
 const reflectionKeys = ['responsibilities', 'highlight1', 'highlight2', 'challenge1', 'challenge2']
 const allRequiredKeys = [...shortRequiredKeys, ...reflectionKeys]
+const monthOptions = Array.from({ length: 12 }, (_, index) => String(index + 1).padStart(2, '0'))
+const yearOptions = Array.from({ length: new Date().getFullYear() - 1959 }, (_, index) => String(new Date().getFullYear() - index))
+const validMonthYear = (value) => /^(0[1-9]|1[0-2])\/(19[6-9]\d|20\d{2})$/.test(String(value || ''))
 const placeholderPattern = /^(?:n\/?a|none|nil|[^\p{L}\p{N}]+)$/iu
 const validShort = (value) => {
   const text = String(value || '').trim()
@@ -17,6 +20,25 @@ const validShort = (value) => {
 const validReflection = (value) => {
   const text = String(value || '').trim()
   return text.length >= 15 && !placeholderPattern.test(text)
+}
+
+function MonthYearSelect({ value, onChange }) {
+  const [month = '', year = ''] = String(value || '').split('/')
+  return (
+    <div>
+      <div className="grid grid-cols-2 gap-2">
+        <select required aria-label="Duration month" value={monthOptions.includes(month) ? month : ''} onChange={(event) => onChange(`${event.target.value}/${year}`)} className="rounded-lg border bg-white px-2 py-2 text-sm">
+          <option value="">Month</option>
+          {monthOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+        </select>
+        <select required aria-label="Duration year" value={yearOptions.includes(year) ? year : ''} onChange={(event) => onChange(`${month}/${event.target.value}`)} className="rounded-lg border bg-white px-2 py-2 text-sm">
+          <option value="">Year</option>
+          {yearOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+        </select>
+      </div>
+      <p className={`mt-1 text-[10px] ${value && !validMonthYear(value) ? 'text-red-500' : 'text-slate-400'}`}>{value && !validMonthYear(value) ? 'Select both month and year.' : 'MM/YYYY *'}</p>
+    </div>
+  )
 }
 
 function RoleInterviewInstructions() {
@@ -83,7 +105,7 @@ export default function RoleInterview() {
   }, [user?.participantId])
 
   const set = (key, value) => setAnswers((current) => ({ ...current, [key]: value }))
-  const completed = shortRequiredKeys.filter((key) => validShort(answers[key])).length + reflectionKeys.filter((key) => validReflection(answers[key])).length
+  const completed = shortRequiredKeys.filter((key) => key.endsWith('_duration') ? validMonthYear(answers[key]) : validShort(answers[key])).length + reflectionKeys.filter((key) => validReflection(answers[key])).length
   const complete = completed === allRequiredKeys.length
 
   useEffect(() => {
@@ -152,7 +174,12 @@ export default function RoleInterview() {
         <section className="rounded-xl border bg-white p-5">
           <h2 className="mb-1 font-semibold">Last 3 Career Transitions</h2>
           <p className="mb-4 text-xs leading-5 text-slate-500">List the last 3 roles you have held over your career, with designation, BU and duration.</p>
-          {transitions.map(({ n, fields }) => <div key={n} className="mb-3"><p className="mb-2 text-xs font-bold uppercase tracking-wide text-[#1e5fba]">Transition {n}</p><div className="grid gap-3 rounded-lg bg-slate-50 p-3 sm:grid-cols-4">{fields.map(([key, label]) => <input required key={key} value={answers[`transition${n}_${key}`] || ''} onChange={(event) => set(`transition${n}_${key}`, event.target.value)} placeholder={`${label} *`} className="rounded-lg border px-3 py-2 text-sm" />)}</div></div>)}
+          {transitions.map(({ n, fields }) => <div key={n} className="mb-3"><p className="mb-2 text-xs font-bold uppercase tracking-wide text-[#1e5fba]">Transition {n}</p><div className="grid gap-3 rounded-lg bg-slate-50 p-3 sm:grid-cols-4">{fields.map(([key, label]) => {
+            const answerKey = `transition${n}_${key}`
+            return key === 'duration'
+              ? <MonthYearSelect key={key} value={answers[answerKey]} onChange={(value) => set(answerKey, value)} />
+              : <input required key={key} value={answers[answerKey] || ''} onChange={(event) => set(answerKey, event.target.value)} placeholder={`${label} *`} className="rounded-lg border px-3 py-2 text-sm" />
+          })}</div></div>)}
         </section>
         <section className="rounded-xl border bg-white p-5">
           <h2 className="mb-1 font-semibold">Summary of current role and responsibilities</h2>

@@ -9,7 +9,7 @@ const stageLabels = {
   APPLICATION_PROFILE: 'Application profile',
   ROLE_INTERVIEW: 'Role interview',
   PHOTOGRAPH: 'Photograph',
-  PRE_WORK: 'Pre-work',
+  PRE_WORK: 'Self Reflection',
   NOMINEES_360: '360 nominees',
   FEEDBACK_360: '360 feedback',
   DC_ASSESSMENTS: 'DC assessments',

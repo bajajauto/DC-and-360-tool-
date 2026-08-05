@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 const journeySteps = [
   { id: 1, label: 'Role Interview', to: '/participant/role-interview', status: 'completed', deadline: '15 Jun' },
   { id: 2, label: 'Photograph', to: '/participant/photograph', status: 'completed', deadline: '15 Jun' },
-  { id: 3, label: 'Pre-Work', to: '/participant/pre-work', status: 'in-progress', deadline: '20 Jun' },
+  { id: 3, label: 'Self Reflection', to: '/participant/pre-work', status: 'in-progress', deadline: '20 Jun' },
   { id: 4, label: '360 Nominees', to: '/participant/360-nominees', status: 'pending', deadline: '20 Jun' },
   { id: 5, label: 'Self 360 Survey', to: '/participant/self-360', status: 'locked', deadline: '30 Jun' },
   { id: 6, label: '360 Feedback', to: '/participant/360-status', status: 'locked', deadline: '30 Jun' },
@@ -12,7 +12,7 @@ const journeySteps = [
 
 const pendingTasks = [
   {
-    title: 'Complete Pre-Work form',
+    title: 'Complete Self Reflection form',
     description: '8 of 9 self-reflection questions answered',
     to: '/participant/pre-work',
     deadline: '20 Jun 2025',

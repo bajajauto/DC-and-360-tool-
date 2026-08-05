@@ -4,23 +4,21 @@ import { api } from '../../lib/api'
 import { useUser } from '../../context/UserContext'
 
 const questions = [
-  'What is the most important thing you have learned about yourself as a result of working in several positions as a leader?',
-  'Using three short phrases, indicate how your close friends might describe you.',
-  'Now describe yourself using three short phrases different from the above.',
-  'What do you think are your strongest points?',
-  'What three areas would you like to improve or change about yourself?',
-  'If we were to talk with your direct reports, what would their criticisms be of you?',
-  'If we were to talk with your peers or bosses, what would their criticisms be of you?',
-  'Sometimes people misinterpret our personality. How do others see you differently from how you really think you are?',
-  'If you picked a character from mythology, films, politics, sports or history who is closest to you psychologically, who would it be?',
-  'Reflecting deep down inside yourself, what pressures would you say are at work on you?',
+  { key: 'q1', text: 'What is the most important thing you have learned about yourself as a result of your work experience?' },
+  { key: 'q2', text: 'Using three short phrases, indicate how your close friends might describe you.' },
+  { key: 'q3', text: 'Now describe yourself using three short phrases different from the above.' },
+  { key: 'q4', text: 'What do you think are your strongest points?' },
+  { key: 'q5', text: 'What three areas would you like to improve or change about yourself?' },
+  { key: 'q6', text: 'If we were to talk with your peers, manager, or direct reports, what would their criticisms be of you?' },
+  { key: 'q8', text: 'Sometimes people misinterpret our personality. How do others see you differently from how you really think you are?' },
+  { key: 'q9', text: 'If you picked a character from mythology, films, politics, sports or history who is closest to you psychologically, who would it be?' },
+  { key: 'q10', text: 'Reflecting deep down inside yourself, what pressures would you say are at work on you?' },
 ]
 
 const helperText = {
   q2: 'Think about how you are described outside work, by people who know you well.',
   q3: 'These should be different from the phrases above. Where they differ is often the interesting part.',
-  q6: 'Be honest. Every leader has areas their team finds difficult, and naming them is a strength, not a weakness.',
-  q7: 'Consider feedback you have received before, including any you found hard to hear.',
+  q6: 'Consider feedback you have received from peers, managers, and direct reports, including any you found hard to hear.',
   q8: "Think of a time someone's reaction to you surprised you.",
   q9: 'Any character from mythology, film, politics, sport or history. Briefly explain why you chose them.',
   q10: 'This is for your own reflection. Consider what genuinely weighs on you, professionally or otherwise.',
@@ -74,8 +72,12 @@ export default function PreWork() {
     if (!user?.participantId) return
     api.getParticipantWork(user.participantId, 'pre-work')
       .then(({ data }) => {
-        setAnswers(data.answers || {})
-        submittedSnapshot.current = data.answers || {}
+        const loadedAnswers = { ...(data.answers || {}) }
+        if (String(loadedAnswers.q7 || '').trim() && !String(loadedAnswers.q6 || '').includes(String(loadedAnswers.q7).trim())) {
+          loadedAnswers.q6 = [loadedAnswers.q6, loadedAnswers.q7].filter((value) => String(value || '').trim()).join('\n\n')
+        }
+        setAnswers(loadedAnswers)
+        submittedSnapshot.current = loadedAnswers
         setStatus(data.status || 'draft')
         setCanEdit(data.canEdit !== false)
         setCutoff(data.cutoff || null)
@@ -84,7 +86,7 @@ export default function PreWork() {
       .finally(() => setDraftLoaded(true))
   }, [user?.participantId])
 
-  const answered = questions.filter((_, index) => validAnswer(answers[`q${index + 1}`])).length
+  const answered = questions.filter(({ key }) => validAnswer(answers[key])).length
 
   useEffect(() => {
     if (!draftLoaded || !user?.participantId || !canEdit || (status === 'submitted' && !editing)) return
@@ -118,11 +120,11 @@ export default function PreWork() {
   return (
     <div className="p-6">
       <div className="mb-5 flex gap-2 text-xs text-gray-400">
-        <Link to="/participant/dashboard">Dashboard</Link><span>/</span><span>Pre-Work</span>
+        <Link to="/participant/dashboard">Dashboard</Link><span>/</span><span>Self Reflection</span>
       </div>
       <div className="mb-5">
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-xl font-bold">Participant Pre-Work</h1>
+          <h1 className="text-xl font-bold">Participant Self Reflection</h1>
           {status === 'submitted' && <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-700">Submitted</span>}
         </div>
         <p className="mt-1 text-sm text-gray-500">Self-Reflection Worksheet · All questions are mandatory · {answered}/{questions.length} answered</p>
@@ -133,16 +135,16 @@ export default function PreWork() {
         <span className="ml-1">{canEdit ? `— ${cutoff ? new Date(cutoff).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'the deadline configured for your cohort'}. You may submit now and return to edit before this deadline.` : '— this form is now read-only.'}</span>
       </div>
       {message && status !== 'submitted' && <div className="mb-4 rounded-lg border bg-white px-4 py-3 text-sm">{message}</div>}
-      {status === 'submitted' && <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3"><div><p className="text-sm font-semibold text-emerald-800">Pre-Work submitted</p><p className="mt-0.5 text-xs text-emerald-700">{canEdit ? `Editable until ${cutoff ? new Date(cutoff).toLocaleDateString('en-GB') : 'the cohort cutoff'}.` : 'The cutoff has passed and this submission is now locked.'}</p></div>{canEdit && !editing && <button onClick={() => setEditing(true)} className="rounded-md bg-[#1e5fba] px-3 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-[#0e3f87]">Edit Submission</button>}</div>}
+      {status === 'submitted' && <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3"><div><p className="text-sm font-semibold text-emerald-800">Self Reflection submitted</p><p className="mt-0.5 text-xs text-emerald-700">{canEdit ? `Editable until ${cutoff ? new Date(cutoff).toLocaleDateString('en-GB') : 'the cohort cutoff'}.` : 'The cutoff has passed and this submission is now locked.'}</p></div>{canEdit && !editing && <button onClick={() => setEditing(true)} className="rounded-md bg-[#1e5fba] px-3 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-[#0e3f87]">Edit Submission</button>}</div>}
       <PreWorkInstructions />
       <div className="space-y-4">
         {questions.map((question, index) => {
-          const key = `q${index + 1}`
+          const { key } = question
           return (
             <section key={key} className="rounded-xl border border-slate-200 bg-white p-5">
               <div className="mb-3 flex items-start gap-3">
                 <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#1e4d8c] text-xs font-bold text-white">{index + 1}</span>
-                <label className="flex-1 text-sm font-semibold leading-6">{question}<span className="ml-0.5 text-red-500">*</span></label>
+                <label className="flex-1 text-sm font-semibold leading-6">{question.text}<span className="ml-0.5 text-red-500">*</span></label>
                 <span className="rounded-full bg-red-50 px-2 py-1 text-[10px] font-semibold uppercase text-red-600">Required</span>
               </div>
               {helperText[key] && <p className="mb-2 ml-9 text-xs leading-5 text-[#59708f]">{helperText[key]}</p>}

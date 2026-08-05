@@ -7,20 +7,19 @@ const evidenceConfig = {
   photograph: { title: 'Participant Photograph', label: 'Identity evidence', icon: Camera },
   'role-interview': { title: 'Role Interview', label: 'Interview submission', icon: MessageSquareText },
   '360-report': { title: '360° Feedback Report', label: 'Aggregated feedback', icon: FileText },
-  'pre-work': { title: 'Pre-work', label: 'Participant submission', icon: BriefcaseBusiness },
+  'pre-work': { title: 'Self Reflection', label: 'Participant submission', icon: BriefcaseBusiness },
 }
 
 const preWorkQuestions = [
-  'What is the most important thing you have learned about yourself as a result of working in several positions as a leader?',
-  'Using three short phrases, indicate how your close friends might describe you.',
-  'Now describe yourself using three short phrases different from the above.',
-  'What do you think are your strongest points?',
-  'What three areas would you like to improve or change about yourself?',
-  'If we were to talk with your direct reports, what would their criticisms be of you?',
-  'If we were to talk with your peers or bosses, what would their criticisms be of you?',
-  'Sometimes people misinterpret our personality. How do others see you differently from how you really think you are?',
-  'If you picked a character from mythology, films, politics, sports or history who is closest to you psychologically, who would it be?',
-  'Reflecting deep down inside yourself, what pressures would you say are at work on you?',
+  { key: 'q1', text: 'What is the most important thing you have learned about yourself as a result of your work experience?' },
+  { key: 'q2', text: 'Using three short phrases, indicate how your close friends might describe you.' },
+  { key: 'q3', text: 'Now describe yourself using three short phrases different from the above.' },
+  { key: 'q4', text: 'What do you think are your strongest points?' },
+  { key: 'q5', text: 'What three areas would you like to improve or change about yourself?' },
+  { key: 'q6', text: 'If we were to talk with your peers, manager, or direct reports, what would their criticisms be of you?' },
+  { key: 'q8', text: 'Sometimes people misinterpret our personality. How do others see you differently from how you really think you are?' },
+  { key: 'q9', text: 'If you picked a character from mythology, films, politics, sports or history who is closest to you psychologically, who would it be?' },
+  { key: 'q10', text: 'Reflecting deep down inside yourself, what pressures would you say are at work on you?' },
 ]
 
 const roleLabels = {
@@ -57,7 +56,10 @@ function RoleInterview({ submission }) {
 
 function PreWork({ submission }) {
   const answers = submission.answers || {}
-  return <div><SubmissionHeader submission={submission} /><div className="space-y-4">{preWorkQuestions.map((question, index) => <AnswerCard key={question} label={`${index + 1}. ${question}`} value={answers[`q${index + 1}`]} />)}</div></div>
+  const q6Answer = String(answers.q6 || '').trim()
+  const q7Answer = String(answers.q7 || '').trim()
+  const combinedCriticismAnswer = q7Answer && !q6Answer.includes(q7Answer) ? [q6Answer, q7Answer].filter(Boolean).join('\n\n') : q6Answer
+  return <div><SubmissionHeader submission={submission} /><div className="space-y-4">{preWorkQuestions.map((question, index) => <AnswerCard key={question.key} label={`${index + 1}. ${question.text}`} value={question.key === 'q6' ? combinedCriticismAnswer : answers[question.key]} />)}</div></div>
 }
 
 function DetailBody({ type, profile }) {

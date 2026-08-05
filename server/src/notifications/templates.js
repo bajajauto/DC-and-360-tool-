@@ -44,13 +44,39 @@ Immediate Next Steps
 1. Upload Photograph
 2. Complete the Role Interview Form
 3. Submit your 360 Degree Feedback nominations
-4. Complete the Pre-work Form
+4. Complete the Self Reflection Form
 
 Deadline: {{Prework Deadline}} EOD
 
 ${support}
 
 We wish you the very best for this development journey.
+
+${signature}`,
+  },
+  {
+    templateId: 'buhr-participant-credentials',
+    phase: 'Setup',
+    trigger: 'Participant accounts created for a cohort; sent once per BUHR after their mapped participants are set up',
+    recipient: 'BUHR',
+    subject: '{{Cohort}} | Login credentials of your mapped participants | Confidential',
+    body: `Dear {{BUHR Name}},
+
+As part of the {{Cohort}} Development Centre, accounts have been created on the Bajaj Auto 360/DC Tool for the participants mapped to you. Their login credentials are listed below for your reference.
+
+Your BUHR Login Details
+Login Link: {{Login Link}}
+Email ID: {{BUHR Email}}
+Password: {{BUHR Password}}
+
+Please note: These credentials are shared for your reference and oversight only. Each participant is responsible for completing their own pre-work, Role Interview and self-assessment. Please do not use these credentials to log in on any participant's behalf. Doing so would compromise the confidentiality and integrity of their assessment.
+
+Participants mapped to you:
+
+Participant Name | Ticket ID | Login Email | Password
+{{Participant Credentials}}
+
+This email contains confidential information. Please store it securely and do not forward it.
 
 ${signature}`,
   },
@@ -176,7 +202,7 @@ ${signature}`,
     phase: 'Documents',
     trigger: 'Automatic at T-3 and T-1 before each document deadline, if pending',
     recipient: 'Participant',
-    subject: 'Reminder | Complete your DC pre-work by {{Prework Deadline}}',
+    subject: 'Reminder | Complete your Self Reflection by {{Prework Deadline}}',
     body: `Dear {{Participant Name}},
 
 As you prepare for the {{Cohort}} Development Centre scheduled for {{DC Dates}}, the following items are still pending on the Bajaj Auto 360/DC Tool:
@@ -185,7 +211,7 @@ As you prepare for the {{Cohort}} Development Centre scheduled for {{DC Dates}},
 
 Please complete these by {{Prework Deadline}} EOD.
 
-The Role Interview Form, Photograph, and Pre-work Form are read by your assessors before the DC and help them understand your context. Please complete them with sincerity. The timelines are sacrosanct and will not be extended.
+The Role Interview Form, Photograph, and Self Reflection Form are read by your assessors before the DC and help them understand your context. Please complete them with sincerity. The timelines are sacrosanct and will not be extended.
 
 ${support}
 

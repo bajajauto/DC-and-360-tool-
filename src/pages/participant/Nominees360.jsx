@@ -18,6 +18,9 @@ const REL_REQUIREMENTS = {
 }
 
 const addableRelationships = ['reporting-manager', 'skip-manager', 'peer', 'direct-report']
+const RESTRICTED_POSITION_LEVELS = new Set(['MX', 'CX', 'DX', 'L0', 'L1'])
+const RESTRICTED_RELATIONSHIPS = new Set(['peer', 'direct-report'])
+const RESTRICTED_NOMINATION_MESSAGE = 'You cannot choose the selected user as your 360 respondent for this category. You may add them under the Reporting Manager, Skip Manager, or BU Head category (wherever applicable) instead.'
 
 const NOMINATION_CATEGORIES = [
   ['Self', 'Self-assessment completed by you.', '1', '1'],
@@ -199,6 +202,27 @@ export default function Nominees360() {
   }
 
   function selectDirectoryEmployee(relationship, index, employee) {
+    const isRestrictedSelection = RESTRICTED_RELATIONSHIPS.has(relationship)
+      && RESTRICTED_POSITION_LEVELS.has(String(employee.positionLevel || '').trim().toUpperCase())
+
+    if (isRestrictedSelection) {
+      setExternalDrafts((prev) => ({
+        ...prev,
+        [relationship]: prev[relationship].map((draft, draftIndex) => draftIndex === index ? {
+          ...draft,
+          name: employee.name,
+          email: '',
+          employeeId: '',
+          positionLevel: employee.positionLevel,
+          directorySelected: false,
+          directoryResults: [],
+          directoryLoading: false,
+          eligibilityError: RESTRICTED_NOMINATION_MESSAGE,
+        } : draft),
+      }))
+      return
+    }
+
     setExternalDrafts((prev) => ({
       ...prev,
       [relationship]: prev[relationship].map((draft, draftIndex) => draftIndex === index ? {
@@ -361,6 +385,17 @@ export default function Nominees360() {
 
   function getVisibleRequirement(rel) {
     return REL_REQUIREMENTS[rel]
+  }
+
+  function minimumRequirementMet(rel) {
+    if (rel === 'reporting-manager' || rel === 'skip-manager') return grouped[rel].length >= 1
+    if (rel === 'peer') return grouped[rel].length >= 4
+    return true
+  }
+
+  function requirementTone(rel) {
+    if (minimumRequirementMet(rel)) return 'text-emerald-700'
+    return validationAttempted ? 'text-red-600' : 'text-[#1e4d8c]'
   }
 
   async function handleSaveList() {
@@ -590,7 +625,7 @@ export default function Nominees360() {
                         <div className="text-right shrink-0">
                           <p className="text-xs text-gray-400">{grouped[rel].length} added</p>
                           {visibleRequirement && (
-                            <p className={`text-xs font-semibold ${rel === 'peer' || rel === 'reporting-manager' ? 'text-red-500' : 'text-[#1e4d8c]'}`}>{visibleRequirement}</p>
+                            <p className={`text-xs font-semibold ${requirementTone(rel)}`}>{visibleRequirement}</p>
                           )}
                         </div>
                       </div>

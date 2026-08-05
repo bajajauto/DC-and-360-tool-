@@ -21,6 +21,22 @@ export function buildInviteUrl(token) {
   return `${appUrl.replace(/\/$/, '')}/invite/${token}`
 }
 
+export async function createParticipantMagicLink(db, { userId, email, participantId }) {
+  const token = generateMagicToken()
+  const magicLink = await db.magicLink.create({
+    data: {
+      userId,
+      email: normalizeEmail(email),
+      role: 'PARTICIPANT',
+      tokenHash: hashMagicToken(token),
+      expiresAt: getMagicLinkExpiry(),
+      payload: { participantId },
+    },
+  })
+
+  return { magicLink, inviteUrl: buildInviteUrl(token) }
+}
+
 export function normalizeEmail(email) {
   return email.trim().toLowerCase()
 }

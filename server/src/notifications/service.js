@@ -3,6 +3,7 @@ import { notificationTemplates } from './templates.js'
 
 const TEMPLATE_CC_ROLES = {
   welcome: ['BUHR', 'LEARN'],
+  'buhr-participant-credentials': ['PALAK'],
   'stage-deadline-reminder': ['BUHR', 'LEARN'],
   'report-360-released': ['BUHR', 'LEARN', 'MANAGER'],
   'report-dc-released': ['BUHR', 'LEARN', 'MANAGER'],
@@ -12,6 +13,38 @@ const TEMPLATE_CC_ROLES = {
 function normalizeEmail(value) {
   const email = String(value || '').trim().toLowerCase()
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : null
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;')
+}
+
+function buildEmailHtml(body, context = {}) {
+  let html = escapeHtml(body)
+  const credentials = context['Participant Credentials']
+  if (typeof credentials === 'string' && credentials.trim()) {
+    const plainTable = `Participant Name | Ticket ID | Login Email | Password\n${credentials}`
+    const rows = credentials.split('\n').map((row) => row.split('|').map((cell) => cell.trim()))
+    const tableHtml = `<table style="width:100%;border-collapse:collapse;margin:12px 0;"><thead><tr>${['Participant Name', 'Ticket ID', 'Login Email', 'Password'].map((heading) => `<th style="border:1px solid #cbd5e1;background:#ebf2fa;padding:8px;text-align:left;">${heading}</th>`).join('')}</tr></thead><tbody>${rows.map((row) => `<tr>${row.map((cell) => `<td style="border:1px solid #cbd5e1;padding:8px;">${escapeHtml(cell)}</td>`).join('')}</tr>`).join('')}</tbody></table>`
+    html = html.replace(escapeHtml(plainTable), tableHtml)
+  }
+  const secureLinks = [context['Login Link'], context['Magic Link']]
+    .filter((link) => typeof link === 'string' && /^https?:\/\//i.test(link))
+
+  for (const link of new Set(secureLinks)) {
+    const escapedLink = escapeHtml(link)
+    html = html.replaceAll(
+      escapedLink,
+      `<a href="${escapedLink}" style="color:#1e4d8c;font-weight:600;text-decoration:underline;">Dc-and-360_tool</a>`,
+    )
+  }
+
+  return `<div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.6;color:#1a1f2e;">${html.replaceAll('\n', '<br>')}</div>`
 }
 
 async function resolveParticipantId({ entity, entityId, metadata = {} }, db) {
@@ -33,7 +66,12 @@ async function resolveCcRecipients({ templateId, toEmail, entity, entityId, meta
   const roles = TEMPLATE_CC_ROLES[templateId] || []
   if (!roles.length) return []
   const participantId = await resolveParticipantId({ entity, entityId, metadata }, db)
-  if (!participantId) return roles.includes('LEARN') ? [normalizeEmail(process.env.NOTIFICATION_LEARN_EMAIL || 'learn@bajajauto.co.in')].filter(Boolean) : []
+  if (!participantId) {
+    return roles.map((role) => ({
+      LEARN: process.env.NOTIFICATION_LEARN_EMAIL || 'learn@bajajauto.co.in',
+      PALAK: process.env.NOTIFICATION_PALAK_EMAIL || 'pshukla1@bajajauto.co.in',
+    })[role]).map(normalizeEmail).filter(Boolean)
+  }
 
   const participant = await db.participant.findUnique({
     where: { id: participantId },
@@ -46,6 +84,7 @@ async function resolveCcRecipients({ templateId, toEmail, entity, entityId, meta
     BUHR: masterData.buhrEmail,
     MANAGER: masterData.reportingManagerEmail,
     LEARN: process.env.NOTIFICATION_LEARN_EMAIL || 'learn@bajajauto.co.in',
+    PALAK: process.env.NOTIFICATION_PALAK_EMAIL || 'pshukla1@bajajauto.co.in',
   })[role])
   const normalizedTo = normalizeEmail(toEmail)
   return [...new Set(addresses.map(normalizeEmail).filter((email) => email && email !== normalizedTo))]
@@ -170,6 +209,7 @@ async function deliverEmail(email, db = prisma) {
       cc: Array.isArray(email.metadata?.cc) && email.metadata.cc.length ? email.metadata.cc : undefined,
       subject: email.subject,
       text: email.body,
+      html: buildEmailHtml(email.body, email.metadata?.context),
     })
 
     return db.emailOutbox.update({

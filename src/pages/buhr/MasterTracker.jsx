@@ -105,7 +105,7 @@ export default function BUHRMasterTracker() {
               </div>
               <h2 className="text-base font-semibold text-[#0f172a]">BUHR Master Tracker</h2>
               <p className="mt-1 text-sm text-slate-600">One Excel row per mapped employee with task completion, 360 response counts, and report status.</p>
-              <p className="mt-2 text-xs text-slate-500"><strong>Includes:</strong> Ticket ID, employee, cohort, stage, nominations, pre-work, photograph, 360 responses, and report status.</p>
+              <p className="mt-2 text-xs text-slate-500"><strong>Includes:</strong> Ticket ID, employee, cohort, stage, nominations, Self Reflection, photograph, 360 responses, and report status.</p>
             </div>
             <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-end lg:w-auto">
               <label className="block">
@@ -158,7 +158,7 @@ export default function BUHRMasterTracker() {
             <table className="w-full min-w-[1280px] border-collapse bg-white text-left text-[13px]">
               <thead className="bg-[#ebf2fa]">
                 <tr>
-                  {['Ticket ID', 'Employee', 'Business Unit', 'Cohort', 'Current stage', 'Nominations', 'Pre-Work', 'Photo', '360 Responses', '360° Feedback Report Status', 'DC Report Status'].map((label) => (
+                  {['Ticket ID', 'Employee', 'Business Unit', 'Cohort', 'Current stage', 'Nominations', 'Self Reflection', 'Photo', '360 Responses', '360° Feedback Report Status', 'DC Report Status'].map((label) => (
                     <th key={label} className="border-b border-[#d5dce5] px-4 py-3 text-[11px] font-bold uppercase tracking-wide text-slate-600">{label}</th>
                   ))}
                 </tr>
