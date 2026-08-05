@@ -1,6 +1,56 @@
 import { prisma } from '../db.js'
 import { notificationTemplates } from './templates.js'
 
+const TEMPLATE_CC_ROLES = {
+  welcome: ['BUHR', 'LEARN'],
+  'stage-deadline-reminder': ['BUHR', 'LEARN'],
+  'report-360-released': ['BUHR', 'LEARN', 'MANAGER'],
+  'report-dc-released': ['BUHR', 'LEARN', 'MANAGER'],
+  'respondent-thank-you': ['PARTICIPANT'],
+}
+
+function normalizeEmail(value) {
+  const email = String(value || '').trim().toLowerCase()
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : null
+}
+
+async function resolveParticipantId({ entity, entityId, metadata = {} }, db) {
+  if (metadata?.participantId) return metadata.participantId
+  if (entity === 'Participant') return entityId
+  if (entity === 'ParticipantTask') return String(entityId || '').split(':')[0] || null
+  if (entity === 'FeedbackTask') {
+    const task = await db.feedbackTask.findUnique({ where: { id: entityId }, select: { participantId: true } })
+    return task?.participantId || null
+  }
+  if (entity === 'Report') {
+    const report = await db.report.findUnique({ where: { id: entityId }, select: { participantId: true } })
+    return report?.participantId || null
+  }
+  return null
+}
+
+async function resolveCcRecipients({ templateId, toEmail, entity, entityId, metadata }, db) {
+  const roles = TEMPLATE_CC_ROLES[templateId] || []
+  if (!roles.length) return []
+  const participantId = await resolveParticipantId({ entity, entityId, metadata }, db)
+  if (!participantId) return roles.includes('LEARN') ? [normalizeEmail(process.env.NOTIFICATION_LEARN_EMAIL || 'learn@bajajauto.co.in')].filter(Boolean) : []
+
+  const participant = await db.participant.findUnique({
+    where: { id: participantId },
+    include: { user: true },
+  })
+  if (!participant) return []
+  const masterData = participant.masterData && typeof participant.masterData === 'object' ? participant.masterData : {}
+  const addresses = roles.map((role) => ({
+    PARTICIPANT: participant.user?.email,
+    BUHR: masterData.buhrEmail,
+    MANAGER: masterData.reportingManagerEmail,
+    LEARN: process.env.NOTIFICATION_LEARN_EMAIL || 'learn@bajajauto.co.in',
+  })[role])
+  const normalizedTo = normalizeEmail(toEmail)
+  return [...new Set(addresses.map(normalizeEmail).filter((email) => email && email !== normalizedTo))]
+}
+
 export function renderTemplate(text, context = {}) {
   return text.replace(/\{\{([^}]+)\}\}/g, (match, key) => {
     const value = context[key.trim()]
@@ -117,6 +167,7 @@ async function deliverEmail(email, db = prisma) {
     const result = await transporter.sendMail({
       from: process.env.EMAIL_FROM || process.env.SMTP_USER,
       to: email.toName ? `${email.toName} <${email.toEmail}>` : email.toEmail,
+      cc: Array.isArray(email.metadata?.cc) && email.metadata.cc.length ? email.metadata.cc : undefined,
       subject: email.subject,
       text: email.body,
     })
@@ -155,6 +206,8 @@ export async function createQueuedEmail({
   entityId = null,
   actorId = null,
   metadata = {},
+  subject = null,
+  body = null,
 }, db = prisma) {
   let template = await db.notificationTemplate.findUnique({ where: { templateId } })
 
@@ -164,14 +217,15 @@ export async function createQueuedEmail({
     template = await db.notificationTemplate.create({ data: defaultTemplate })
   }
 
+  const cc = await resolveCcRecipients({ templateId, toEmail, entity, entityId, metadata }, db)
   return db.emailOutbox.create({
     data: {
       templateId,
       toEmail,
       toName,
       recipientRole: template.recipient,
-      subject: renderTemplate(template.subject, context),
-      body: renderTemplate(template.body, context),
+      subject: renderTemplate(subject || template.subject, context),
+      body: renderTemplate(body || template.body, context),
       magicLinkId,
       entity,
       entityId,
@@ -179,6 +233,7 @@ export async function createQueuedEmail({
       metadata: {
         ...metadata,
         context,
+        cc,
       },
     },
   })

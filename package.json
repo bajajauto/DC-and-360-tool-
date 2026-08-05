@@ -18,6 +18,7 @@
     "db:seed": "node server/prisma/seed.js",
     "db:bootstrap": "node server/prisma/bootstrapAccessAccounts.js",
     "db:import-hr": "node server/prisma/importHrData.js",
+    "db:import-directory": "node server/prisma/importEmployeeDirectory.js",
     "build": "vite build",
     "preview": "vite preview"
   },

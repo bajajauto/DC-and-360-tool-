@@ -163,6 +163,69 @@ cohortsRouter.patch('/:cohortId', asyncHandler(async (req, res) => {
   res.json({ data: toCohortDto(cohort) })
 }))
 
+cohortsRouter.delete('/:cohortId', asyncHandler(async (req, res) => {
+  const cohort = await prisma.cohort.findUnique({
+    where: { id: req.params.cohortId },
+    include: {
+      participants: {
+        include: {
+          user: true,
+          feedbackTasks: { select: { id: true } },
+          reports: { select: { id: true } },
+        },
+      },
+    },
+  })
+  if (!cohort) throw httpError(404, 'Cohort not found')
+
+  const participantIds = cohort.participants.map((participant) => participant.id)
+  const feedbackTaskIds = cohort.participants.flatMap((participant) => participant.feedbackTasks.map((task) => task.id))
+  const reportIds = cohort.participants.flatMap((participant) => participant.reports.map((report) => report.id))
+  const participantUsers = cohort.participants.map((participant) => participant.user)
+  const magicLinks = participantIds.length ? await prisma.magicLink.findMany({
+    where: { role: 'RESPONDENT' },
+    select: { id: true, payload: true },
+  }) : []
+  const participantIdSet = new Set(participantIds)
+  const magicLinkIds = magicLinks
+    .filter((link) => link.payload && typeof link.payload === 'object' && participantIdSet.has(link.payload.participantId))
+    .map((link) => link.id)
+
+  await prisma.$transaction(async (tx) => {
+    const emailFilters = [
+      participantIds.length ? { entity: 'Participant', entityId: { in: participantIds } } : null,
+      feedbackTaskIds.length ? { entity: 'FeedbackTask', entityId: { in: feedbackTaskIds } } : null,
+      reportIds.length ? { entity: 'Report', entityId: { in: reportIds } } : null,
+      participantIds.length ? { entity: 'ParticipantTask', OR: participantIds.map((id) => ({ entityId: { startsWith: `${id}:` } })) } : null,
+      magicLinkIds.length ? { magicLinkId: { in: magicLinkIds } } : null,
+    ].filter(Boolean)
+    if (emailFilters.length) await tx.emailOutbox.deleteMany({ where: { OR: emailFilters } })
+    if (magicLinkIds.length) await tx.magicLink.deleteMany({ where: { id: { in: magicLinkIds } } })
+    await tx.cohort.delete({ where: { id: cohort.id } })
+
+    const usersByRemainingRoles = new Map()
+    for (const user of participantUsers) {
+      const remainingRoles = user.roles.filter((role) => role !== 'PARTICIPANT')
+      const key = JSON.stringify(remainingRoles)
+      const group = usersByRemainingRoles.get(key) || { roles: remainingRoles, ids: [] }
+      group.ids.push(user.id)
+      usersByRemainingRoles.set(key, group)
+    }
+    for (const group of usersByRemainingRoles.values()) {
+      await tx.user.updateMany({ where: { id: { in: group.ids } }, data: { roles: group.roles } })
+    }
+  })
+
+  res.json({
+    data: {
+      id: cohort.id,
+      name: cohort.name,
+      participantCount: cohort.participants.length,
+      deleted: true,
+    },
+  })
+}))
+
 cohortsRouter.get('/:cohortId/participants', asyncHandler(async (req, res) => {
   const cohort = await prisma.cohort.findUnique({
     where: { id: req.params.cohortId },

@@ -72,6 +72,9 @@ export const api = {
   updateCohort: (cohortId, payload) =>
     apiFetch(`/api/cohorts/${cohortId}`, { method: 'PATCH', body: JSON.stringify(payload) }),
 
+  deleteCohort: (cohortId) =>
+    apiFetch(`/api/cohorts/${cohortId}`, { method: 'DELETE' }),
+
   getCohortParticipants: (cohortId) => apiFetch(`/api/cohorts/${cohortId}/participants`),
 
   addCohortParticipant: (cohortId, payload) =>
@@ -103,6 +106,15 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify({ nominees }),
     }),
+
+  checkNomineeEligibility: (participantId, nominee) =>
+    apiFetch(`/api/participants/${participantId}/nominees/check-eligibility`, {
+      method: 'POST',
+      body: JSON.stringify(nominee),
+    }),
+
+  searchEmployeeDirectory: (participantId, query) =>
+    apiFetch(`/api/participants/${participantId}/employee-directory?q=${encodeURIComponent(query || '')}`),
 
   getParticipantPhoto: (participantId) => apiFetch(`/api/participants/${participantId}/photo`),
 

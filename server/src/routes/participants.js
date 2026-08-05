@@ -38,6 +38,53 @@ const nomineesPayloadSchema = z.object({
   nominees: z.array(nomineeSchema).min(1),
 })
 
+const nomineeEligibilitySchema = nomineeSchema.pick({
+  email: true,
+  employeeId: true,
+  isExternal: true,
+  relationship: true,
+})
+
+const RESTRICTED_POSITION_LEVELS = new Set(['MX', 'CX', 'DX', 'L0', 'L1'])
+const RESTRICTED_NOMINATION_MESSAGE = 'You cannot choose the selected user as your 360 respondent for this category. You may add them under the Reporting Manager, Skip Manager, or BU Head category (wherever applicable) instead.'
+
+function normalizedPositionLevel(value) {
+  return String(value || '').trim().toUpperCase()
+}
+
+function matchesMasterContact(nominee, masterData, prefix) {
+  const email = normalizeEmail(nominee.email)
+  const employeeId = String(nominee.employeeId || '').trim().toLowerCase()
+  const masterEmail = String(masterData[`${prefix}Email`] || '').trim()
+  return (masterEmail && email === normalizeEmail(masterEmail))
+    || (employeeId && employeeId === String(masterData[`${prefix}EmployeeId`] || '').trim().toLowerCase())
+}
+
+function restrictedNomineeIsApplicable(nominee, masterData) {
+  if (nominee.relationship === 'reporting-manager') return matchesMasterContact(nominee, masterData, 'reportingManager')
+  if (nominee.relationship === 'skip-manager') {
+    return matchesMasterContact(nominee, masterData, 'skipManager') || matchesMasterContact(nominee, masterData, 'buHead')
+  }
+  return false
+}
+
+async function findDirectoryEntry(nominee, db = prisma) {
+  if (nominee.isExternal) return null
+  const email = normalizeEmail(nominee.email)
+  const employeeId = String(nominee.employeeId || '').trim()
+  return db.employeeDirectoryEntry.findFirst({
+    where: { OR: [{ email }, ...(employeeId ? [{ employeeId }] : [])] },
+  })
+}
+
+async function assertNomineePositionEligibility(nominee, participant, db = prisma) {
+  const directoryEntry = await findDirectoryEntry(nominee, db)
+  if (!directoryEntry || !RESTRICTED_POSITION_LEVELS.has(normalizedPositionLevel(directoryEntry.positionLevel))) return directoryEntry
+  const masterData = participant.masterData && typeof participant.masterData === 'object' ? participant.masterData : {}
+  if (!restrictedNomineeIsApplicable(nominee, masterData)) throw httpError(400, RESTRICTED_NOMINATION_MESSAGE)
+  return directoryEntry
+}
+
 const participantWorkSchema = z.object({
   answers: z.record(z.string(), z.unknown()),
   submit: z.boolean().optional().default(false),
@@ -54,7 +101,7 @@ function validResponse(value, minimum = 1) {
 function validateParticipantWork(type, answers) {
   if (type === 'pre-work') {
     const invalid = PRE_WORK_QUESTION_KEYS.filter((key) => !validResponse(answers[key], 15))
-    if (invalid.length) throw httpError(400, 'Please answer every Pre-Work question with at least 15 characters. Placeholder responses such as NA, None, hyphens, or dots are not accepted.')
+    if (invalid.length) throw httpError(400, 'Please answer every Self Reflection question with at least 15 characters. Placeholder responses such as NA, None, hyphens, or dots are not accepted.')
     return
   }
 
@@ -63,7 +110,8 @@ function validateParticipantWork(type, answers) {
   const reflectionFields = ['responsibilities', 'highlight1', 'highlight2', 'challenge1', 'challenge2']
   const optionalReflectionFields = ['highlight3', 'challenge3']
   const invalidOptionalResponse = optionalReflectionFields.some((key) => answers[key] && !validResponse(answers[key], 15))
-  if (shortFields.some((key) => !validResponse(answers[key])) || reflectionFields.some((key) => !validResponse(answers[key], 15)) || invalidOptionalResponse) {
+  const invalidDuration = [1, 2, 3].some((number) => !/^(0[1-9]|1[0-2])\/(19[6-9]\d|20\d{2})$/.test(String(answers[`transition${number}_duration`] || '')))
+  if (shortFields.some((key) => !validResponse(answers[key])) || invalidDuration || reflectionFields.some((key) => !validResponse(answers[key], 15)) || invalidOptionalResponse) {
     throw httpError(400, 'Please complete every required Role Interview field. Detailed responses require at least 15 characters, and placeholder responses are not accepted.')
   }
 }
@@ -244,7 +292,7 @@ participantsRouter.put('/:participantId/work/:type', asyncHandler(async (req, re
   const field = req.params.type === 'role-interview' ? 'roleInterview' : 'preWork'
   const current = participant[field]
   const cutoff = req.params.type === 'role-interview' ? participant.cohort.roleInterviewDeadline : participant.cohort.preWorkDeadline
-  if (hasCutoffPassed(cutoff)) throw httpError(409, `The ${req.params.type === 'role-interview' ? 'Role Interview' : 'Pre-Work'} cutoff has passed. This submission can no longer be edited.`)
+  if (hasCutoffPassed(cutoff)) throw httpError(409, `The ${req.params.type === 'role-interview' ? 'Role Interview' : 'Self Reflection'} cutoff has passed. This submission can no longer be edited.`)
   if (payload.submit) validateParticipantWork(req.params.type, payload.answers)
   const remainsSubmitted = current?.status === 'submitted'
   const submitted = payload.submit || remainsSubmitted
@@ -284,6 +332,7 @@ participantsRouter.put('/:participantId/nominees', asyncHandler(async (req, res)
   if (payload.nominees.some((nominee) => nominee.isExternal && nominee.relationship !== 'peer')) {
     throw httpError(400, 'External stakeholders must be added within the Peers category')
   }
+  for (const nominee of payload.nominees) await assertNomineePositionEligibility(nominee, participant)
   const lockedNominees = participant.nominees.filter((nominee) => nominee.locked)
   for (const locked of lockedNominees) {
     const retained = payload.nominees.find((nominee) => normalizeEmail(nominee.email) === normalizeEmail(locked.email) && relationshipMap[nominee.relationship] === locked.relationship)
@@ -336,6 +385,47 @@ participantsRouter.put('/:participantId/nominees', asyncHandler(async (req, res)
   })
 }))
 
+participantsRouter.post('/:participantId/nominees/check-eligibility', asyncHandler(async (req, res) => {
+  const nominee = nomineeEligibilitySchema.parse(req.body)
+  const participant = await findParticipant(req.params.participantId)
+  assertParticipantAccess(req, participant)
+  const directoryEntry = await assertNomineePositionEligibility(nominee, participant)
+  res.json({
+    data: {
+      eligible: true,
+      verified: Boolean(directoryEntry),
+      positionLevel: directoryEntry?.positionLevel || null,
+    },
+  })
+}))
+
+participantsRouter.get('/:participantId/employee-directory', asyncHandler(async (req, res) => {
+  const participant = await findParticipant(req.params.participantId)
+  assertParticipantAccess(req, participant)
+  const query = String(req.query.q || '').trim()
+  if (query.length < 2) return res.json({ data: [] })
+  const rows = await prisma.employeeDirectoryEntry.findMany({
+    where: {
+      OR: [
+        { name: { contains: query, mode: 'insensitive' } },
+        { employeeId: { contains: query, mode: 'insensitive' } },
+        { email: { contains: query, mode: 'insensitive' } },
+      ],
+    },
+    orderBy: [{ name: 'asc' }, { employeeId: 'asc' }],
+    take: 10,
+  })
+  res.json({
+    data: rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      email: row.email,
+      employeeId: row.employeeId,
+      positionLevel: row.positionLevel,
+    })),
+  })
+}))
+
 participantsRouter.post('/:participantId/self-feedback-task', asyncHandler(async (req, res) => {
   const participant = await findParticipant(req.params.participantId)
   assertParticipantAccess(req, participant)
@@ -377,6 +467,12 @@ participantsRouter.post('/:participantId/nominees/submit', asyncHandler(async (r
   const participant = await findParticipant(req.params.participantId)
   assertParticipantAccess(req, participant)
   const nominees = participant.nominees
+  for (const nominee of nominees) {
+    await assertNomineePositionEligibility({
+      ...nominee,
+      relationship: nominee.relationship.toLowerCase().replaceAll('_', '-'),
+    }, participant)
+  }
   if (nominees.some((nominee) => nominee.status === 'SUBMITTED')) throw httpError(409, 'These nominations have already been submitted and are final')
 
   if (!nominees.length) throw httpError(400, 'Add nominees before submitting')

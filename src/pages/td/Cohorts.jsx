@@ -53,7 +53,7 @@ function Metric({ label, value, sub, tone = 'text-[#0f172a]' }) {
 function RoleGuide() {
   const steps = [
     'Create a cohort, download the Employee Details template, fill and upload it.',
-    'Participants complete their Role Interview, Pre-Work, photograph and 360 nominations within the configured deadlines.',
+    'Participants complete their Role Interview, Self Reflection, photograph and 360 nominations within the configured deadlines.',
     'Launch and track 360 feedback. Respondents receive task-specific magic links immediately, with reminders and delivery status available in Email History.',
     'Assessors review participant evidence and upload the completed assessor-analysis workbook for each participant.',
     'Generate, review and release the 360° Feedback Report and final Development Centre Report when all required inputs are ready.',
@@ -102,7 +102,7 @@ const dcTypeOptions = ['EX to LX', 'LX to MX']
 const deadlineFieldDefs = [
   { key: 'roleInterviewDeadline', label: 'Role Interview Deadline' },
   { key: 'photoDeadline', label: 'Photograph Deadline' },
-  { key: 'preWorkDeadline', label: 'Pre-Work Deadline' },
+  { key: 'preWorkDeadline', label: 'Self Reflection Deadline' },
   { key: 'nominationDeadline', label: 'Nomination Deadline' },
   { key: 'threeSixtyCutoff', label: '360 Cutoff' },
 ]
@@ -418,7 +418,7 @@ function ParticipantsTab({ rows, generated, onManage }) {
         <table className="w-full border-collapse bg-white text-left text-[13px]">
           <thead className="bg-[#ebf2fa]">
             <tr>
-              {['Ticket ID', 'Name', 'BU', 'Nominations', 'Pre-Work', 'Photo', '360 Responses', '360° Feedback Report Status', 'DC Report Status', ''].map((label) => (
+              {['Ticket ID', 'Name', 'BU', 'Nominations', 'Self Reflection', 'Photo', '360 Responses', '360° Feedback Report Status', 'DC Report Status', ''].map((label) => (
                 <th key={label} className="border-b border-[#d5dce5] px-3 py-2.5 text-[11px] font-bold uppercase tracking-wide text-slate-600">{label}</th>
               ))}
             </tr>
@@ -693,6 +693,7 @@ export default function Cohorts({ view = 'dashboard' }) {
   const [loadingParticipants, setLoadingParticipants] = useState(false)
   const [error, setError] = useState('')
   const [modalState, setModalState] = useState(null) // { mode: 'create' | 'edit', cohort? }
+  const [deletingCohortId, setDeletingCohortId] = useState('')
 
   function refreshCohorts() {
     return api.getCohorts().then((result) => {
@@ -712,6 +713,28 @@ export default function Cohorts({ view = 'dashboard' }) {
       if (result?.data?.id) setCohortId(result.data.id)
     }
     setModalState(null)
+  }
+
+  async function handleDeleteCohort(target) {
+    const confirmation = window.prompt(`This permanently deletes ${target.name}, its participants, submissions, nominations, feedback tasks, links, email history and reports.\n\nType the cohort name exactly to confirm:`)
+    if (confirmation === null) return
+    if (confirmation.trim() !== target.name) {
+      setError('Cohort deletion cancelled because the name did not match exactly.')
+      return
+    }
+    setDeletingCohortId(target.id)
+    setError('')
+    try {
+      await api.deleteCohort(target.id)
+      const remaining = cohorts.filter((item) => item.id !== target.id)
+      setCohorts(remaining)
+      setCohortId((current) => current === target.id ? remaining.at(-1)?.id || '' : current)
+      if (cohortId === target.id) setAllParticipants([])
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setDeletingCohortId('')
+    }
   }
 
   useEffect(() => {
@@ -872,6 +895,14 @@ export default function Cohorts({ view = 'dashboard' }) {
                     <td className="border-b border-[#d5dce5] px-3 py-3">{item.participantCount ?? (item.id === cohortId ? allInCohort.length : 0)}</td>
                     <td className="border-b border-[#d5dce5] px-3 py-3"><Badge tone="info">Live</Badge></td>
                     <td className="border-b border-[#d5dce5] px-3 py-3 text-right">
+                      <button
+                        onClick={(event) => { event.stopPropagation(); handleDeleteCohort(item) }}
+                        disabled={deletingCohortId === item.id}
+                        className="mr-1 inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
+                        aria-label={`Delete ${item.name}`}
+                      >
+                        <Trash2 size={14} />
+                      </button>
                       <button
                         onClick={(event) => { event.stopPropagation(); setModalState({ mode: 'edit', cohort: item }) }}
                         className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-[#ebf2fa] hover:text-[#1e5fba]"

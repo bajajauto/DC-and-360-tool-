@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { prisma } from '../db.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
 import { httpError } from '../utils/httpError.js'
-import { ensureNotificationTemplates, renderTemplate, sendEmail } from '../notifications/service.js'
+import { createQueuedEmail, ensureNotificationTemplates, renderTemplate, sendEmail } from '../notifications/service.js'
 
 export const notificationsRouter = Router()
 
@@ -131,6 +131,9 @@ async function resolveRecipient(recipient) {
         'Days Remaining': metadataContext(sourceEmail)['Days Remaining'] || '',
       },
       magicLinkId: magicLink.id,
+      entity: sourceEmail.entity,
+      entityId: sourceEmail.entityId,
+      metadata: sourceEmail.metadata,
     }
   }
 
@@ -155,6 +158,9 @@ async function resolveRecipient(recipient) {
       name: user.name,
       context: buildParticipantContext(user.participant, user.name),
       magicLinkId: null,
+      entity: user.participant ? 'Participant' : null,
+      entityId: user.participant?.id || null,
+      metadata: user.participant ? { participantId: user.participant.id } : {},
     }
   }
 
@@ -182,10 +188,13 @@ async function resolveRecipient(recipient) {
       name,
       context: buildParticipantContext(participant, name),
       magicLinkId: null,
+      entity: 'Participant',
+      entityId: participant.id,
+      metadata: { participantId: participant.id },
     }
   }
 
-  return { email: recipient.email.toLowerCase(), name: recipient.name || null, context: {}, magicLinkId: null }
+  return { email: recipient.email.toLowerCase(), name: recipient.name || null, context: {}, magicLinkId: null, entity: null, entityId: null, metadata: {} }
 }
 
 function toTemplateDto(template) {
@@ -219,6 +228,7 @@ function toEmailDto(email) {
     entity: email.entity,
     entityId: email.entityId,
     metadata: email.metadata,
+    cc: Array.isArray(email.metadata?.cc) ? email.metadata.cc : [],
     queuedAt: email.queuedAt.toISOString(),
     sentAt: email.sentAt?.toISOString() || null,
   }
@@ -379,18 +389,18 @@ notificationsRouter.post('/send', asyncHandler(async (req, res) => {
 
   const results = []
   for (const recipient of personalized) {
-    const deliveryRecord = await prisma.emailOutbox.create({
-      data: {
-        templateId: template.templateId,
-        toEmail: recipient.email,
-        toName: recipient.name,
-        recipientRole: template.recipient,
-        subject: recipient.subject,
-        body: recipient.body,
-        magicLinkId: recipient.magicLinkId,
-        actorId: req.auth.userId,
-        metadata: { source: 'template-compose', templateTrigger: template.trigger, context: recipient.context },
-      },
+    const deliveryRecord = await createQueuedEmail({
+      templateId: template.templateId,
+      toEmail: recipient.email,
+      toName: recipient.name,
+      subject: recipient.subject,
+      body: recipient.body,
+      context: recipient.context,
+      magicLinkId: recipient.magicLinkId,
+      entity: recipient.entity,
+      entityId: recipient.entityId,
+      actorId: req.auth.userId,
+      metadata: { ...recipient.metadata, source: 'template-compose', templateTrigger: template.trigger },
     })
     const sent = await sendEmail(deliveryRecord.id, { force: true })
     results.push(toEmailDto(sent))

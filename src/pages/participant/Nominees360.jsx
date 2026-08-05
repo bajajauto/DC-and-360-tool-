@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useUser } from '../../context/UserContext'
 import { api } from '../../lib/api'
@@ -43,7 +43,7 @@ function RequirementsTable({ compact = false }) {
   )
 }
 
-const emptyDraft = () => ({ name: '', email: '', employeeId: '', isExternal: false })
+const emptyDraft = () => ({ name: '', email: '', employeeId: '', isExternal: false, eligibilityError: '', directoryResults: [], directoryLoading: false, directorySelected: false })
 const createInitialDrafts = () => ({
   'reporting-manager': [emptyDraft()],
   'skip-manager': [emptyDraft()],
@@ -84,6 +84,7 @@ function NominationInstructions({ nominationDeadline, feedbackCutoff, onAccept }
             <li><strong>Range of perspectives.</strong> Cover different parts of your working world so your report reflects how you operate across the organisation.</li>
             <li><strong>Sufficient exposure.</strong> Nominate people who have worked with you closely enough, and recently enough, to comment meaningfully.</li>
             <li><strong>External stakeholders count.</strong> Vendors, dealers, partners and customers outside Bajaj Auto can be nominated.</li>
+            <li><strong>Position-level restriction.</strong> Employees at MX, CX, DX, L0 or L1 cannot be nominated as Peers / Internal Customers / External Stakeholders or Direct Reports. They may be included only when they are your applicable Reporting Manager, Skip Manager or BU Head.</li>
           </ul></div>
           <div className="border-t pt-6"><h2 className="text-base font-bold text-[#1e4d8c]">Respondent categories and minimums</h2><p className="mt-2">The minimum response threshold protects individual respondent confidentiality.</p><div className="mt-4"><RequirementsTable /></div>
             <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-900"><strong>Please read the last column carefully.</strong> It shows the minimum responses required from each category to generate the 360° Feedback Report. A value of 0 means responses from that category are not required for report generation.</div>
@@ -116,6 +117,8 @@ export default function Nominees360() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [validationAttempted, setValidationAttempted] = useState(false)
+  const [checkingDraft, setCheckingDraft] = useState('')
+  const directorySearchTimers = useRef({})
   const [cohort, setCohort] = useState({})
   const acceptanceKey = participantId ? `nomination-instructions-accepted:${participantId}` : ''
   const [instructionsAccepted, setInstructionsAccepted] = useState(() => participantId ? window.localStorage.getItem(`nomination-instructions-accepted:${participantId}`) === 'true' : false)
@@ -160,7 +163,55 @@ export default function Nominees360() {
   function updateExternalDraft(relationship, index, field, value) {
     setExternalDrafts((prev) => ({
       ...prev,
-      [relationship]: prev[relationship].map((draft, draftIndex) => draftIndex === index ? { ...draft, [field]: value } : draft),
+      [relationship]: prev[relationship].map((draft, draftIndex) => draftIndex === index ? { ...draft, [field]: value, eligibilityError: '' } : draft),
+    }))
+  }
+
+  function updateDraftName(relationship, index, value) {
+    const draftKey = `${relationship}:${index}`
+    window.clearTimeout(directorySearchTimers.current[draftKey])
+    setExternalDrafts((prev) => ({
+      ...prev,
+      [relationship]: prev[relationship].map((draft, draftIndex) => draftIndex === index ? {
+        ...draft,
+        name: value,
+        eligibilityError: '',
+        directorySelected: false,
+        directoryResults: [],
+        directoryLoading: value.trim().length >= 2 && !draft.isExternal,
+      } : draft),
+    }))
+    if (value.trim().length < 2) return
+    directorySearchTimers.current[draftKey] = window.setTimeout(async () => {
+      try {
+        const result = await api.searchEmployeeDirectory(participantId, value.trim())
+        setExternalDrafts((prev) => ({
+          ...prev,
+          [relationship]: prev[relationship].map((draft, draftIndex) => draftIndex === index && draft.name === value ? { ...draft, directoryResults: result.data || [], directoryLoading: false } : draft),
+        }))
+      } catch (err) {
+        setExternalDrafts((prev) => ({
+          ...prev,
+          [relationship]: prev[relationship].map((draft, draftIndex) => draftIndex === index && draft.name === value ? { ...draft, directoryResults: [], directoryLoading: false, eligibilityError: err.message } : draft),
+        }))
+      }
+    }, 250)
+  }
+
+  function selectDirectoryEmployee(relationship, index, employee) {
+    setExternalDrafts((prev) => ({
+      ...prev,
+      [relationship]: prev[relationship].map((draft, draftIndex) => draftIndex === index ? {
+        ...draft,
+        name: employee.name,
+        email: employee.email || '',
+        employeeId: employee.employeeId,
+        positionLevel: employee.positionLevel,
+        directorySelected: true,
+        directoryResults: [],
+        directoryLoading: false,
+        eligibilityError: '',
+      } : draft),
     }))
   }
 
@@ -182,8 +233,28 @@ export default function Nominees360() {
     }
   }
 
-  function addExternalNominee(relationship, index) {
+  async function addExternalNominee(relationship, index) {
     const draft = externalDrafts[relationship][index]
+    const draftKey = `${relationship}:${index}`
+    if (!draft.isExternal) {
+      setCheckingDraft(draftKey)
+      try {
+        await api.checkNomineeEligibility(participantId, {
+          email: draft.email.trim(),
+          employeeId: draft.employeeId.trim(),
+          isExternal: false,
+          relationship,
+        })
+      } catch (err) {
+        setExternalDrafts((prev) => ({
+          ...prev,
+          [relationship]: prev[relationship].map((item, draftIndex) => draftIndex === index ? { ...item, eligibilityError: err.message } : item),
+        }))
+        return
+      } finally {
+        setCheckingDraft('')
+      }
+    }
     setNominees((prev) => [
       ...prev,
       { id: `nominee-${relationship}-${Date.now()}`, name: draft.name.trim(), email: draft.email.trim(), employeeId: draft.isExternal ? '' : draft.employeeId.trim(), isExternal: draft.isExternal, relationship, source: draft.isExternal ? 'external' : 'manual' },
@@ -223,17 +294,33 @@ export default function Nominees360() {
             {drafts.map((draft, index) => {
               const duplicateEmail = nominees.some((nominee) => nominee.email.toLowerCase() === draft.email.trim().toLowerCase())
                 || drafts.some((other, otherIndex) => otherIndex !== index && other.email.trim() && other.email.trim().toLowerCase() === draft.email.trim().toLowerCase())
-              const canAdd = draft.name.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.email.trim()) && (draft.isExternal || draft.employeeId.trim()) && !duplicateEmail
+              const draftKey = `${relationship}:${index}`
+              const isChecking = checkingDraft === draftKey
+              const canAdd = draft.name.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.email.trim()) && (draft.isExternal || draft.employeeId.trim()) && !duplicateEmail && !isChecking
               return <div key={index} className="rounded-lg border border-slate-200 bg-white p-3">
               <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-400">Nominee {grouped[relationship].length + index + 1}</p>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <input
-                type="text"
-                placeholder="Full name"
-                value={draft.name}
-                onChange={(e) => updateExternalDraft(relationship, index, 'name', e.target.value)}
-                className="px-3 py-2 rounded-lg border border-[#e2e8f0] bg-white text-sm placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-[#1e4d8c]"
-              />
+              <div className="relative">
+                <input
+                  type="text"
+                  autoComplete="off"
+                  placeholder="Start typing employee name"
+                  value={draft.name}
+                  onChange={(e) => updateDraftName(relationship, index, e.target.value)}
+                  className="w-full rounded-lg border border-[#e2e8f0] bg-white px-3 py-2 text-sm placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-[#1e4d8c]"
+                />
+                {draft.directoryLoading && <div className="absolute left-0 right-0 top-full z-30 mt-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500 shadow-lg">Searching employees…</div>}
+                {!draft.directoryLoading && draft.directoryResults?.length > 0 && (
+                  <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-64 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-xl">
+                    {draft.directoryResults.map((employee) => (
+                      <button key={employee.id} type="button" onClick={() => selectDirectoryEmployee(relationship, index, employee)} className="block w-full border-b border-slate-100 px-3 py-2.5 text-left last:border-0 hover:bg-blue-50">
+                        <span className="block text-xs font-semibold text-slate-900">{employee.name}</span>
+                        <span className="mt-0.5 block text-[11px] text-slate-500">{employee.email || 'Email not available — enter manually'} · Ticket ID: {employee.employeeId} · Level: {employee.positionLevel}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               <input
                 type="email"
                 placeholder="Email address"
@@ -256,11 +343,13 @@ export default function Nominees360() {
                 onClick={() => addExternalNominee(relationship, index)}
                 className="px-4 py-2 rounded-lg border border-[#1e4d8c] text-[#1e4d8c] text-sm font-medium hover:bg-[#dbeafe] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                Add
+                {isChecking ? 'Checking…' : 'Add'}
               </button>
               </div>
             </div>
             {duplicateEmail && <p className="mt-2 text-xs font-medium text-red-600">This email address is already in the nominee list.</p>}
+            {draft.directorySelected && <p className="mt-2 text-xs font-medium text-emerald-700">Employee selected from directory{draft.positionLevel ? ` · Position level ${draft.positionLevel}` : ''}.</p>}
+            {draft.eligibilityError && <p className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium leading-5 text-red-700">{draft.eligibilityError}</p>}
             </div>
             })}
             </div>
