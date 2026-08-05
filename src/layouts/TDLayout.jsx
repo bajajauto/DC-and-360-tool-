@@ -3,6 +3,7 @@ import {
   Bell,
   ChevronDown,
   ClipboardList,
+  Database,
   FileText,
   FileSpreadsheet,
   LayoutDashboard,
@@ -28,6 +29,7 @@ const navSections = [
     label: 'Operations',
     items: [
       { to: '/td/templates', label: 'Email Centre', icon: Bell },
+      { to: '/td/employee-directory', label: 'Employee Directory', icon: Database },
       { to: '/td/outbox', label: 'Email Outbox', icon: Mail },
       { to: '/td/exports', label: 'Trackers & Exports', icon: ClipboardList },
       { to: '/td/assessor-analysis', label: 'Assessor Excel', icon: FileSpreadsheet },

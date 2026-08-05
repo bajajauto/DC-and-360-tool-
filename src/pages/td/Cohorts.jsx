@@ -644,6 +644,19 @@ function EmployeeUploadTab() {
   )
 }
 
+export function EmployeeDirectoryPage() {
+  return (
+    <div className="px-9 py-8">
+      <div className="mx-auto max-w-[1200px]">
+        <p className="mb-2 text-xs text-slate-500">Talent Development / Employee Directory</p>
+        <h1 className="font-serif text-[34px] font-semibold leading-tight text-[#1e4d8c]">Employee Directory</h1>
+        <p className="mb-6 mt-1 text-sm text-slate-600">View the active employee directory and replace it with the latest EC employee dump.</p>
+        <EmployeeUploadTab />
+      </div>
+    </div>
+  )
+}
+
 function ManageParticipantsTab({ cohort, rows, onAdded, onDeleted }) {
   const emptyRow = () => ({ name: '', employeeId: '', email: '', designation: '', businessUnit: '' })
   const [forms, setForms] = useState([])
@@ -1100,8 +1113,6 @@ export default function Cohorts({ view = 'dashboard' }) {
             </table>
           </div>
         </Card>}
-
-        {!isCurrentView && <div className="mb-5"><EmployeeUploadTab /></div>}
 
         {isCurrentView && <div className="mb-5">
           <div className="mb-4 flex flex-col gap-3 border-b border-[#d5dce5] md:flex-row md:items-center md:justify-between">
