@@ -8,7 +8,7 @@ const reports = [
     subtitle: 'EX-to-LX Cohort · Jun 2025',
     status: 'available',
     releasedOn: '28 Jun 2025',
-    description: 'Aggregated feedback from all your 360 respondents — competency scores, behaviour ratings, and qualitative themes.',
+    description: 'Aggregated feedback from all your 360 respondents: competency scores, behaviour ratings, and qualitative themes.',
     icon: '360',
     bgColor: 'bg-[#dbeafe]',
     textColor: 'text-[#1e4d8c]',
@@ -19,7 +19,7 @@ const reports = [
     subtitle: 'EX-to-LX Cohort · Jul 2025',
     status: 'pending',
     releasedOn: null,
-    description: 'Your full Development Centre report including assessor observations, integrated 360 findings, and an IDP focus area.',
+    description: 'Your full Development Centre report including assessor observations, integrated 360 findings, and a focus area.',
     icon: 'DC',
     bgColor: 'bg-indigo-100',
     textColor: 'text-indigo-700',
@@ -46,7 +46,7 @@ export default function Reports() {
 
       <div className="mb-5">
         <h1 className="text-xl font-bold text-[#1a1f2e]">My Reports</h1>
-        <p className="text-sm text-gray-500 mt-0.5">Your DC artefacts — released by TD and kept confidential</p>
+        <p className="text-sm text-gray-500 mt-0.5">Your DC artefacts, released by TD and kept confidential</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_248px] gap-6">

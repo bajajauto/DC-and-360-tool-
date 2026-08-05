@@ -16,7 +16,7 @@ const preWorkQuestions = [
   { key: 'q3', text: 'Now describe yourself using three short phrases different from the above.' },
   { key: 'q4', text: 'What do you think are your strongest points?' },
   { key: 'q5', text: 'What three areas would you like to improve or change about yourself?' },
-  { key: 'q6', text: 'If we were to talk with your peers, manager, or direct reports, what would their criticisms be of you?' },
+  { key: 'q6', text: 'If we were to speak with your peers, manager, and direct reports (if applicable), what do you think they would identify as your key areas for improvement?' },
   { key: 'q8', text: 'Sometimes people misinterpret our personality. How do others see you differently from how you really think you are?' },
   { key: 'q9', text: 'If you picked a character from mythology, films, politics, sports or history who is closest to you psychologically, who would it be?' },
   { key: 'q10', text: 'Reflecting deep down inside yourself, what pressures would you say are at work on you?' },

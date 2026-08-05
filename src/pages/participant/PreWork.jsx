@@ -9,7 +9,7 @@ const questions = [
   { key: 'q3', text: 'Now describe yourself using three short phrases different from the above.' },
   { key: 'q4', text: 'What do you think are your strongest points?' },
   { key: 'q5', text: 'What three areas would you like to improve or change about yourself?' },
-  { key: 'q6', text: 'If we were to talk with your peers, manager, or direct reports, what would their criticisms be of you?' },
+  { key: 'q6', text: 'If we were to speak with your peers, manager, and direct reports (if applicable), what do you think they would identify as your key areas for improvement?' },
   { key: 'q8', text: 'Sometimes people misinterpret our personality. How do others see you differently from how you really think you are?' },
   { key: 'q9', text: 'If you picked a character from mythology, films, politics, sports or history who is closest to you psychologically, who would it be?' },
   { key: 'q10', text: 'Reflecting deep down inside yourself, what pressures would you say are at work on you?' },
@@ -44,7 +44,6 @@ function PreWorkInstructions() {
         <h2 className="text-xs font-bold uppercase tracking-wide text-[#1e5fba]">How to fill it</h2>
         <ol className="mt-2 list-decimal space-y-1.5 pl-5 leading-6">
           <li>Please answer all ten questions. Nothing should be left blank.</li>
-          <li>Please be candid. The questions about how others might criticise you are often the most valuable, and are not held against you in any way.</li>
           <li>Please write in as much detail as you need. A few honest sentences are worth more than a single word.</li>
           <li>Please do not enter placeholder text such as NA, N/A, None, hyphens, dots or any other special characters in place of an answer.</li>
           <li>Set aside a quiet 30 to 40 minutes. Your responses save as you go, so you may return and edit at any time before the deadline.</li>
