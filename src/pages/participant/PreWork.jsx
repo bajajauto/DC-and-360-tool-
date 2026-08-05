@@ -66,6 +66,7 @@ export default function PreWork() {
   const [draftLoaded, setDraftLoaded] = useState(false)
   const [autoSaveStatus, setAutoSaveStatus] = useState('idle')
   const submittedSnapshot = useRef({})
+  const firstQuestionRef = useRef(null)
 
   useEffect(() => {
     if (!user?.participantId) return
@@ -79,6 +80,7 @@ export default function PreWork() {
         submittedSnapshot.current = loadedAnswers
         setStatus(data.status || 'draft')
         setCanEdit(data.canEdit !== false)
+        setEditing(false)
         setCutoff(data.cutoff || null)
       })
       .catch((error) => setMessage(error.message))
@@ -86,6 +88,11 @@ export default function PreWork() {
   }, [user?.participantId])
 
   const answered = questions.filter(({ key }) => validAnswer(answers[key])).length
+
+  function startEditing() {
+    setEditing(true)
+    window.requestAnimationFrame(() => firstQuestionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+  }
 
   useEffect(() => {
     if (!draftLoaded || !user?.participantId || !canEdit || (status === 'submitted' && !editing)) return
@@ -106,7 +113,7 @@ export default function PreWork() {
       setStatus(data.status)
       if (submit) {
         submittedSnapshot.current = data.answers || answers
-        setEditing(false)
+        setEditing(canEdit)
       }
       setMessage(submit ? '' : 'Draft saved.')
     } catch (error) {
@@ -125,6 +132,7 @@ export default function PreWork() {
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-xl font-bold">Participant Self Reflection</h1>
           {status === 'submitted' && <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-700">Submitted</span>}
+          {status === 'submitted' && canEdit && !editing && <button type="button" onClick={startEditing} className="rounded-md bg-[#1e5fba] px-3 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-[#0e3f87]">Edit Submission</button>}
         </div>
         <p className="mt-1 text-sm text-gray-500">Self-Reflection Worksheet · All questions are mandatory · {answered}/{questions.length} answered</p>
         {autoSaveStatus !== 'idle' && <p className={`mt-1 text-xs ${autoSaveStatus === 'saved' ? 'text-emerald-600' : 'text-slate-400'}`}>{autoSaveStatus === 'saved' ? 'Saved automatically' : 'Saving...'}</p>}
@@ -134,9 +142,9 @@ export default function PreWork() {
         <span className="ml-1">{canEdit ? `— ${cutoff ? new Date(cutoff).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'the deadline configured for your cohort'}. You may submit now and return to edit before this deadline.` : '— this form is now read-only.'}</span>
       </div>
       {message && status !== 'submitted' && <div className="mb-4 rounded-lg border bg-white px-4 py-3 text-sm">{message}</div>}
-      {status === 'submitted' && <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3"><div><p className="text-sm font-semibold text-emerald-800">Self Reflection submitted</p><p className="mt-0.5 text-xs text-emerald-700">{canEdit ? `Editable until ${cutoff ? new Date(cutoff).toLocaleDateString('en-GB') : 'the cohort cutoff'}.` : 'The cutoff has passed and this submission is now locked.'}</p></div>{canEdit && !editing && <button onClick={() => setEditing(true)} className="rounded-md bg-[#1e5fba] px-3 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-[#0e3f87]">Edit Submission</button>}</div>}
+      {status === 'submitted' && <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3"><p className="text-sm font-semibold text-emerald-800">Self Reflection submitted</p><p className="mt-0.5 text-xs text-emerald-700">{canEdit ? `Editable until ${cutoff ? new Date(cutoff).toLocaleDateString('en-GB') : 'the cohort cutoff'}.` : 'The cutoff has passed and this submission is now locked.'}</p></div>}
       <PreWorkInstructions />
-      <div className="space-y-4">
+      <div ref={firstQuestionRef} className="scroll-mt-6 space-y-4">
         {questions.map((question, index) => {
           const { key } = question
           return (
@@ -167,7 +175,8 @@ export default function PreWork() {
       <div className="mt-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-900"><strong>Please review your responses before submitting.</strong> You may edit your submission until the cohort cutoff. Timelines are sacrosanct and will not be extended.</div>
       <div className="sticky bottom-0 mt-5 flex justify-end gap-3 border-t bg-[#f4f7fb]/95 py-4">
         {status !== 'submitted' && <button disabled={saving || !canEdit} onClick={() => save(false)} className="rounded-lg border bg-white px-4 py-2 text-sm font-semibold disabled:opacity-40">Save Draft</button>}
-        {status === 'submitted' && !editing && <button disabled className="rounded-lg border border-emerald-200 bg-emerald-100 px-5 py-2 text-sm font-semibold text-emerald-700">Submitted</button>}
+        {status === 'submitted' && !editing && canEdit && <button type="button" onClick={startEditing} className="rounded-lg bg-[#1e4d8c] px-5 py-2 text-sm font-semibold text-white hover:bg-[#153d70]">Edit Submission</button>}
+        {status === 'submitted' && !editing && !canEdit && <button disabled className="rounded-lg border border-emerald-200 bg-emerald-100 px-5 py-2 text-sm font-semibold text-emerald-700">Submitted</button>}
         {editing && <button disabled={saving} onClick={() => { setAnswers(submittedSnapshot.current); setEditing(false) }} className="rounded-lg border bg-white px-4 py-2 text-sm font-semibold">Cancel</button>}
         {(status !== 'submitted' || editing) && <button disabled={saving || !canEdit || answered !== questions.length} onClick={() => save(true)} className="rounded-lg bg-[#1e4d8c] px-5 py-2 text-sm font-semibold text-white disabled:opacity-40">{editing ? 'Save Changes' : 'Submit'}</button>}
       </div>
