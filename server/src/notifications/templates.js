@@ -191,14 +191,14 @@ ${signature}`,
     phase: 'Documents',
     trigger: 'Automatic at T-3 and T-1 before each document deadline, if pending',
     recipient: 'Participant',
-    subject: 'Reminder | Complete your Self Reflection by {{Prework Deadline}}',
+    subject: 'Reminder | Complete your pending DC tasks',
     body: `Dear {{Participant Name}},
 
 As you prepare for the {{Cohort}} Development Centre scheduled for {{DC Dates}}, the following items are still pending on the Bajaj Auto 360/DC Tool:
 
 {{Pending Items}}
 
-Please complete these by {{Prework Deadline}} EOD.
+Please complete the pending items by their respective deadlines.
 
 The Role Interview Form, Photograph, and Self Reflection Form are read by your assessors before the DC and help them understand your context. Please complete them with sincerity. The timelines are sacrosanct and will not be extended.
 

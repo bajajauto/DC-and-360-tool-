@@ -62,7 +62,7 @@ async function resolveParticipantId({ entity, entityId, metadata = {} }, db) {
   return null
 }
 
-async function resolveCcRecipients({ templateId, toEmail, entity, entityId, metadata }, db) {
+export async function resolveCcRecipients({ templateId, toEmail, entity, entityId, metadata }, db = prisma) {
   const roles = TEMPLATE_CC_ROLES[templateId] || []
   if (!roles.length) return []
   const participantId = await resolveParticipantId({ entity, entityId, metadata }, db)

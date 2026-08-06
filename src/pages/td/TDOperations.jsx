@@ -265,6 +265,8 @@ export function NotificationTemplates() {
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
   const [recipientsLoading, setRecipientsLoading] = useState(false)
+  const [ccPreview, setCcPreview] = useState([])
+  const [ccPreviewLoading, setCcPreviewLoading] = useState(false)
   const [notice, setNotice] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -343,6 +345,31 @@ export function NotificationTemplates() {
     .filter((email) => !selectedEmails.has(email) && !pastedEmails.has(email))
     .map((email) => ({ email, name: null, sourceType: 'manual', sourceId: null }))
   const composedRecipients = [...selectedDirectoryRecipients, ...manualRecipients, ...pastedRecipients]
+  const composedRecipientKey = composedRecipients
+    .map((recipient) => `${recipient.sourceType}:${recipient.sourceId || recipient.email}`)
+    .sort()
+    .join('|')
+  const ccAddresses = [...new Set(ccPreview.flatMap((row) => row.cc || []))]
+
+  useEffect(() => {
+    if (!selected || !composedRecipients.length) {
+      setCcPreview([])
+      setCcPreviewLoading(false)
+      return undefined
+    }
+    let cancelled = false
+    setCcPreviewLoading(true)
+    const timeout = window.setTimeout(() => {
+      api.previewNotificationCc(selected.templateId, composedRecipients)
+        .then((result) => { if (!cancelled) setCcPreview(result.data || []) })
+        .catch(() => { if (!cancelled) setCcPreview([]) })
+        .finally(() => { if (!cancelled) setCcPreviewLoading(false) })
+    }, 250)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timeout)
+    }
+  }, [selected, composedRecipientKey])
 
   const trimmedSearch = recipientSearch.trim().toLowerCase()
   const searchIsNewEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedSearch)
@@ -492,7 +519,11 @@ export function NotificationTemplates() {
 
             <label className="mb-1 block text-xs font-semibold text-slate-700">Or paste email addresses in bulk</label>
             <textarea value={bulkEmails} onChange={(event) => { setBulkEmails(event.target.value); setSent(false) }} rows={3} placeholder="name@company.com, another@company.com" className="mb-3 w-full rounded-lg border border-[#c2ccda] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#d6e4f7]" />
-            <p className="mb-4 text-[11px] text-slate-500">Separate addresses with commas, semicolons, spaces, or new lines. {composedRecipients.length} unique recipient{composedRecipients.length === 1 ? '' : 's'} selected.</p>
+            <p className="mb-2 text-[11px] text-slate-500">Separate addresses with commas, semicolons, spaces, or new lines. {composedRecipients.length} unique recipient{composedRecipients.length === 1 ? '' : 's'} selected.</p>
+            <div className="mb-4 rounded-lg border border-[#d5dce5] bg-[#f8fbff] px-3 py-2 text-[11px]">
+              <p className="text-slate-600"><span className="font-bold text-slate-700">To:</span> {composedRecipients.length ? composedRecipients.map((recipient) => recipient.email).join(', ') : 'No recipients selected'}</p>
+              <p className="mt-1 text-slate-600"><span className="font-bold text-slate-700">CC:</span> {ccPreviewLoading ? 'Checking…' : ccAddresses.length ? ccAddresses.join(', ') : 'None'}</p>
+            </div>
 
             <label className="mb-1 block text-xs font-semibold text-slate-700">Subject</label>
             <input value={subject} onChange={(event) => { setSubject(event.target.value); setSent(false) }} className="mb-3 w-full rounded-lg border border-[#c2ccda] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#d6e4f7]" />

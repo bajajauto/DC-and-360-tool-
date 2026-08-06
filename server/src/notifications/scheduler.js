@@ -97,47 +97,49 @@ function responseStatusContext(participant) {
   }
 }
 
-// Role Interview / Photograph / Self Reflection deadline reminders (Section 8: T-3, T-1)
+function stageItemComplete(participant, item) {
+  if (item.stage === 'ROLE_INTERVIEW') return participant.roleInterview?.status === 'submitted'
+  if (item.stage === 'PRE_WORK') return participant.preWork?.status === 'submitted'
+  return Boolean(participant.photoUrl)
+}
+
+// One consolidated Role Interview / Photograph / Self Reflection reminder per
+// participant at T-3/T-1 whenever any pending item's deadline triggers a run.
 async function sendStageDeadlineReminders(db) {
-  for (const item of STAGE_ITEMS) {
-    const participants = await db.participant.findMany({
-      include: { user: true, cohort: true },
-    })
+  const participants = await db.participant.findMany({
+    include: { user: true, cohort: true },
+  })
 
-    for (const participant of participants) {
-      const complete = item.stage === 'ROLE_INTERVIEW'
-        ? participant.roleInterview?.status === 'submitted'
-        : item.stage === 'PRE_WORK'
-          ? participant.preWork?.status === 'submitted'
-          : Boolean(participant.photoUrl)
-      if (complete) continue
-      const deadline = participant.cohort[item.deadlineField]
-      if (!deadline) continue
+  for (const participant of participants) {
+    const pendingItems = STAGE_ITEMS
+      .filter((item) => !stageItemComplete(participant, item))
+      .map((item) => ({ ...item, deadline: participant.cohort[item.deadlineField] }))
+    const triggeringItems = pendingItems.filter((item) => item.deadline && [3, 1].includes(daysUntil(item.deadline)))
+    if (!triggeringItems.length) continue
+    if (await alreadyQueuedToday(db, 'stage-deadline-reminder', 'Participant', participant.id)) continue
 
-      const diff = daysUntil(deadline)
-      if (diff !== 3 && diff !== 1) continue
-
-      const scheduleEntityId = `${participant.id}:${item.stage}`
-      if (await alreadyQueuedToday(db, 'stage-deadline-reminder', 'ParticipantTask', scheduleEntityId)) continue
-
-      await queueEmail({
-        templateId: 'stage-deadline-reminder',
-        toEmail: participant.user.email,
-        toName: participant.user.name,
-        context: {
-          'Participant Name': participant.user.name,
-          Cohort: participant.cohort.name,
-          'DC Dates': participant.cohort.eventStart && participant.cohort.eventEnd
-            ? `${formatDate(participant.cohort.eventStart)} - ${formatDate(participant.cohort.eventEnd)}`
-            : formatDate(participant.cohort.eventStart),
-          'Pending Items': item.label,
-          'Prework Deadline': formatDate(deadline),
-        },
-        entity: 'ParticipantTask',
-        entityId: scheduleEntityId,
-        metadata: { item: item.label, daysRemaining: diff },
-      }, db)
-    }
+    await queueEmail({
+      templateId: 'stage-deadline-reminder',
+      toEmail: participant.user.email,
+      toName: participant.user.name,
+      context: {
+        'Participant Name': participant.user.name,
+        Cohort: participant.cohort.name,
+        'DC Dates': participant.cohort.eventStart && participant.cohort.eventEnd
+          ? `${formatDate(participant.cohort.eventStart)} - ${formatDate(participant.cohort.eventEnd)}`
+          : formatDate(participant.cohort.eventStart),
+        'Pending Items': pendingItems
+          .map((item) => `- ${item.label}${item.deadline ? ` (due ${formatDate(item.deadline)} EOD)` : ''}`)
+          .join('\n'),
+        'Prework Deadline': formatDate(triggeringItems[0].deadline),
+      },
+      entity: 'Participant',
+      entityId: participant.id,
+      metadata: {
+        items: pendingItems.map((item) => item.label),
+        triggeringItems: triggeringItems.map((item) => item.label),
+      },
+    }, db)
   }
 }
 

@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { prisma } from '../db.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
 import { httpError } from '../utils/httpError.js'
-import { createQueuedEmail, ensureNotificationTemplates, renderTemplate, sendEmail } from '../notifications/service.js'
+import { createQueuedEmail, ensureNotificationTemplates, renderTemplate, resolveCcRecipients, sendEmail } from '../notifications/service.js'
 import { createParticipantMagicLink } from '../utils/magicLinks.js'
 
 export const notificationsRouter = Router()
@@ -25,6 +25,11 @@ const automationSettingsSchema = z.object({
     templateId: z.string().trim().min(1),
     automatic: z.boolean(),
   })).min(1).max(100),
+})
+
+const ccPreviewSchema = z.object({
+  templateId: z.string().trim().min(1),
+  recipients: bulkSendSchema.shape.recipients,
 })
 
 const MAGIC_LINK_TEMPLATES = new Set(['resp-invite', 'resp-reminder', 'resp-recurring-reminder'])
@@ -74,6 +79,11 @@ function buildParticipantContext(participant, recipientName) {
     .filter((nominee) => nominee.status !== 'RESPONDED')
     .map((nominee) => nominee.name)
     .join(', ')
+  const pendingItems = [
+    participant?.roleInterview?.status !== 'submitted' && ['Role Interview Form', cohort?.roleInterviewDeadline],
+    !participant?.photoUrl && ['Photograph', cohort?.photoDeadline],
+    participant?.preWork?.status !== 'submitted' && ['Self Reflection Form', cohort?.preWorkDeadline],
+  ].filter(Boolean)
 
   return {
     'Recipient Name': recipientName || participantUser?.name || '',
@@ -88,7 +98,9 @@ function buildParticipantContext(participant, recipientName) {
     'DC Dates': cohort?.eventStart && cohort?.eventEnd ? `${dateLabel(cohort.eventStart)} - ${dateLabel(cohort.eventEnd)}` : dateLabel(cohort?.eventStart),
     'Nomination Deadline': dateLabel(cohort?.nominationDeadline),
     'Prework Deadline': dateLabel(cohort?.preWorkDeadline),
-    'Pending Items': 'Role Interview Form, Photograph, Self Reflection Form',
+    'Pending Items': pendingItems.length
+      ? pendingItems.map(([label, deadline]) => `- ${label}${deadline ? ` (due ${dateLabel(deadline)} EOD)` : ''}`).join('\n')
+      : 'No pending items',
     '360 Cutoff': dateLabel(cohort?.threeSixtyCutoff),
     'Days Remaining': daysRemaining(cohort?.threeSixtyCutoff),
     'Respondent Count': String(tasks.length),
@@ -400,6 +412,28 @@ notificationsRouter.get('/recipients', asyncHandler(async (req, res) => {
       roles: user.roles.map((role) => role.toLowerCase()),
     })), ...masterContacts],
   })
+}))
+
+notificationsRouter.post('/cc-preview', asyncHandler(async (req, res) => {
+  const payload = ccPreviewSchema.parse(req.body)
+  const template = await prisma.notificationTemplate.findUnique({ where: { templateId: payload.templateId } })
+  if (!template) throw httpError(404, 'Notification template not found')
+
+  const uniqueRecipients = [...new Map(payload.recipients.map((recipient) => [`${recipient.sourceType}:${recipient.sourceId || recipient.email.toLowerCase()}`, recipient])).values()]
+  const rows = []
+  for (const recipient of uniqueRecipients) {
+    const resolved = await resolveRecipient(recipient)
+    const cc = await resolveCcRecipients({
+      templateId: template.templateId,
+      toEmail: resolved.email,
+      entity: resolved.entity,
+      entityId: resolved.entityId,
+      metadata: resolved.metadata,
+    })
+    rows.push({ toEmail: resolved.email, toName: resolved.name, cc })
+  }
+
+  res.json({ data: rows })
 }))
 
 notificationsRouter.post('/send', asyncHandler(async (req, res) => {

@@ -550,7 +550,9 @@ function SubmissionConfirmation({ task, onBack }) {
       </div>
       <h2 className="text-xl font-bold text-[#1a1f2e] mb-2">Feedback Submitted</h2>
       <p className="text-sm text-gray-500 mb-1">
-        Your feedback for <span className="font-medium text-[#1a1f2e]">{task.participantName}</span> has been recorded.
+        {task.relationship === 'Self'
+          ? 'Submitted for yourself.'
+          : <>Your feedback for <span className="font-medium text-[#1a1f2e]">{task.participantName}</span> has been recorded.</>}
       </p>
       <p className="text-xs text-gray-400 mb-8">
         Responses are confidential and will be aggregated before appearing in the 360° Feedback Report.
