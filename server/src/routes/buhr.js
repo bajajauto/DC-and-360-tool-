@@ -75,6 +75,7 @@ buhrRouter.get('/:userId/participants', asyncHandler(async (req, res) => {
     return {
       ...summary,
       taskStatus,
+      assessorTemplateUploaded: participant.assessorReviews[0]?.status === 'uploaded',
       taskCompletionPercent: taskCompletionPercent(taskStatus),
       cohort: {
         id: participant.cohort.id,
@@ -103,6 +104,12 @@ buhrRouter.get('/:userId/participants', asyncHandler(async (req, res) => {
           releasedAt: item.releasedAt?.toISOString() || null,
           downloadUrl: `/api/buhr/${buhr.id}/reports/${participant.id}/${item.type.toLowerCase()}/download`,
         })),
+      reportStatuses: participant.reports.map((item) => ({
+        type: item.type.toLowerCase(),
+        status: item.status.toLowerCase(),
+        generatedAt: item.generatedAt?.toISOString() || null,
+        releasedAt: item.releasedAt?.toISOString() || null,
+      })),
     }
   })
 

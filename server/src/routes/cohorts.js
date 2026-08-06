@@ -338,6 +338,10 @@ cohortsRouter.delete('/:cohortId', asyncHandler(async (req, res) => {
     const usersByRemainingRoles = new Map()
     for (const user of participantUsers) {
       const remainingRoles = user.roles.filter((role) => role !== 'PARTICIPANT')
+      if (!remainingRoles.length) {
+        await tx.user.delete({ where: { id: user.id } })
+        continue
+      }
       const key = JSON.stringify(remainingRoles)
       const group = usersByRemainingRoles.get(key) || { roles: remainingRoles, ids: [] }
       group.ids.push(user.id)
@@ -401,6 +405,7 @@ cohortsRouter.get('/:cohortId/participants', asyncHandler(async (req, res) => {
           generatedAt: report.generatedAt?.toISOString() || null,
           releasedAt: report.releasedAt?.toISOString() || null,
         })),
+        assessorTemplateUploaded: participant.assessorReviews[0]?.status === 'uploaded',
         taskStatus,
         taskCompletionPercent: taskCompletionPercent(taskStatus),
       }

@@ -22,6 +22,23 @@ function doneOrNotDone(participant, step) {
   return taskState(participant, step) === 'completed' ? 'Done' : 'Not done'
 }
 
+function reportAuditFields(participant) {
+  const reports = participant.reportStatuses || participant.reports || []
+  const report360 = reports.find((report) => String(report.type).toLowerCase() === '360')
+  const dcReport = reports.find((report) => String(report.type).toLowerCase() === 'dc')
+  const isGenerated = (report) => Boolean(report && ['generated', 'released'].includes(String(report.status).toLowerCase()))
+  const isVisible = (report) => String(report?.status || '').toLowerCase() === 'released'
+  return [
+    isGenerated(report360) ? 'Generated' : 'Not generated',
+    isVisible(report360) ? 'Visible' : 'Not visible',
+    participant.assessorTemplateUploaded || participant.taskStatus?.assessment === 'completed' ? 'Uploaded' : 'Not uploaded',
+    isGenerated(dcReport) ? 'Generated' : 'Not generated',
+    isVisible(dcReport) ? 'Visible' : 'Not visible',
+  ]
+}
+
+const reportAuditHeaders = ['360 report generated', '360 report visibility', 'Assessor Template Upload', 'DC report generated', 'DC report visible']
+
 function liveStage(participant) {
   if (trackerSteps.every((step) => taskState(participant, step) === 'completed')) return 'Completed'
   if (trackerSteps.every((step) => ['pending', 'locked'].includes(taskState(participant, step)))) return 'Not started'
@@ -63,7 +80,7 @@ function downloadWorkbook(filename, worksheets) {
 
 export function exportParticipantProcessStatus(participant, cohortName = '') {
   const processRows = [
-    ['Participant', 'Employee ID', 'Cohort', 'Designation', 'Business unit', 'Current stage', 'Self 360', 'Other responses received', 'Other respondents', 'Other responses pending', 'Report status', 'Last activity', ...trackerSteps.map((step) => step.label)],
+    ['Participant', 'Employee ID', 'Cohort', 'Designation', 'Business unit', 'Current stage', 'Self 360', 'Other responses received', 'Other respondents', 'Other responses pending', ...reportAuditHeaders, 'Last activity', ...trackerSteps.map((step) => step.label)],
     [
       participant.name,
       participant.employeeId,
@@ -75,7 +92,7 @@ export function exportParticipantProcessStatus(participant, cohortName = '') {
       participant.responses,
       participant.totalResponses,
       Math.max(0, participant.totalResponses - participant.responses),
-      participant.reportStatus,
+      ...reportAuditFields(participant),
       participant.lastActivity,
       ...trackerSteps.map((step) => doneOrNotDone(participant, step)),
     ],
@@ -122,7 +139,7 @@ export function exportParticipantNomineeStatus(participant) {
 
 export function exportCohortProcessStatus(cohort, participants) {
   const processRows = [
-    ['Participant', 'Employee ID', 'Designation', 'Business unit', 'Current stage', 'Self 360', 'Other responses received', 'Other respondents', 'Other responses pending', 'Report status', 'Last activity', ...trackerSteps.map((step) => step.label)],
+    ['Participant', 'Employee ID', 'Designation', 'Business unit', 'Current stage', 'Self 360', 'Other responses received', 'Other respondents', 'Other responses pending', ...reportAuditHeaders, 'Last activity', ...trackerSteps.map((step) => step.label)],
     ...participants.map((participant) => [
       participant.name,
       participant.employeeId,
@@ -133,7 +150,7 @@ export function exportCohortProcessStatus(cohort, participants) {
       participant.responses,
       participant.totalResponses,
       Math.max(0, participant.totalResponses - participant.responses),
-      participant.reportStatus,
+      ...reportAuditFields(participant),
       participant.lastActivity,
       ...trackerSteps.map((step) => doneOrNotDone(participant, step)),
     ]),
@@ -146,7 +163,7 @@ export function exportCohortProcessStatus(cohort, participants) {
 
 export function exportBuhrProcessStatus(businessUnit, participants) {
   const processRows = [
-    ['Participant', 'Employee ID', 'Designation', 'Business unit', 'Cohort', 'Current stage', 'Nominations', 'Self 360', 'Other responses received', 'Other respondents', 'Other responses pending', 'Report status', 'Last activity', ...trackerSteps.map((step) => step.label)],
+    ['Participant', 'Employee ID', 'Designation', 'Business unit', 'Cohort', 'Current stage', 'Nominations', 'Self 360', 'Other responses received', 'Other respondents', 'Other responses pending', ...reportAuditHeaders, 'Last activity', ...trackerSteps.map((step) => step.label)],
     ...participants.map((participant) => [
       participant.name,
       participant.employeeId,
@@ -159,7 +176,7 @@ export function exportBuhrProcessStatus(businessUnit, participants) {
       participant.responses,
       participant.totalResponses,
       Math.max(0, participant.totalResponses - participant.responses),
-      participant.reportStatus,
+      ...reportAuditFields(participant),
       participant.lastActivity,
       ...trackerSteps.map((step) => doneOrNotDone(participant, step)),
     ]),

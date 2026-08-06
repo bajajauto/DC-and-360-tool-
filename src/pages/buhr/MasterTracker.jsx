@@ -158,7 +158,7 @@ export default function BUHRMasterTracker() {
             <table className="w-full min-w-[1560px] border-collapse bg-white text-left text-[13px]">
               <thead className="bg-[#ebf2fa]">
                 <tr>
-                  {['Ticket ID', 'Employee', 'Business Unit', 'Cohort', 'Current stage', 'Role Interview', 'Nominations', 'Self Reflection', 'Photo', 'Self 360', 'Other 360 Responses', '360° Feedback Report Status', 'DC Report Status'].map((label) => (
+                  {['Ticket ID', 'Employee', 'Business Unit', 'Cohort', 'Current stage', 'Role Interview', 'Nominations', 'Self Reflection', 'Photo', 'Self 360', 'Other 360 Responses', '360 Report Generated', '360 Report Visibility', 'Assessor Template Upload', 'DC Report Generated', 'DC Report Visible'].map((label) => (
                     <th key={label} className="border-b border-[#d5dce5] px-4 py-3 text-[11px] font-bold uppercase tracking-wide text-slate-600">{label}</th>
                   ))}
                 </tr>
@@ -171,12 +171,13 @@ export default function BUHRMasterTracker() {
                   const preWorkSubmitted = participant.preWorkSubmitted
                   const photoUploaded = participant.photoSubmitted
                   const selfSubmitted = participant.selfFeedback?.status === 'submitted'
-                  const report360Released = participant.reportStatus === 'released'
-                  const report360Ready = participant.reportStatus === 'ready'
-                  const report360Generated = participant.reportStatus === 'generated'
-                  const report360Label = report360Released ? 'Released' : report360Generated ? 'Generated' : report360Ready ? 'Ready' : 'Waiting'
-                  const report360Tone = report360Released || report360Generated ? 'success' : report360Ready ? 'info' : 'warning'
-                  const dcReportReleased = participant.reports?.some((report) => report.type === 'dc')
+                  const report360 = participant.reportStatuses?.find((report) => report.type === '360')
+                  const dcReport = participant.reportStatuses?.find((report) => report.type === 'dc')
+                  const report360Generated = report360 && ['generated', 'released'].includes(report360.status)
+                  const report360Visible = report360?.status === 'released'
+                  const assessorTemplateUploaded = participant.assessorTemplateUploaded || participant.taskStatus?.assessment === 'completed'
+                  const dcReportGenerated = dcReport && ['generated', 'released'].includes(dcReport.status)
+                  const dcReportVisible = dcReport?.status === 'released'
                   return (
                     <tr key={participant.id} className="hover:bg-[#f4f7fb]">
                       <td className="border-b border-[#e8edf4] px-4 py-4 font-medium text-[#1e5fba]">{participant.employeeId}</td>
@@ -196,8 +197,11 @@ export default function BUHRMasterTracker() {
                       <td className="border-b border-[#e8edf4] px-4 py-4"><StatusPill tone={photoUploaded ? 'success' : 'warning'}>{photoUploaded ? 'Uploaded' : 'Pending'}</StatusPill></td>
                       <td className="border-b border-[#e8edf4] px-4 py-4"><StatusPill tone={selfSubmitted ? 'success' : 'warning'}>{selfSubmitted ? 'Submitted' : 'Not submitted'}</StatusPill></td>
                       <td className="border-b border-[#e8edf4] px-4 py-4"><StatusPill tone={responsesComplete ? 'success' : participant.responses ? 'info' : 'neutral'}>{participant.responses}/{participant.totalResponses}</StatusPill></td>
-                      <td className="border-b border-[#e8edf4] px-4 py-4"><StatusPill tone={report360Tone}>{report360Label}</StatusPill></td>
-                      <td className="border-b border-[#e8edf4] px-4 py-4"><StatusPill tone={dcReportReleased ? 'success' : 'warning'}>{dcReportReleased ? 'Released' : 'Not released'}</StatusPill></td>
+                      <td className="border-b border-[#e8edf4] px-4 py-4"><StatusPill tone={report360Generated ? 'success' : 'warning'}>{report360Generated ? 'Generated' : 'Not generated'}</StatusPill></td>
+                      <td className="border-b border-[#e8edf4] px-4 py-4"><StatusPill tone={report360Visible ? 'success' : 'warning'}>{report360Visible ? 'Visible' : 'Not visible'}</StatusPill></td>
+                      <td className="border-b border-[#e8edf4] px-4 py-4"><StatusPill tone={assessorTemplateUploaded ? 'success' : 'warning'}>{assessorTemplateUploaded ? 'Uploaded' : 'Not uploaded'}</StatusPill></td>
+                      <td className="border-b border-[#e8edf4] px-4 py-4"><StatusPill tone={dcReportGenerated ? 'success' : 'warning'}>{dcReportGenerated ? 'Generated' : 'Not generated'}</StatusPill></td>
+                      <td className="border-b border-[#e8edf4] px-4 py-4"><StatusPill tone={dcReportVisible ? 'success' : 'warning'}>{dcReportVisible ? 'Visible' : 'Not visible'}</StatusPill></td>
                     </tr>
                   )
                 })}

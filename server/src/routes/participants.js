@@ -165,7 +165,7 @@ async function findParticipant(id) {
       cohort: true,
       nominees: { orderBy: { createdAt: 'asc' } },
       feedbackTasks: { include: { responses: true } },
-      reports: { where: { type: '360' }, orderBy: { updatedAt: 'desc' }, take: 1 },
+      reports: { orderBy: { updatedAt: 'desc' } },
       assessorReviews: { orderBy: { updatedAt: 'desc' }, take: 1 },
     },
   })
@@ -242,10 +242,11 @@ participantsRouter.get('/:participantId', asyncHandler(async (req, res) => {
   })
   const cutoffPassed = hasCutoffPassed(participant.cohort.threeSixtyCutoff)
   const nomineesSubmitted = participant.nominees.length > 0 && participant.nominees.every((nominee) => nominee.status === 'SUBMITTED')
+  const latest360Report = participant.reports.find((report) => report.type.toLowerCase() === '360') || null
   const taskStatus = deriveTaskStatus(participant, {
     allResponsesComplete,
     nomineesSubmitted,
-    latestReport: participant.reports[0] || null,
+    latestReport: latest360Report,
     latestAssessorReview: participant.assessorReviews[0] || null,
   })
   const respondents = buildRespondentStatuses(participant, nomineesSubmitted)
@@ -260,7 +261,15 @@ participantsRouter.get('/:participantId', asyncHandler(async (req, res) => {
   res.json({
     data: {
       ...toParticipantSummary(participant),
-      reportStatus: participant.reports[0]?.status?.toLowerCase() || (participant.reportStatus === 'READY' ? 'ready' : 'waiting'),
+      reportStatus: latest360Report?.status?.toLowerCase() || (participant.reportStatus === 'READY' ? 'ready' : 'waiting'),
+      reports: participant.reports.map((report) => ({
+        id: report.id,
+        type: report.type.toLowerCase(),
+        status: report.status.toLowerCase(),
+        generatedAt: report.generatedAt?.toISOString() || null,
+        releasedAt: report.releasedAt?.toISOString() || null,
+      })),
+      assessorTemplateUploaded: participant.assessorReviews[0]?.status === 'uploaded',
       masterData: participant.masterData || {},
       reportReady: participant.feedbackTasks.length > 0 && (allResponsesComplete || cutoffPassed),
       allResponsesComplete,
