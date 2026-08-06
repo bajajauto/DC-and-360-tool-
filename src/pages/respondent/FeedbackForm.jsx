@@ -286,7 +286,7 @@ export default function FeedbackForm({ returnTo = '/respondent/dashboard', taskI
   const navigate = useNavigate()
   const outletContext = useOutletContext()
   const setSurveyNavigation = outletContext?.setSurveyNavigation
-  const { user } = useUser()
+  const { user, updateRespondentTaskStatus, refreshParticipantData } = useUser()
   const [loadedTask, setLoadedTask] = useState(null)
 
   const task = loadedTask || user?.respondentTasks.find((t) => t.id === taskId)
@@ -415,7 +415,12 @@ export default function FeedbackForm({ returnTo = '/respondent/dashboard', taskI
     if (!canSubmit) return
     import('../../lib/api').then(({ api }) => {
       api.submitFeedback(taskId, draftPayload)
-        .then(() => setSubmitted(true))
+        .then(() => {
+          setLoadedTask((current) => current ? { ...current, status: 'submitted' } : current)
+          updateRespondentTaskStatus(taskId, 'submitted')
+          if (user?.participantId) refreshParticipantData(user.participantId)
+          setSubmitted(true)
+        })
         .catch(() => {})
     })
   }

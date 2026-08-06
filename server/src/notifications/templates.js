@@ -21,12 +21,15 @@ Getting Started
 
 Your account on the Bajaj Auto 360/DC Tool is now active. We recommend flagging and saving this email, as it contains your login credentials, which you will need throughout your DC journey.
 
-Use the secure login link below to access your account directly, or sign in with the credentials provided at the app link.
+Your Login Credentials
+You can access the platform using either of the following options:
 
-Login Details
-Login Link: {{Login Link}}
-App Link: {{App Link}}
-Email ID: {{Participant Email}}
+Option 1: Direct Login
+Click here: {{Login Link}}
+
+Option 2: Login with Your Credentials
+Website: {{App Link}}
+Login ID: {{Participant Email}}
 Password: {{Participant Password}}
 
 Immediate Next Steps
@@ -60,10 +63,16 @@ Participant Name | Ticket ID | Login Email | Password
 
 Please note: These credentials are shared for your reference and oversight only. Each participant is responsible for completing their own pre-work, Role Interview and self-assessment. Please do not use these credentials to log in on any participant's behalf. Doing so would compromise the confidentiality and integrity of their assessment.
 
-Your BUHR Login Details
-- Login Link: {{Login Link}}
-- Email ID: {{BUHR Email}}
-- Password: {{BUHR Password}}
+Your Login Credentials
+You can access the platform using either of the following options:
+
+Option 1: Direct Login
+Click here: {{Login Link}}
+
+Option 2: Login with Your Credentials
+Website: {{App Link}}
+Login ID: {{BUHR Email}}
+Password: {{BUHR Password}}
 
 This email contains confidential information. Please store it securely and do not forward it.
 

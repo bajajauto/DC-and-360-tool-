@@ -33,14 +33,17 @@ function buildEmailHtml(body, context = {}) {
     const tableHtml = `<table style="width:100%;border-collapse:collapse;margin:12px 0;"><thead><tr>${['Participant Name', 'Ticket ID', 'Login Email', 'Password'].map((heading) => `<th style="border:1px solid #cbd5e1;background:#ebf2fa;padding:8px;text-align:left;">${heading}</th>`).join('')}</tr></thead><tbody>${rows.map((row) => `<tr>${row.map((cell) => `<td style="border:1px solid #cbd5e1;padding:8px;">${escapeHtml(cell)}</td>`).join('')}</tr>`).join('')}</tbody></table>`
     html = html.replace(escapeHtml(plainTable), tableHtml)
   }
-  const secureLinks = [context['Login Link'], context['App Link'], context['Magic Link']]
-    .filter((link) => typeof link === 'string' && /^https?:\/\//i.test(link))
+  const secureLinks = [
+    [context['Login Link'], 'Direct login'],
+    [context['App Link'], 'dc and 360 tool website link'],
+    [context['Magic Link'], 'Open feedback form'],
+  ].filter(([link]) => typeof link === 'string' && /^https?:\/\//i.test(link))
 
-  for (const link of new Set(secureLinks)) {
+  for (const [link, label] of secureLinks) {
     const escapedLink = escapeHtml(link)
     html = html.replaceAll(
       escapedLink,
-      `<a href="${escapedLink}" style="color:#1e4d8c;font-weight:600;text-decoration:underline;">Dc-and-360_tool</a>`,
+      `<a href="${escapedLink}" style="color:#1e4d8c;font-weight:600;text-decoration:underline;">${label}</a>`,
     )
   }
 

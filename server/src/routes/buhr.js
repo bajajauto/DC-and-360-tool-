@@ -4,7 +4,7 @@ import { Router } from 'express'
 import { prisma } from '../db.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
 import { httpError } from '../utils/httpError.js'
-import { toParticipantSummary } from '../utils/mappers.js'
+import { deriveTaskStatus, taskCompletionPercent, toParticipantSummary } from '../utils/mappers.js'
 
 export const buhrRouter = Router()
 
@@ -28,11 +28,16 @@ function latest360Report(participant) {
     .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())[0] || null
 }
 
+function isMappedToBuhr(participant, buhr) {
+  const masterData = participant?.masterData && typeof participant.masterData === 'object' ? participant.masterData : {}
+  return String(masterData.buhrEmail || '').trim().toLowerCase() === buhr.email.trim().toLowerCase()
+}
+
 buhrRouter.get('/:userId/participants', asyncHandler(async (req, res) => {
   assertBuhrSelf(req)
   const buhr = await getBuhrUser(req.params.userId)
 
-  const participants = await prisma.participant.findMany({
+  const businessUnitParticipants = await prisma.participant.findMany({
     where: {
       user: {
         businessUnit: buhr.businessUnit,
@@ -44,19 +49,33 @@ buhrRouter.get('/:userId/participants', asyncHandler(async (req, res) => {
       nominees: { orderBy: { createdAt: 'asc' } },
       feedbackTasks: true,
       reports: true,
+      assessorReviews: { orderBy: { updatedAt: 'desc' }, take: 1 },
     },
     orderBy: [
       { cohort: { eventStart: 'desc' } },
       { user: { name: 'asc' } },
     ],
   })
+  const participants = businessUnitParticipants.filter((participant) => isMappedToBuhr(participant, buhr))
 
   const rows = participants.map((participant) => {
     const report = latest360Report(participant)
     const released = participant.reportStatus === 'RELEASED' && report?.status === 'RELEASED'
+    const summary = toParticipantSummary(participant)
+    const nomineesSubmitted = participant.nominees.length > 0 && participant.nominees.every((nominee) => nominee.status === 'SUBMITTED')
+    const taskStatus = deriveTaskStatus(participant, {
+      allResponsesComplete: summary.selfFeedback.status === 'submitted'
+        && summary.totalResponses > 0
+        && summary.responses === summary.totalResponses,
+      nomineesSubmitted,
+      latestReport: report,
+      latestAssessorReview: participant.assessorReviews[0] || null,
+    })
 
     return {
-      ...toParticipantSummary(participant),
+      ...summary,
+      taskStatus,
+      taskCompletionPercent: taskCompletionPercent(taskStatus),
       cohort: {
         id: participant.cohort.id,
         name: participant.cohort.name,
@@ -113,7 +132,7 @@ buhrRouter.get('/:userId/reports/:participantId/:reportType/download', asyncHand
   })
 
   if (!participant) throw httpError(404, 'Participant not found')
-  if (participant.user.businessUnit !== buhr.businessUnit) throw httpError(403, 'This participant is outside your BUHR scope')
+  if (!isMappedToBuhr(participant, buhr)) throw httpError(403, 'This participant is not mapped to your BUHR account')
   const report = participant.reports
     .filter((item) => item.type.toLowerCase() === req.params.reportType.toLowerCase())
     .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())[0] || null

@@ -18,7 +18,10 @@ const stageLabels = {
 
 export function toParticipantSummary(participant) {
   const nominees = participant.nominees || []
-  const responses = participant.feedbackTasks?.filter((task) => task.status === 'SUBMITTED' && task.relationship !== 'SELF').length || 0
+  const feedbackTasks = participant.feedbackTasks || []
+  const responses = feedbackTasks.filter((task) => task.status === 'SUBMITTED' && task.relationship !== 'SELF').length
+  const taskByNomineeId = new Map(feedbackTasks.filter((task) => task.nomineeId).map((task) => [task.nomineeId, task]))
+  const selfTask = feedbackTasks.find((task) => task.relationship === 'SELF')
 
   return {
     id: participant.id,
@@ -37,7 +40,18 @@ export function toParticipantSummary(participant) {
     totalResponses: nominees.length,
     reportStatus: participant.reportStatus.toLowerCase(),
     lastActivity: participant.lastActivityAt?.toISOString() || null,
-    nominees: nominees.map(toNomineeDto),
+    nominees: nominees.map((nominee) => {
+      const task = taskByNomineeId.get(nominee.id)
+      return {
+        ...toNomineeDto(nominee),
+        feedbackStatus: task?.status?.toLowerCase() || 'pending',
+        respondedOn: task?.submittedAt?.toISOString() || null,
+      }
+    }),
+    selfFeedback: {
+      status: selfTask?.status?.toLowerCase() || 'pending',
+      respondedOn: selfTask?.submittedAt?.toISOString() || null,
+    },
   }
 }
 

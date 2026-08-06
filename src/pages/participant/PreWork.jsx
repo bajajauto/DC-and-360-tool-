@@ -55,7 +55,7 @@ function PreWorkInstructions() {
 }
 
 export default function PreWork() {
-  const { user } = useUser()
+  const { user, refreshParticipantData } = useUser()
   const [answers, setAnswers] = useState({})
   const [status, setStatus] = useState('draft')
   const [message, setMessage] = useState('')
@@ -114,6 +114,7 @@ export default function PreWork() {
       if (submit) {
         submittedSnapshot.current = data.answers || answers
         setEditing(canEdit)
+        await refreshParticipantData(user.participantId)
       }
       setMessage(submit ? '' : 'Draft saved.')
     } catch (error) {

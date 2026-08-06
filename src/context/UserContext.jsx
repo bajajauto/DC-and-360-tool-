@@ -122,6 +122,20 @@ export function UserProvider({ children }) {
     if (user?.roles.includes(role)) setActiveRole(role)
   }, [user])
 
+  const updateRespondentTaskStatus = useCallback((taskId, status) => {
+    setUser((current) => {
+      if (!current) return current
+      const nextUser = {
+        ...current,
+        respondentTasks: (current.respondentTasks || []).map((task) => (
+          task.id === taskId ? { ...task, status, progress: status === 'submitted' ? 100 : task.progress } : task
+        )),
+      }
+      writeJson(SESSION_KEY, nextUser)
+      return nextUser
+    })
+  }, [])
+
   const pendingRespondentCount = useMemo(() =>
     (user?.respondentTasks || []).filter(t => t.status === 'pending' || t.status === 'saved').length,
     [user]
@@ -142,6 +156,7 @@ export function UserProvider({ children }) {
       loginFromMagicLink,
       logout,
       switchRole,
+      updateRespondentTaskStatus,
       refreshParticipantData,
       pendingRespondentCount,
       pendingParticipantCount,

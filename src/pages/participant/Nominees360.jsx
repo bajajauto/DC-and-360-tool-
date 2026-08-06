@@ -416,7 +416,7 @@ export default function Nominees360() {
         locked: n.locked || false,
       })))
       setNominees(result.data)
-      refreshParticipantData(participantId)
+      await refreshParticipantData(participantId)
       setMode('review')
     } catch (err) {
       setError(err.message)
@@ -436,7 +436,7 @@ export default function Nominees360() {
     try {
       const result = await api.submitNominees(participantId)
       setNominees(result.data)
-      refreshParticipantData(participantId)
+      await refreshParticipantData(participantId)
       setMode('submitted')
     } catch (err) {
       setError(err.message)

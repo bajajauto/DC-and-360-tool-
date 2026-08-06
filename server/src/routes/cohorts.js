@@ -97,6 +97,7 @@ async function queueBuhrCredentialEmails(db, cohort, groups, actorId = null) {
         'BUHR Password': process.env.MOCK_USER_PASSWORD || 'Welcome@123',
         Cohort: cohort.name,
         'Login Link': buhrLink.inviteUrl,
+        'App Link': process.env.APP_URL || process.env.CLIENT_ORIGIN || 'http://localhost:5173',
         'Participant Credentials': participantCredentialTable(group.participants),
       },
       entity: 'Cohort',
@@ -380,7 +381,9 @@ cohortsRouter.get('/:cohortId/participants', asyncHandler(async (req, res) => {
     data: participants.map((participant) => {
       const summary = toParticipantSummary(participant)
       const nomineesSubmitted = participant.nominees.length > 0 && participant.nominees.every((nominee) => nominee.status === 'SUBMITTED')
-      const allResponsesComplete = summary.totalResponses > 0 && summary.responses === summary.totalResponses
+      const allResponsesComplete = summary.selfFeedback.status === 'submitted'
+        && summary.totalResponses > 0
+        && summary.responses === summary.totalResponses
       const latest360Report = participant.reports.find((report) => report.type.toLowerCase() === '360') || null
       const taskStatus = deriveTaskStatus(participant, {
         allResponsesComplete,

@@ -86,7 +86,7 @@ export default function BUHRMasterTracker() {
         <div>
           <p className="mb-1 text-xs text-gray-400">BUHR / {payload?.businessUnit || user?.bu || 'Business Unit'}</p>
           <h1 className="text-xl font-bold text-[#172033]">Trackers and Exports</h1>
-          <p className="mt-1 text-xs text-slate-500">Download the live master tracker for employees mapped to your business unit.</p>
+          <p className="mt-1 text-xs text-slate-500">Download the live master tracker for participants explicitly mapped to your BUHR account.</p>
         </div>
       </header>
 
@@ -155,10 +155,10 @@ export default function BUHRMasterTracker() {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1280px] border-collapse bg-white text-left text-[13px]">
+            <table className="w-full min-w-[1560px] border-collapse bg-white text-left text-[13px]">
               <thead className="bg-[#ebf2fa]">
                 <tr>
-                  {['Ticket ID', 'Employee', 'Business Unit', 'Cohort', 'Current stage', 'Nominations', 'Self Reflection', 'Photo', '360 Responses', '360° Feedback Report Status', 'DC Report Status'].map((label) => (
+                  {['Ticket ID', 'Employee', 'Business Unit', 'Cohort', 'Current stage', 'Role Interview', 'Nominations', 'Self Reflection', 'Photo', 'Self 360', 'Other 360 Responses', '360° Feedback Report Status', 'DC Report Status'].map((label) => (
                     <th key={label} className="border-b border-[#d5dce5] px-4 py-3 text-[11px] font-bold uppercase tracking-wide text-slate-600">{label}</th>
                   ))}
                 </tr>
@@ -166,9 +166,11 @@ export default function BUHRMasterTracker() {
               <tbody>
                 {filtered.map((participant) => {
                   const responsesComplete = participant.totalResponses > 0 && participant.responses >= participant.totalResponses
-                  const nominationsSubmitted = participant.nominees?.length > 0
+                  const roleInterviewSubmitted = participant.taskStatus?.role === 'completed'
+                  const nominationsSubmitted = participant.taskStatus?.nominees === 'completed'
                   const preWorkSubmitted = participant.preWorkSubmitted
                   const photoUploaded = participant.photoSubmitted
+                  const selfSubmitted = participant.selfFeedback?.status === 'submitted'
                   const report360Released = participant.reportStatus === 'released'
                   const report360Ready = participant.reportStatus === 'ready'
                   const report360Generated = participant.reportStatus === 'generated'
@@ -188,9 +190,11 @@ export default function BUHRMasterTracker() {
                         <p className="mt-0.5 text-[11px] text-slate-500">{participant.cohort?.programme || 'Development Centre'}</p>
                       </td>
                       <td className="border-b border-[#e8edf4] px-4 py-4"><StatusPill tone="info">{participant.stage}</StatusPill></td>
+                      <td className="border-b border-[#e8edf4] px-4 py-4"><StatusPill tone={roleInterviewSubmitted ? 'success' : 'warning'}>{roleInterviewSubmitted ? 'Submitted' : 'Not submitted'}</StatusPill></td>
                       <td className="border-b border-[#e8edf4] px-4 py-4"><StatusPill tone={nominationsSubmitted ? 'success' : 'warning'}>{nominationsSubmitted ? 'Submitted' : 'Not submitted'}</StatusPill></td>
                       <td className="border-b border-[#e8edf4] px-4 py-4"><StatusPill tone={preWorkSubmitted ? 'success' : 'warning'}>{preWorkSubmitted ? 'Submitted' : 'Pending'}</StatusPill></td>
                       <td className="border-b border-[#e8edf4] px-4 py-4"><StatusPill tone={photoUploaded ? 'success' : 'warning'}>{photoUploaded ? 'Uploaded' : 'Pending'}</StatusPill></td>
+                      <td className="border-b border-[#e8edf4] px-4 py-4"><StatusPill tone={selfSubmitted ? 'success' : 'warning'}>{selfSubmitted ? 'Submitted' : 'Not submitted'}</StatusPill></td>
                       <td className="border-b border-[#e8edf4] px-4 py-4"><StatusPill tone={responsesComplete ? 'success' : participant.responses ? 'info' : 'neutral'}>{participant.responses}/{participant.totalResponses}</StatusPill></td>
                       <td className="border-b border-[#e8edf4] px-4 py-4"><StatusPill tone={report360Tone}>{report360Label}</StatusPill></td>
                       <td className="border-b border-[#e8edf4] px-4 py-4"><StatusPill tone={dcReportReleased ? 'success' : 'warning'}>{dcReportReleased ? 'Released' : 'Not released'}</StatusPill></td>

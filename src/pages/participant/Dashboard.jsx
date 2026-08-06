@@ -85,7 +85,7 @@ function StepIcon({ status, step }) {
 }
 
 export default function Dashboard() {
-  const { user, participantData } = useUser()
+  const { user, participantData, refreshParticipantData } = useUser()
   const [selfTask, setSelfTask] = useState(null)
   const nominees = participantData?.nominees ?? []
   const nomineeStatus = nominees.some(n => n.status === 'submitted')
@@ -94,6 +94,10 @@ export default function Dashboard() {
       ? 'saved'
       : 'pending'
   const nomineeProgress = nomineeCompletionPercent(nominees, nomineeStatus === 'completed')
+
+  useEffect(() => {
+    if (user?.participantId) refreshParticipantData(user.participantId)
+  }, [refreshParticipantData, user?.participantId])
 
   useEffect(() => {
     if (nomineeStatus !== 'completed' || !user?.participantId) return

@@ -78,7 +78,7 @@ function ReflectionMeta({ value }) {
 }
 
 export default function RoleInterview() {
-  const { user, participantData } = useUser()
+  const { user, participantData, refreshParticipantData } = useUser()
   const [answers, setAnswers] = useState({})
   const [status, setStatus] = useState('draft')
   const [message, setMessage] = useState('')
@@ -135,6 +135,7 @@ export default function RoleInterview() {
       if (submit) {
         submittedSnapshot.current = data.answers || answers
         setEditing(canEdit)
+        await refreshParticipantData(user.participantId)
       }
       setMessage(submit ? '' : 'Draft saved.')
     } catch (error) {

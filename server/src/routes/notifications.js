@@ -150,6 +150,7 @@ async function buildBuhrCredentialContext(recipient) {
     'BUHR Password': password,
     Cohort: latestCohort.name,
     'Login Link': process.env.APP_URL || process.env.CLIENT_ORIGIN || 'http://localhost:5173',
+    'App Link': process.env.APP_URL || process.env.CLIENT_ORIGIN || 'http://localhost:5173',
     'Participant Credentials': cohortParticipants
       .map((participant) => `${participant.user.name} | ${participant.user.employeeId || '-'} | ${participant.user.email} | ${password}`)
       .join('\n'),
