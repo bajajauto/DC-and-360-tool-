@@ -12,7 +12,7 @@ const navItems = [
 export default function BUHRLayout() {
   const { pathname } = useLocation()
   const navigate = useNavigate()
-  const { user, logout } = useUser()
+  const { user, logout, switchRole } = useUser()
 
   if (!user || !user.roles.includes('buhr')) return <Navigate to="/" replace />
 
@@ -23,6 +23,15 @@ export default function BUHRLayout() {
         <div className="h-5 w-px bg-slate-300" />
         <p className="text-xs tracking-wide text-slate-500">BUHR Workspace</p>
         <div className="flex-1" />
+        {user.roles.includes('participant') && (
+          <button
+            type="button"
+            onClick={() => { switchRole('participant'); navigate('/participant/dashboard') }}
+            className="rounded-lg border border-[#bfdbfe] bg-blue-50 px-3 py-1.5 text-xs font-semibold text-[#1e4d8c] hover:bg-blue-100"
+          >
+            Participant View
+          </button>
+        )}
         <div className="inline-flex items-center gap-2 rounded-full border border-[#d6e4f7] bg-[#ebf2fa] px-3.5 py-1.5 text-xs font-semibold text-[#1e5fba]" title="Your mapped business unit">
           <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
           {user.bu || 'Business Unit'}

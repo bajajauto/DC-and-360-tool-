@@ -21,7 +21,9 @@ export default function InviteRedeem() {
         if (!isMounted) return
         const destination = user.magicLink.role === 'respondent'
           ? `/respondent/feedback/${user.magicLink.taskId}`
-          : '/participant/dashboard'
+          : user.magicLink.role === 'buhr'
+            ? '/buhr/dashboard'
+            : '/participant/dashboard'
         navigate(destination, { replace: true })
       } catch (err) {
         if (!isMounted) return

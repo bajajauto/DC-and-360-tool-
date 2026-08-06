@@ -64,6 +64,36 @@ invitesRouter.post('/redeem', asyncHandler(async (req, res) => {
     })
   }
 
+  if (magicLink.role === 'BUHR') {
+    if (!magicLink.user || !magicLink.user.roles.includes('BUHR')) throw httpError(404, 'BUHR account not found')
+
+    await prisma.magicLink.update({
+      where: { id: magicLink.id },
+      data: { usedAt: magicLink.usedAt || new Date() },
+    })
+
+    const roles = magicLink.user.roles.map((role) => role.toLowerCase())
+    const authToken = signToken(
+      { sub: magicLink.user.id, roles, typ: 'user' },
+      { expiresInSeconds: ttlSeconds },
+    )
+
+    return res.json({
+      data: {
+        token: authToken,
+        role: 'buhr',
+        id: magicLink.user.id,
+        name: magicLink.user.name,
+        email: magicLink.user.email,
+        employeeId: magicLink.user.employeeId,
+        designation: magicLink.user.designation,
+        bu: magicLink.user.businessUnit,
+        roles,
+        expiresAt: magicLink.expiresAt.toISOString(),
+      },
+    })
+  }
+
   if (magicLink.role !== 'RESPONDENT') throw httpError(400, 'Invite link role is not supported')
 
   const taskId = magicLink.payload?.taskId

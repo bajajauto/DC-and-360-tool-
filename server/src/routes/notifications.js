@@ -4,7 +4,7 @@ import { prisma } from '../db.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
 import { httpError } from '../utils/httpError.js'
 import { createQueuedEmail, ensureNotificationTemplates, renderTemplate, resolveCcRecipients, sendEmail } from '../notifications/service.js'
-import { createParticipantMagicLink } from '../utils/magicLinks.js'
+import { createBuhrMagicLink, createParticipantMagicLink } from '../utils/magicLinks.js'
 
 export const notificationsRouter = Router()
 
@@ -466,6 +466,11 @@ notificationsRouter.post('/send', asyncHandler(async (req, res) => {
     for (const recipient of resolvedRecipients) {
       if (recipient.sourceType !== 'user') continue
       recipient.context = await buildBuhrCredentialContext(recipient)
+      const buhrUser = await prisma.user.findUnique({ where: { email: recipient.email } })
+      if (!buhrUser || !buhrUser.roles.includes('BUHR')) throw httpError(400, `BUHR account not found for ${recipient.email}`)
+      const buhrLink = await createBuhrMagicLink(prisma, { userId: buhrUser.id, email: buhrUser.email })
+      recipient.context = { ...recipient.context, 'Login Link': buhrLink.inviteUrl }
+      recipient.magicLinkId = buhrLink.magicLink.id
     }
   }
 

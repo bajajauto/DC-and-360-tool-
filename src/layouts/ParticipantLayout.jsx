@@ -75,6 +75,7 @@ export default function ParticipantLayout() {
   }
 
   const isRespondentToo = user.roles.includes('respondent')
+  const isBuhrToo = user.roles.includes('buhr')
 
   function handleSwitchToRespondent() {
     setDropdownOpen(false)
@@ -154,6 +155,18 @@ export default function ParticipantLayout() {
                 </button>
               </div>
             )}
+          </div>
+        )}
+
+        {isBuhrToo && (
+          <div className="px-3 pt-3 pb-1">
+            <button
+              type="button"
+              onClick={() => { switchRole('buhr'); navigate('/buhr/dashboard') }}
+              className="w-full rounded-lg border border-[#bfdbfe] bg-blue-50 px-3 py-2 text-left text-[11px] font-semibold text-[#1e4d8c] hover:bg-blue-100"
+            >
+              Switch to BUHR Workspace
+            </button>
           </div>
         )}
 

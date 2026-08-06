@@ -37,6 +37,22 @@ export async function createParticipantMagicLink(db, { userId, email, participan
   return { magicLink, inviteUrl: buildInviteUrl(token) }
 }
 
+export async function createBuhrMagicLink(db, { userId, email }) {
+  const token = generateMagicToken()
+  const magicLink = await db.magicLink.create({
+    data: {
+      userId,
+      email: normalizeEmail(email),
+      role: 'BUHR',
+      tokenHash: hashMagicToken(token),
+      expiresAt: getMagicLinkExpiry(),
+      payload: {},
+    },
+  })
+
+  return { magicLink, inviteUrl: buildInviteUrl(token) }
+}
+
 export function normalizeEmail(email) {
   return email.trim().toLowerCase()
 }

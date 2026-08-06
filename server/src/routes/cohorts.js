@@ -6,7 +6,7 @@ import { httpError } from '../utils/httpError.js'
 import { deriveTaskStatus, taskCompletionPercent, toParticipantSummary } from '../utils/mappers.js'
 import { hashPassword } from '../utils/passwords.js'
 import { createQueuedEmail, sendEmail } from '../notifications/service.js'
-import { createParticipantMagicLink } from '../utils/magicLinks.js'
+import { createBuhrMagicLink, createParticipantMagicLink } from '../utils/magicLinks.js'
 
 export const cohortsRouter = Router()
 
@@ -84,6 +84,9 @@ function participantCredentialTable(participants) {
 async function queueBuhrCredentialEmails(db, cohort, groups, actorId = null) {
   const emailIds = []
   for (const group of groups.values()) {
+    const buhrUser = await db.user.findUnique({ where: { email: group.email } })
+    if (!buhrUser || !buhrUser.roles.includes('BUHR')) continue
+    const buhrLink = await createBuhrMagicLink(db, { userId: buhrUser.id, email: buhrUser.email })
     const email = await createQueuedEmail({
       templateId: 'buhr-participant-credentials',
       toEmail: group.email,
@@ -93,12 +96,13 @@ async function queueBuhrCredentialEmails(db, cohort, groups, actorId = null) {
         'BUHR Email': group.email,
         'BUHR Password': process.env.MOCK_USER_PASSWORD || 'Welcome@123',
         Cohort: cohort.name,
-        'Login Link': process.env.APP_URL || 'http://localhost:5173',
+        'Login Link': buhrLink.inviteUrl,
         'Participant Credentials': participantCredentialTable(group.participants),
       },
       entity: 'Cohort',
       entityId: cohort.id,
       actorId,
+      magicLinkId: buhrLink.magicLink.id,
       metadata: { cohortId: cohort.id, buhrEmail: group.email, participantCount: group.participants.length },
     }, db)
     if (email) emailIds.push(email.id)
@@ -172,11 +176,20 @@ cohortsRouter.post('/', asyncHandler(async (req, res) => {
   const cohort = await prisma.$transaction(async (tx) => {
     const created = await tx.cohort.create({ data: { ...cohortData, slug } })
     for (const row of participants) {
-      const user = await tx.user.upsert({
-        where: { email: row.email.toLowerCase() },
-        update: { name: row.name, employeeId: row.employeeId, designation: row.designation, businessUnit: row.businessUnit, roles: ['PARTICIPANT'] },
-        create: { name: row.name, email: row.email.toLowerCase(), employeeId: row.employeeId, designation: row.designation, businessUnit: row.businessUnit, passwordHash, roles: ['PARTICIPANT'] },
-      })
+      const participantEmail = row.email.toLowerCase()
+      const existingParticipantUser = await tx.user.findUnique({ where: { email: participantEmail } })
+      const participantUserData = { name: row.name, employeeId: row.employeeId, designation: row.designation, businessUnit: row.businessUnit }
+      const user = existingParticipantUser
+        ? await tx.user.update({
+            where: { id: existingParticipantUser.id },
+            data: {
+              ...participantUserData,
+              roles: existingParticipantUser.roles.includes('PARTICIPANT')
+                ? existingParticipantUser.roles
+                : [...existingParticipantUser.roles, 'PARTICIPANT'],
+            },
+          })
+        : await tx.user.create({ data: { ...participantUserData, email: participantEmail, passwordHash, roles: ['PARTICIPANT'] } })
       const participant = await tx.participant.upsert({
         where: { userId: user.id },
         update: { cohortId: created.id, masterData: row.masterData, stage: 'APPLICATION_PROFILE', progress: 10, reportStatus: 'WAITING', lastActivityAt: new Date() },
