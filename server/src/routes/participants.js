@@ -47,6 +47,14 @@ const nomineeEligibilitySchema = nomineeSchema.pick({
 
 const RESTRICTED_POSITION_LEVELS = new Set(['MX', 'CX', 'DX', 'L0', 'L1'])
 const RESTRICTED_NOMINATION_MESSAGE = 'You cannot choose the selected user as your 360 respondent for this category. You may add them under the Reporting Manager, Skip Manager, or BU Head category (wherever applicable) instead.'
+const BLOCKED_SELF_SELECTION_MESSAGE = 'Selection of this user as a 360° respondent is restricted.'
+const BLOCKED_SELF_SELECTION_EMPLOYEE_IDS = new Set(['26207', '36020', '10258', '54521'])
+const BLOCKED_SELF_SELECTION_EMAILS = new Set([
+  'pshrivastava@bajajauto.co.in',
+  'ajoseph@bajajauto.co.in',
+  'kpdsa@bajajauto.co.in',
+  'rsharma@bajajauto.co.in',
+])
 
 function normalizedPositionLevel(value) {
   return String(value || '').trim().toUpperCase()
@@ -78,7 +86,15 @@ async function findDirectoryEntry(nominee, db = prisma) {
 }
 
 async function assertNomineePositionEligibility(nominee, participant, db = prisma) {
+  const employeeId = String(nominee.employeeId || '').trim()
+  if (BLOCKED_SELF_SELECTION_EMPLOYEE_IDS.has(employeeId) || BLOCKED_SELF_SELECTION_EMAILS.has(normalizeEmail(nominee.email))) {
+    throw httpError(400, BLOCKED_SELF_SELECTION_MESSAGE)
+  }
   const directoryEntry = await findDirectoryEntry(nominee, db)
+  if (directoryEntry && (BLOCKED_SELF_SELECTION_EMPLOYEE_IDS.has(String(directoryEntry.employeeId || '').trim())
+    || BLOCKED_SELF_SELECTION_EMAILS.has(normalizeEmail(directoryEntry.email)))) {
+    throw httpError(400, BLOCKED_SELF_SELECTION_MESSAGE)
+  }
   if (!directoryEntry || !RESTRICTED_POSITION_LEVELS.has(normalizedPositionLevel(directoryEntry.positionLevel))) return directoryEntry
   const masterData = participant.masterData && typeof participant.masterData === 'object' ? participant.masterData : {}
   if (!restrictedNomineeIsApplicable(nominee, masterData)) throw httpError(400, RESTRICTED_NOMINATION_MESSAGE)

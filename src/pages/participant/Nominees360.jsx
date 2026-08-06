@@ -21,6 +21,9 @@ const addableRelationships = ['reporting-manager', 'skip-manager', 'peer', 'dire
 const RESTRICTED_POSITION_LEVELS = new Set(['MX', 'CX', 'DX', 'L0', 'L1'])
 const RESTRICTED_RELATIONSHIPS = new Set(['peer', 'direct-report'])
 const RESTRICTED_NOMINATION_MESSAGE = 'You cannot choose the selected user as your 360 respondent for this category. You may add them under the Reporting Manager, Skip Manager, or BU Head category (wherever applicable) instead.'
+const BLOCKED_SELF_SELECTION_MESSAGE = 'Selection of this user as a 360° respondent is restricted.'
+const BLOCKED_SELF_SELECTION_EMPLOYEE_IDS = new Set(['26207', '36020', '10258', '54521'])
+const BLOCKED_SELF_SELECTION_EMAILS = new Set(['pshrivastava@bajajauto.co.in', 'ajoseph@bajajauto.co.in', 'kpdsa@bajajauto.co.in', 'rsharma@bajajauto.co.in'])
 
 const NOMINATION_CATEGORIES = [
   ['Self', 'Self-assessment completed by you.', '1', '1'],
@@ -223,6 +226,27 @@ export default function Nominees360() {
   }
 
   function selectDirectoryEmployee(relationship, index, employee) {
+    const isBlockedSelection = BLOCKED_SELF_SELECTION_EMPLOYEE_IDS.has(String(employee.employeeId || '').trim())
+      || BLOCKED_SELF_SELECTION_EMAILS.has(String(employee.email || '').trim().toLowerCase())
+
+    if (isBlockedSelection) {
+      setExternalDrafts((prev) => ({
+        ...prev,
+        [relationship]: prev[relationship].map((draft, draftIndex) => draftIndex === index ? {
+          ...draft,
+          email: '',
+          employeeId: '',
+          positionLevel: undefined,
+          directorySelected: false,
+          directoryResults: [],
+          directoryLoading: false,
+          eligibilityError: BLOCKED_SELF_SELECTION_MESSAGE,
+        } : draft),
+      }))
+      window.alert(BLOCKED_SELF_SELECTION_MESSAGE)
+      return
+    }
+
     const isRestrictedSelection = RESTRICTED_RELATIONSHIPS.has(relationship)
       && RESTRICTED_POSITION_LEVELS.has(String(employee.positionLevel || '').trim().toUpperCase())
 
