@@ -78,7 +78,7 @@ const exportCards = [
     icon: FileText,
     title: 'Cohort Master Tracker',
     desc: 'One row per participant with status across every stage.',
-    cols: 'Ticket ID, Name, BU, Details, Nominations, Self Reflection, Photo, 360 %, OB Sheet, Reports',
+    cols: 'Ticket ID, Name, BU, Details, Nominations, Self Reflection, Photo, 360 Responses, OB Sheet, Reports',
     best: 'Weekly cohort health checks',
   },
   {

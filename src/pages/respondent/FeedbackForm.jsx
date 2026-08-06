@@ -341,7 +341,6 @@ export default function FeedbackForm({ returnTo = '/respondent/dashboard', taskI
   const answeredCount = getValidRatingCount(ratings, behaviourIds)
   const sectionReflectionAnsweredCount = getCompletedCommentCount(sectionSsc, surveySections)
   const requiredAnsweredCount = answeredCount + sectionReflectionAnsweredCount
-  const progressPct = Math.round((requiredAnsweredCount / requiredTotal) * 100)
   const allRated = answeredCount === totalRatings
   const reflectionsComplete = sectionReflectionAnsweredCount === totalCommentFields
   const canSubmit = allRated && reflectionsComplete
@@ -476,9 +475,6 @@ export default function FeedbackForm({ returnTo = '/respondent/dashboard', taskI
                 <span className="text-gray-400 ml-1.5 font-normal">- {task.relationship}</span>
               </p>
               <span className="ml-2 shrink-0 text-xs text-gray-400">{requiredAnsweredCount}/{requiredTotal}</span>
-            </div>
-            <div className="h-1.5 w-full rounded-full bg-gray-100">
-              <div className="h-1.5 rounded-full bg-[#1e4d8c] transition-all duration-300" style={{ width: `${progressPct}%` }} />
             </div>
           </div>
           <span className="hidden rounded-full border border-[#d5dce5] bg-[#f4f7fb] px-3 py-1 text-[10px] font-semibold text-slate-600 sm:inline-flex">

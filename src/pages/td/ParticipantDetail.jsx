@@ -122,7 +122,6 @@ export default function ParticipantDetail() {
             <span className="font-semibold text-emerald-700">{cohort?.name || 'Unassigned cohort'}</span>
           </p>
         </div>
-        <div className="min-w-56"><div className="flex justify-between text-xs mb-2"><span className="text-gray-500">Overall completion</span><strong>{participant.taskCompletionPercent}%</strong></div><div className="h-2 bg-gray-100 rounded-full"><div className="h-2 rounded-full bg-[#2867a7]" style={{ width: `${participant.taskCompletionPercent}%` }} /></div></div>
       </section>
 
       <div className="grid xl:grid-cols-[1fr_320px] gap-6">
@@ -174,7 +173,7 @@ export default function ParticipantDetail() {
           <section className="bg-white border border-[#e2e8f0] rounded-2xl overflow-hidden">
             <div className="px-6 py-5 border-b border-[#e8edf3] flex justify-between"><div><h3 className="font-semibold text-[#172033]">360 feedback collection</h3><p className="text-xs text-gray-400 mt-1">Individual responses remain confidential</p></div><div className="text-right"><p className="text-lg font-bold text-violet-700">{participant.responses}/{participant.totalResponses}</p><p className="text-[10px] text-gray-400">responses received</p></div></div>
             <div className="p-5 grid sm:grid-cols-4 gap-3">
-              {relationshipSummary.map(({ relationship, responded, total }) => <div key={relationship} className="rounded-xl bg-[#f8fafc] border border-[#edf1f5] p-4"><p className="text-[11px] text-gray-500">{relationshipLabels[relationship] || relationship}</p><p className="text-lg font-bold text-[#172033] mt-2">{responded}<span className="text-xs font-normal text-gray-400">/{total}</span></p><div className="h-1 bg-gray-200 rounded mt-2"><div className="h-1 bg-violet-500 rounded" style={{ width: `${Math.min(100, total ? responded / total * 100 : 0)}%` }} /></div></div>)}
+              {relationshipSummary.map(({ relationship, responded, total }) => <div key={relationship} className="rounded-xl bg-[#f8fafc] border border-[#edf1f5] p-4"><p className="text-[11px] text-gray-500">{relationshipLabels[relationship] || relationship}</p><p className="text-lg font-bold text-[#172033] mt-2">{responded}<span className="text-xs font-normal text-gray-400">/{total}</span></p></div>)}
             </div>
             {participant.responses < participant.totalResponses && <div className="px-5 pb-5"><button className="flex items-center gap-2 text-xs font-semibold text-[#1e4d8c] border border-blue-200 rounded-lg px-3 py-2 hover:bg-blue-50"><Mail size={14} />Send reminder to pending nominees</button></div>}
           </section>

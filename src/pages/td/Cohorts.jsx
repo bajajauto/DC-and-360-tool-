@@ -7,7 +7,7 @@ import { exportCohortNomineeStatus, exportCohortProcessStatus } from '../../lib/
 const tabs = [
   { id: 'participants', label: 'Participants' },
   { id: 'manage', label: 'Manage Participants' },
-  { id: 'threesixty', label: '360 Progress' },
+  { id: 'threesixty', label: '360 Responses' },
   { id: 'assessors', label: 'Assessor Status' },
   { id: 'reports', label: 'Reports' },
 ]
@@ -761,7 +761,7 @@ function ThreeSixtyTab({ rows }) {
   return (
     <Card>
       <CardHeader
-        title="360 Progress"
+        title="360 Responses"
         subtitle="Overall response counts. Scores and individual answers are never exposed here."
         action={(
           <div className="flex gap-2">

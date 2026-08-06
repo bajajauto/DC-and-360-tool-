@@ -30,15 +30,6 @@ const TASK_STATUS_KEY_BY_LABEL = {
   'DC Report': 'report',
 }
 
-function nomineeCompletionPercent(nominees, submitted) {
-  if (submitted) return 100
-  const filledRequiredSlots =
-    Math.min(1, nominees.filter((nominee) => nominee.relationship === 'reporting-manager').length)
-    + Math.min(1, nominees.filter((nominee) => nominee.relationship === 'skip-manager').length)
-    + Math.min(4, nominees.filter((nominee) => nominee.relationship === 'peer').length)
-  return Math.round((filledRequiredSlots / 6) * 100)
-}
-
 function StatusBadge({ status }) {
   const map = {
     completed: { label: 'Submitted', className: 'bg-green-100 text-green-700' },
@@ -93,7 +84,6 @@ export default function Dashboard() {
     : nominees.length > 0
       ? 'saved'
       : 'pending'
-  const nomineeProgress = nomineeCompletionPercent(nominees, nomineeStatus === 'completed')
 
   useEffect(() => {
     if (user?.participantId) refreshParticipantData(user.participantId)
@@ -123,7 +113,6 @@ export default function Dashboard() {
       to: '/participant/pre-work',
       deadline: formatDeadline(cohort, 'preWorkDeadline'),
       urgency: 'medium',
-      progress: preWorkAnsweredCount * 10,
     })
   }
   if (nomineeStatus !== 'completed') {
@@ -133,14 +122,12 @@ export default function Dashboard() {
       to: '/participant/360-nominees',
       deadline: formatDeadline(cohort, 'nominationDeadline'),
       urgency: 'medium',
-      progress: nomineeProgress,
     } : {
       title: 'Submit 360 Nominees',
       description: 'Select your feedback respondents from the directory',
       to: '/participant/360-nominees',
       deadline: formatDeadline(cohort, 'nominationDeadline'),
       urgency: 'high',
-      progress: 0,
     })
   }
   if (nomineeStatus === 'completed' && selfSurveyStatus !== 'completed') {
@@ -150,29 +137,10 @@ export default function Dashboard() {
       to: '/participant/self-360',
       deadline: formatDeadline(cohort, 'threeSixtyCutoff'),
       urgency: 'high',
-      progress: selfTask?.progress ?? 0,
     })
   }
   const completedSteps = journeySteps.filter((s) => s.status === 'completed').length
   const totalSteps = journeySteps.length
-  const roleQuestionCount = participantData?.roleInterviewQuestionCount ?? 0
-  const roleProgress = taskStatus?.role === 'completed'
-    ? 100
-    : roleQuestionCount
-      ? Math.round(((participantData?.roleInterviewAnsweredCount ?? 0) / roleQuestionCount) * 100)
-      : 0
-  const stageProgress = {
-    'Role Interview': roleProgress,
-    Photograph: taskStatus?.photo === 'completed' ? 100 : 0,
-    'Self Reflection': Math.min(100, preWorkAnsweredCount * 10),
-    'Self 360 Survey': selfSurveyStatus === 'completed' ? 100 : (selfTask?.progress ?? 0),
-    '360 Nominees': nomineeProgress,
-    '360 Feedback': participantData?.totalResponses
-      ? Math.round(((participantData?.responses ?? 0) / participantData.totalResponses) * 100)
-      : 0,
-    'DC Report': taskStatus?.report === 'completed' ? 100 : 0,
-  }
-  const progressPct = Math.round(journeySteps.reduce((sum, step) => sum + (stageProgress[step.label] ?? 0), 0) / totalSteps)
 
   return (
     <div className="p-6">
@@ -188,13 +156,6 @@ export default function Dashboard() {
             <p className="text-blue-200 text-sm font-medium">Your DC Journey Progress</p>
             <p className="text-2xl font-bold mt-0.5">{completedSteps} of {totalSteps} stages complete</p>
           </div>
-          <div className="text-right">
-            <p className="text-3xl font-bold">{progressPct}%</p>
-            <p className="text-blue-200 text-xs mt-0.5">Overall completion</p>
-          </div>
-        </div>
-        <div className="w-full bg-blue-800 rounded-full h-2">
-          <div className="bg-white rounded-full h-2 transition-all duration-500" style={{ width: `${progressPct}%` }} />
         </div>
         <p className="text-blue-200 text-xs mt-2">DC date: <span className="text-white font-medium">{cohort?.eventDate || 'TBD'}</span></p>
       </div>
@@ -246,16 +207,6 @@ export default function Dashboard() {
                     )}
                   </div>
                   <p className="text-xs text-gray-500 mb-3">{task.description}</p>
-                  {task.progress > 0 && (
-                    <div className="mb-3">
-                      <div className="flex justify-between text-[10px] text-gray-400 mb-1">
-                        <span>Progress</span><span>{task.progress}%</span>
-                      </div>
-                      <div className="w-full bg-gray-100 rounded-full h-1.5">
-                        <div className="bg-[#1e4d8c] rounded-full h-1.5" style={{ width: `${task.progress}%` }} />
-                      </div>
-                    </div>
-                  )}
                   <div className="flex items-center justify-between">
                     <p className="text-[10px] text-gray-400">Due: {task.deadline}</p>
                     <Link to={task.to} className="text-xs text-[#1e4d8c] font-medium hover:underline">Continue →</Link>

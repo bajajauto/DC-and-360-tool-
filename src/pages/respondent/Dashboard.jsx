@@ -56,13 +56,6 @@ function TaskCard({ task, onOpen }) {
             <div className="mt-3">
               <div className="flex justify-between text-[10px] text-gray-400 mb-1">
                 <span>{task.answered} of {task.totalQuestions} questions</span>
-                <span>{task.progress}%</span>
-              </div>
-              <div className="w-full bg-gray-100 rounded-full h-1.5">
-                <div
-                  className={`rounded-full h-1.5 transition-all ${isSubmitted ? 'bg-green-500' : 'bg-[#1e4d8c]'}`}
-                  style={{ width: `${task.progress}%` }}
-                />
               </div>
             </div>
           )}

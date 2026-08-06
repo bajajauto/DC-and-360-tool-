@@ -48,9 +48,6 @@ export default function PreWork() {
       </div>
 
       <div className="mb-8">
-        <div className="w-full bg-gray-100 rounded-full h-1.5">
-          <div className="bg-[#1e4d8c] rounded-full h-1.5 transition-all duration-300" style={{ width: `${(answeredCount / questions.length) * 100}%` }} />
-        </div>
         <p className="text-xs text-gray-400 mt-1.5">
           {canSubmit ? 'All questions answered — you can submit when ready.' : `${questions.length - answeredCount} question${questions.length - answeredCount !== 1 ? 's' : ''} remaining`}
         </p>

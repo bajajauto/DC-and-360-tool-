@@ -34,7 +34,6 @@ const relationshipStyles: Record<Relationship, { row: string; avatar: string; ba
 
 const submitted = respondents.filter((r) => r.status === 'submitted').length
 const total = respondents.length
-const pct = Math.round((submitted / total) * 100)
 
 function initials(name: string) {
   if (name === 'Rahul Kumar (Self)') return 'ME'
@@ -62,12 +61,8 @@ export default function Status360() {
             <p className="text-3xl font-bold mt-0.5">{submitted} <span className="text-blue-300 text-lg font-normal">/ {total}</span></p>
           </div>
           <div className="text-right">
-            <p className="text-3xl font-bold">{pct}%</p>
-            <p className="text-blue-200 text-xs mt-0.5">Complete</p>
+            <p className="text-sm font-semibold text-blue-100">{pending} pending</p>
           </div>
-        </div>
-        <div className="w-full bg-blue-800 rounded-full h-2 mb-2">
-          <div className="bg-white rounded-full h-2" style={{ width: `${pct}%` }} />
         </div>
         <div className="flex justify-between text-xs text-blue-300 mt-1">
           <span>{total - submitted} pending</span>

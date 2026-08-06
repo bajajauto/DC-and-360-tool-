@@ -37,7 +37,6 @@ export default function Status360() {
   const submitted = summary?.submitted ?? respondents.filter((respondent) => respondent.status === 'submitted').length
   const total = summary?.total ?? respondents.length
   const pending = summary?.pending ?? Math.max(0, total - submitted)
-  const pct = summary?.percent ?? (total ? Math.round((submitted / total) * 100) : 0)
   const cutoffDate = participantData?.cohort?.threeSixtyCutoff
   const cutoffLabel = cutoffDate ? new Date(cutoffDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'TBD'
 
@@ -64,16 +63,9 @@ export default function Status360() {
                 <p className="text-blue-200 text-sm">Responses received</p>
                 <p className="text-3xl font-bold mt-0.5">{submitted} <span className="text-blue-300 text-lg font-normal">/ {total}</span></p>
               </div>
-              <div className="text-right">
-                <p className="text-3xl font-bold">{pct}%</p>
-                <p className="text-blue-200 text-xs mt-0.5">Complete</p>
-              </div>
+              <p className="text-sm font-semibold text-blue-100">{pending} pending</p>
             </div>
-            <div className="w-full bg-blue-800 rounded-full h-2 mb-2">
-              <div className="bg-white rounded-full h-2" style={{ width: `${pct}%` }} />
-            </div>
-            <div className="flex justify-between text-xs text-blue-300 mt-1">
-              <span>{pending} pending</span>
+            <div className="flex justify-end text-xs text-blue-300 mt-1">
               <span>Cutoff: {cutoffLabel}</span>
             </div>
           </div>
@@ -145,9 +137,6 @@ export default function Status360() {
                   <div className="flex justify-between text-xs mb-1">
                     <span className="text-gray-500">{item.label}</span>
                     <span className="font-semibold text-[#1a1f2e]">{item.count}</span>
-                  </div>
-                  <div className="w-full bg-gray-100 rounded-full h-1.5">
-                    <div className={`${item.color} rounded-full h-1.5`} style={{ width: `${total ? (item.count / total) * 100 : 0}%` }} />
                   </div>
                 </div>
               ))}

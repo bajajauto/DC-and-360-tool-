@@ -22,15 +22,9 @@ function doneOrNotDone(participant, step) {
   return taskState(participant, step) === 'completed' ? 'Done' : 'Not done'
 }
 
-function liveProgress(participant) {
-  const completed = trackerSteps.filter((step) => taskState(participant, step) === 'completed').length
-  return Math.round((completed / trackerSteps.length) * 100)
-}
-
 function liveStage(participant) {
-  const progress = liveProgress(participant)
-  if (progress === 100) return 'Completed'
-  if (progress === 0 && trackerSteps.every((step) => ['pending', 'locked'].includes(taskState(participant, step)))) return 'Not started'
+  if (trackerSteps.every((step) => taskState(participant, step) === 'completed')) return 'Completed'
+  if (trackerSteps.every((step) => ['pending', 'locked'].includes(taskState(participant, step)))) return 'Not started'
   const current = trackerSteps.find((step) => ['in-progress', 'pending'].includes(taskState(participant, step)))
   return current?.label || 'In progress'
 }
@@ -69,7 +63,7 @@ function downloadWorkbook(filename, worksheets) {
 
 export function exportParticipantProcessStatus(participant, cohortName = '') {
   const processRows = [
-    ['Participant', 'Employee ID', 'Cohort', 'Designation', 'Business unit', 'Current stage', 'Progress', 'Self 360', 'Other responses received', 'Other respondents', 'Other responses pending', 'Report status', 'Last activity', ...trackerSteps.map((step) => step.label)],
+    ['Participant', 'Employee ID', 'Cohort', 'Designation', 'Business unit', 'Current stage', 'Self 360', 'Other responses received', 'Other respondents', 'Other responses pending', 'Report status', 'Last activity', ...trackerSteps.map((step) => step.label)],
     [
       participant.name,
       participant.employeeId,
@@ -77,7 +71,6 @@ export function exportParticipantProcessStatus(participant, cohortName = '') {
       participant.designation,
       participant.bu,
       liveStage(participant),
-      `${liveProgress(participant)}%`,
       participant.selfFeedback?.status === 'submitted' ? 'Done' : 'Not done',
       participant.responses,
       participant.totalResponses,
@@ -129,14 +122,13 @@ export function exportParticipantNomineeStatus(participant) {
 
 export function exportCohortProcessStatus(cohort, participants) {
   const processRows = [
-    ['Participant', 'Employee ID', 'Designation', 'Business unit', 'Current stage', 'Progress', 'Self 360', 'Other responses received', 'Other respondents', 'Other responses pending', 'Report status', 'Last activity', ...trackerSteps.map((step) => step.label)],
+    ['Participant', 'Employee ID', 'Designation', 'Business unit', 'Current stage', 'Self 360', 'Other responses received', 'Other respondents', 'Other responses pending', 'Report status', 'Last activity', ...trackerSteps.map((step) => step.label)],
     ...participants.map((participant) => [
       participant.name,
       participant.employeeId,
       participant.designation,
       participant.bu,
       liveStage(participant),
-      `${liveProgress(participant)}%`,
       participant.selfFeedback?.status === 'submitted' ? 'Done' : 'Not done',
       participant.responses,
       participant.totalResponses,
@@ -154,7 +146,7 @@ export function exportCohortProcessStatus(cohort, participants) {
 
 export function exportBuhrProcessStatus(businessUnit, participants) {
   const processRows = [
-    ['Participant', 'Employee ID', 'Designation', 'Business unit', 'Cohort', 'Current stage', 'Progress', 'Nominations', 'Self 360', 'Other responses received', 'Other respondents', 'Other responses pending', 'Report status', 'Last activity', ...trackerSteps.map((step) => step.label)],
+    ['Participant', 'Employee ID', 'Designation', 'Business unit', 'Cohort', 'Current stage', 'Nominations', 'Self 360', 'Other responses received', 'Other respondents', 'Other responses pending', 'Report status', 'Last activity', ...trackerSteps.map((step) => step.label)],
     ...participants.map((participant) => [
       participant.name,
       participant.employeeId,
@@ -162,7 +154,6 @@ export function exportBuhrProcessStatus(businessUnit, participants) {
       participant.bu,
       participant.cohort?.name || 'Unassigned',
       liveStage(participant),
-      `${liveProgress(participant)}%`,
       participant.nominees?.length || 0,
       participant.selfFeedback?.status === 'submitted' ? 'Done' : 'Not done',
       participant.responses,
