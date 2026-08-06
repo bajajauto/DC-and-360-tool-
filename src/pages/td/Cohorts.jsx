@@ -141,6 +141,30 @@ function cohortToForm(cohort) {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
+const COHORT_TEMPLATE_HEADERS = [
+  'Sr No', 'Emp Name', 'Ticket ID', 'Gender', 'Local Designation', 'Job Level', 'Position Level (Label)',
+  'Function', 'Sub Function', 'Employee Group', 'Employee Subgroup', 'Date of Joining', 'Department',
+  'Business Unit', 'Location', 'Email', 'Reporting Manager Name', 'Reporting Manager Ticket ID',
+  'Reporting Manager Email', 'Skip Manager Name', 'Skip Manager Ticket ID', 'Skip Manager Email',
+  'BU Head Name', 'BU Head Ticket ID', 'BU Head Email', 'BUHR Name', 'BUHR Ticket ID', 'BUHR Email',
+]
+
+const COHORT_TEMPLATE_FIELD_TYPES = COHORT_TEMPLATE_HEADERS.map((header) => (
+  ['Emp Name', 'Ticket ID', 'Local Designation', 'Business Unit', 'Email', 'BUHR Name', 'BUHR Ticket ID', 'BUHR Email'].includes(header)
+    ? 'Mandatory'
+    : header === 'Sr No' ? 'Optional serial number' : 'Optional'
+))
+
+async function downloadCohortCreationTemplate() {
+  const XLSX = await import('xlsx')
+  const worksheet = XLSX.utils.aoa_to_sheet([COHORT_TEMPLATE_HEADERS, COHORT_TEMPLATE_FIELD_TYPES])
+  worksheet['!cols'] = COHORT_TEMPLATE_HEADERS.map((header) => ({ wch: Math.max(14, Math.min(30, header.length + 3)) }))
+  worksheet['!freeze'] = { xSplit: 0, ySplit: 2 }
+  const workbook = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Employee Details')
+  XLSX.writeFile(workbook, 'DC-Cohort-Creation-Template.xlsx')
+}
+
 async function parseParticipantTemplate(file) {
   const XLSX = await import('xlsx')
   const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array' })
@@ -408,8 +432,20 @@ function CohortFormModal({ mode, initialCohort, onClose, onSubmit }) {
 
           {mode === 'create' && (
             <div className="border-t border-[#e2e8f0] pt-4">
-              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Participant master sheet</label>
-              <p className="mb-3 text-xs leading-5 text-slate-500">Upload the completed 28-column Excel template. Participant accounts and BUHR access will be created with the cohort. Participants will enter all 360 nominees themselves.</p>
+              <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Participant master sheet</label>
+                  <p className="max-w-xl text-xs leading-5 text-slate-500">Upload the completed 28-column Excel template. Participant accounts and BUHR access will be created with the cohort. Participants will enter all 360 nominees themselves.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={downloadCohortCreationTemplate}
+                  className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-[#1e5fba] bg-white px-3 py-2 text-xs font-semibold text-[#1e5fba] hover:bg-[#ebf2fa]"
+                >
+                  <Download size={14} />
+                  Download Cohort Creation Template
+                </button>
+              </div>
               <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-dashed border-[#c2ccda] bg-[#f8fafc] px-4 py-5 text-sm font-medium text-slate-600 hover:border-[#1e5fba] hover:bg-[#ebf2fa]">
                 <Upload size={18} />
                 {fileName || 'Choose master data workbook'}
