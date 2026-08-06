@@ -49,7 +49,7 @@ function RequirementsTable({ compact = false }) {
   )
 }
 
-const emptyDraft = () => ({ name: '', email: '', employeeId: '', isExternal: false, eligibilityError: '', directoryResults: [], directoryLoading: false, directorySelected: false })
+const emptyDraft = () => ({ name: '', email: '', employeeId: '', isExternal: false, eligibilityError: '', directoryResults: [], directoryLoading: false, directorySelected: false, directoryOpen: false })
 const createInitialDrafts = () => ({
   'reporting-manager': [emptyDraft()],
   'skip-manager': [emptyDraft()],
@@ -189,6 +189,7 @@ export default function Nominees360() {
         directorySelected: false,
         directoryResults: [],
         directoryLoading: value.trim().length >= 2 && !draft.isExternal,
+        directoryOpen: value.trim().length >= 2 && !draft.isExternal,
       } : draft),
     }))
     if (isExternal || value.trim().length < 2) return
@@ -208,6 +209,20 @@ export default function Nominees360() {
     }, 250)
   }
 
+  function closeDirectoryDropdown(relationship, index) {
+    const draftKey = `${relationship}:${index}`
+    window.clearTimeout(directorySearchTimers.current[draftKey])
+    setExternalDrafts((prev) => ({
+      ...prev,
+      [relationship]: prev[relationship].map((draft, draftIndex) => draftIndex === index ? {
+        ...draft,
+        directoryOpen: false,
+        directoryResults: [],
+        directoryLoading: false,
+      } : draft),
+    }))
+  }
+
   function toggleExternalDraft(relationship, index, isExternal) {
     const draftKey = `${relationship}:${index}`
     window.clearTimeout(directorySearchTimers.current[draftKey])
@@ -221,6 +236,7 @@ export default function Nominees360() {
         directoryResults: [],
         directoryLoading: false,
         directorySelected: false,
+        directoryOpen: false,
         eligibilityError: '',
       } : draft),
     }))
@@ -255,6 +271,7 @@ export default function Nominees360() {
           directorySelected: false,
           directoryResults: [],
           directoryLoading: false,
+          directoryOpen: false,
           eligibilityError: message,
         } : draft),
       }))
@@ -276,6 +293,7 @@ export default function Nominees360() {
           directorySelected: false,
           directoryResults: [],
           directoryLoading: false,
+          directoryOpen: false,
           eligibilityError: BLOCKED_SELF_SELECTION_MESSAGE,
         } : draft),
       }))
@@ -298,6 +316,7 @@ export default function Nominees360() {
           directorySelected: false,
           directoryResults: [],
           directoryLoading: false,
+          directoryOpen: false,
           eligibilityError: RESTRICTED_NOMINATION_MESSAGE,
         } : draft),
       }))
@@ -315,6 +334,7 @@ export default function Nominees360() {
         directorySelected: true,
         directoryResults: [],
         directoryLoading: false,
+        directoryOpen: false,
         eligibilityError: '',
       } : draft),
     }))
@@ -424,13 +444,14 @@ export default function Nominees360() {
                   placeholder="Start typing employee name"
                   value={draft.name}
                   onChange={(e) => updateDraftName(relationship, index, e.target.value)}
+                  onBlur={() => closeDirectoryDropdown(relationship, index)}
                   className="w-full rounded-lg border border-[#e2e8f0] bg-white px-3 py-2 text-sm placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-[#1e4d8c]"
                 />
-                {!draft.isExternal && draft.directoryLoading && <div className="absolute left-0 right-0 top-full z-30 mt-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500 shadow-lg">Searching employees…</div>}
-                {!draft.isExternal && !draft.directoryLoading && draft.directoryResults?.length > 0 && (
+                {!draft.isExternal && draft.directoryOpen && draft.directoryLoading && <div className="absolute left-0 right-0 top-full z-30 mt-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500 shadow-lg">Searching employees…</div>}
+                {!draft.isExternal && draft.directoryOpen && !draft.directoryLoading && draft.directoryResults?.length > 0 && (
                   <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-64 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-xl">
                     {draft.directoryResults.map((employee) => (
-                      <button key={employee.id} type="button" onClick={() => selectDirectoryEmployee(relationship, index, employee)} className="block w-full border-b border-slate-100 px-3 py-2.5 text-left last:border-0 hover:bg-blue-50">
+                      <button key={employee.id} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => selectDirectoryEmployee(relationship, index, employee)} className="block w-full border-b border-slate-100 px-3 py-2.5 text-left last:border-0 hover:bg-blue-50">
                         <span className="block text-xs font-semibold text-slate-900">{employee.name}</span>
                         <span className="mt-0.5 block text-[11px] text-slate-500">{employee.email || 'Email not available — enter manually'} · Ticket ID: {employee.employeeId} · Level: {employee.positionLevel}</span>
                       </button>
