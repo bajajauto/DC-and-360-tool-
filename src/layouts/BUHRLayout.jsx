@@ -2,6 +2,7 @@ import { ClipboardList, FileText, LayoutDashboard, LogOut } from 'lucide-react'
 import { Link, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useUser } from '../context/UserContext'
 import bajajBrandLockup from '../assets/bajaj-brand-lockup.png'
+import RoleSwitchBanner from '../components/RoleSwitchBanner'
 
 const navItems = [
   { to: '/buhr/dashboard', label: 'BU Dashboard', icon: LayoutDashboard },
@@ -23,15 +24,6 @@ export default function BUHRLayout() {
         <div className="h-5 w-px bg-slate-300" />
         <p className="text-xs tracking-wide text-slate-500">BUHR Workspace</p>
         <div className="flex-1" />
-        {user.roles.includes('participant') && (
-          <button
-            type="button"
-            onClick={() => { switchRole('participant'); navigate('/participant/dashboard') }}
-            className="rounded-lg border border-[#bfdbfe] bg-blue-50 px-3 py-1.5 text-xs font-semibold text-[#1e4d8c] hover:bg-blue-100"
-          >
-            Participant View
-          </button>
-        )}
         <div className="inline-flex items-center gap-2 rounded-full border border-[#d6e4f7] bg-[#ebf2fa] px-3.5 py-1.5 text-xs font-semibold text-[#1e5fba]" title="Your mapped business unit">
           <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
           {user.bu || 'Business Unit'}
@@ -42,7 +34,14 @@ export default function BUHRLayout() {
         </div>
       </header>
 
-      <div className="flex min-h-[calc(100vh-52px)]">
+      {user.roles.includes('participant') && (
+        <RoleSwitchBanner
+          target="participant"
+          onSwitch={() => { switchRole('participant'); navigate('/participant/dashboard') }}
+        />
+      )}
+
+      <div className={`flex ${user.roles.includes('participant') ? 'min-h-[calc(100vh-105px)]' : 'min-h-[calc(100vh-52px)]'}`}>
         <aside className="sticky top-[52px] h-[calc(100vh-52px)] w-[228px] shrink-0 border-r border-[#d5dce5] bg-white px-3 py-4">
           <p className="px-3 pb-2 pt-1 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">Workspace</p>
           <nav className="space-y-1">

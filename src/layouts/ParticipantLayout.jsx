@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useUser } from '../context/UserContext'
+import RoleSwitchBanner from '../components/RoleSwitchBanner'
 
 const navItems = [
   { to: '/participant/dashboard', label: 'Dashboard', icon: HomeIcon },
@@ -158,18 +159,6 @@ export default function ParticipantLayout() {
           </div>
         )}
 
-        {isBuhrToo && (
-          <div className="px-3 pt-3 pb-1">
-            <button
-              type="button"
-              onClick={() => { switchRole('buhr'); navigate('/buhr/dashboard') }}
-              className="w-full rounded-lg border border-[#bfdbfe] bg-blue-50 px-3 py-2 text-left text-[11px] font-semibold text-[#1e4d8c] hover:bg-blue-100"
-            >
-              Switch to BUHR Workspace
-            </button>
-          </div>
-        )}
-
         {/* Nav */}
         <nav className="flex-1 min-h-0 overflow-y-auto px-3 py-3 space-y-0.5">
           {navItems.map((item) => {
@@ -218,6 +207,12 @@ export default function ParticipantLayout() {
 
       {/* Page content */}
       <main className="flex-1 overflow-auto" onClick={() => setDropdownOpen(false)}>
+        {isBuhrToo && (
+          <RoleSwitchBanner
+            target="buhr"
+            onSwitch={() => { switchRole('buhr'); navigate('/buhr/dashboard') }}
+          />
+        )}
         {/* Nomination CTA button */}
         {isRespondentToo && pendingRespondentCount > 0 && (
           <div className="px-8 pt-6 pb-0">
