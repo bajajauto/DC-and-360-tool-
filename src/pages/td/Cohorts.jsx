@@ -142,24 +142,35 @@ function cohortToForm(cohort) {
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 const COHORT_TEMPLATE_HEADERS = [
-  'Sr No', 'Emp Name', 'Ticket ID', 'Gender', 'Local Designation', 'Job Level', 'Position Level (Label)',
-  'Function', 'Sub Function', 'Employee Group', 'Employee Subgroup', 'Date of Joining', 'Department',
-  'Business Unit', 'Location', 'Email', 'Reporting Manager Name', 'Reporting Manager Ticket ID',
-  'Reporting Manager Email', 'Skip Manager Name', 'Skip Manager Ticket ID', 'Skip Manager Email',
-  'BU Head Name', 'BU Head Ticket ID', 'BU Head Email', 'BUHR Name', 'BUHR Ticket ID', 'BUHR Email',
+  'Emp Name ', 'Ticket ID ', 'DOJ', 'Designation', 'Job Level ', 'Position Level', 'Age ', 'Gender',
+  'Phone No.', 'Legal Entity', 'Sector ', 'Department', 'BU', 'Location', 'Email ID ',
+  'Reporting manager Name', 'Ticket Id ', 'Email ID ', 'Skip Manager Name  ', 'ticket Id ', 'email id ',
+  'BU head Name ', 'Ticket Id ', 'Email', 'BUHR Name ', 'Ticket id ', 'email ',
 ]
 
-const COHORT_TEMPLATE_FIELD_TYPES = COHORT_TEMPLATE_HEADERS.map((header) => (
-  ['Emp Name', 'Ticket ID', 'Local Designation', 'Business Unit', 'Email', 'BUHR Name', 'BUHR Ticket ID', 'BUHR Email'].includes(header)
-    ? 'Mandatory'
-    : header === 'Sr No' ? 'Optional serial number' : 'Optional'
-))
+const COHORT_TEMPLATE_HEADER_COLORS = [
+  ...Array(15).fill('F6C6AD'),
+  ...Array(3).fill('4E95D9'),
+  ...Array(3).fill('84E291'),
+  ...Array(3).fill('E59EDD'),
+  ...Array(3).fill('61CBF4'),
+]
 
 async function downloadCohortCreationTemplate() {
   const XLSX = await import('xlsx')
-  const worksheet = XLSX.utils.aoa_to_sheet([COHORT_TEMPLATE_HEADERS, COHORT_TEMPLATE_FIELD_TYPES])
-  worksheet['!cols'] = COHORT_TEMPLATE_HEADERS.map((header) => ({ wch: Math.max(14, Math.min(30, header.length + 3)) }))
-  worksheet['!freeze'] = { xSplit: 0, ySplit: 2 }
+  const worksheet = XLSX.utils.aoa_to_sheet([COHORT_TEMPLATE_HEADERS, Array(27).fill(''), Array(27).fill('')])
+  COHORT_TEMPLATE_HEADERS.forEach((_, index) => {
+    const cell = worksheet[XLSX.utils.encode_cell({ r: 0, c: index })]
+    cell.s = {
+      fill: { patternType: 'solid', fgColor: { rgb: COHORT_TEMPLATE_HEADER_COLORS[index] } },
+      font: { bold: true, color: { rgb: '000000' } },
+      alignment: { vertical: 'center' },
+    }
+  })
+  worksheet['!cols'] = COHORT_TEMPLATE_HEADERS.map((header, index) => ({
+    wch: index === 17 ? 28 : index === 18 ? 20 : Math.max(10, Math.min(24, header.trim().length + 3)),
+  }))
+  worksheet['!freeze'] = { xSplit: 0, ySplit: 1 }
   const workbook = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Employee Details')
   XLSX.writeFile(workbook, 'DC-Cohort-Creation-Template.xlsx')
@@ -173,7 +184,7 @@ async function parseParticipantTemplate(file) {
   const headers = (values[0] || []).map((value, index) => String(value).trim() || `Column ${index + 1}`)
   const nameCol = headers.findIndex((header) => header.toLowerCase() === 'emp name')
   if (nameCol === -1 || headers.length - nameCol < 27 || !headers[nameCol + 1].toLowerCase().includes('ticket')) {
-    throw new Error('This file does not match the 28-column master data template.')
+    throw new Error('This file does not match the configured 27-column cohort creation template.')
   }
 
   const col = (offset) => nameCol + offset
@@ -262,7 +273,7 @@ function CohortFormModal({ mode, initialCohort, onClose, onSubmit }) {
       // assuming a fixed position, so both layouts work.
       const nameCol = headers.findIndex((header) => header.toLowerCase() === 'emp name')
       if (nameCol === -1 || headers.length - nameCol < 27 || !headers[nameCol + 1].toLowerCase().includes('ticket')) {
-        throw new Error('This file does not match the 28-column master data template.')
+        throw new Error('This file does not match the configured 27-column cohort creation template.')
       }
       const col = (offset) => nameCol + offset
 
@@ -435,7 +446,7 @@ function CohortFormModal({ mode, initialCohort, onClose, onSubmit }) {
               <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Participant master sheet</label>
-                  <p className="max-w-xl text-xs leading-5 text-slate-500">Upload the completed 28-column Excel template. Participant accounts and BUHR access will be created with the cohort. Participants will enter all 360 nominees themselves.</p>
+                  <p className="max-w-xl text-xs leading-5 text-slate-500">Upload the completed configured 27-column Excel template. Participant accounts and BUHR access will be created with the cohort. Participants will enter all 360 nominees themselves.</p>
                 </div>
                 <button
                   type="button"
@@ -770,12 +781,12 @@ function ManageParticipantsTab({ cohort, rows, onAdded, onDeleted }) {
     <div className="space-y-5">
       {message && <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">{message}</div>}
       <Card>
-        <CardHeader title="Add Participants" subtitle="Use the same completed 28-column Employee Details template used during cohort creation." />
+        <CardHeader title="Add Participants" subtitle="Use the same completed 27-column Employee Details template used during cohort creation." />
         <div className="rounded-xl border border-[#7ba6e0] bg-[#ebf2fa] p-4 text-sm text-[#123e77]">All participant, manager, skip manager, BU head and BUHR details will be stored. The respective BUHR account is created or updated automatically.</div>
         <label className="mt-4 flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-[#c2ccda] bg-[#f4f7fb] px-5 py-7 text-center hover:border-[#1e5fba] hover:bg-[#ebf2fa]">
           <Upload size={30} className="mb-2 text-slate-500" />
           <span className="font-medium text-[#0f172a]">{fileName || 'Choose completed Employee Details template'}</span>
-          <span className="mt-1 text-xs text-slate-500">Excel (.xlsx or .xls) · full 28-column structure required</span>
+          <span className="mt-1 text-xs text-slate-500">Excel (.xlsx or .xls) · full configured 27-column structure required</span>
           <input type="file" accept=".xlsx,.xls" onChange={handleParticipantWorkbook} className="sr-only" />
         </label>
         {validation && <div className="mt-4 grid gap-3 sm:grid-cols-3"><Metric label="Rows found" value={validation.total}/><Metric label="Valid participants" value={validation.validCount} tone="text-[#15803d]"/><Metric label="Rows with errors" value={validation.errorRowCount} tone={validation.errorRowCount ? 'text-[#b91c1c]' : 'text-[#15803d]'}/></div>}
