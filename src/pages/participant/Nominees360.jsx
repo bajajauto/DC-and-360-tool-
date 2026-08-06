@@ -175,6 +175,7 @@ export default function Nominees360() {
   function updateDraftName(relationship, index, value) {
     const draftKey = `${relationship}:${index}`
     window.clearTimeout(directorySearchTimers.current[draftKey])
+    const isExternal = externalDrafts[relationship][index]?.isExternal
     setExternalDrafts((prev) => ({
       ...prev,
       [relationship]: prev[relationship].map((draft, draftIndex) => draftIndex === index ? {
@@ -186,7 +187,7 @@ export default function Nominees360() {
         directoryLoading: value.trim().length >= 2 && !draft.isExternal,
       } : draft),
     }))
-    if (value.trim().length < 2) return
+    if (isExternal || value.trim().length < 2) return
     directorySearchTimers.current[draftKey] = window.setTimeout(async () => {
       try {
         const result = await api.searchEmployeeDirectory(participantId, value.trim())
@@ -201,6 +202,24 @@ export default function Nominees360() {
         }))
       }
     }, 250)
+  }
+
+  function toggleExternalDraft(relationship, index, isExternal) {
+    const draftKey = `${relationship}:${index}`
+    window.clearTimeout(directorySearchTimers.current[draftKey])
+    setExternalDrafts((prev) => ({
+      ...prev,
+      [relationship]: prev[relationship].map((draft, draftIndex) => draftIndex === index ? {
+        ...draft,
+        isExternal,
+        employeeId: isExternal ? '' : draft.employeeId,
+        positionLevel: isExternal ? undefined : draft.positionLevel,
+        directoryResults: [],
+        directoryLoading: false,
+        directorySelected: false,
+        eligibilityError: '',
+      } : draft),
+    }))
   }
 
   function selectDirectoryEmployee(relationship, index, employee) {
@@ -335,8 +354,8 @@ export default function Nominees360() {
                   onChange={(e) => updateDraftName(relationship, index, e.target.value)}
                   className="w-full rounded-lg border border-[#e2e8f0] bg-white px-3 py-2 text-sm placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-[#1e4d8c]"
                 />
-                {draft.directoryLoading && <div className="absolute left-0 right-0 top-full z-30 mt-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500 shadow-lg">Searching employees…</div>}
-                {!draft.directoryLoading && draft.directoryResults?.length > 0 && (
+                {!draft.isExternal && draft.directoryLoading && <div className="absolute left-0 right-0 top-full z-30 mt-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500 shadow-lg">Searching employees…</div>}
+                {!draft.isExternal && !draft.directoryLoading && draft.directoryResults?.length > 0 && (
                   <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-64 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-xl">
                     {draft.directoryResults.map((employee) => (
                       <button key={employee.id} type="button" onClick={() => selectDirectoryEmployee(relationship, index, employee)} className="block w-full border-b border-slate-100 px-3 py-2.5 text-left last:border-0 hover:bg-blue-50">
@@ -363,7 +382,7 @@ export default function Nominees360() {
                 className="rounded-lg border border-[#e2e8f0] bg-white px-3 py-2 text-sm placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-[#1e4d8c] disabled:bg-slate-100"
               />
               <div className="flex items-center justify-between gap-3">
-                {relationship === 'peer' ? <label className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={draft.isExternal} onChange={(event) => { updateExternalDraft(relationship, index, 'isExternal', event.target.checked); if (event.target.checked) updateExternalDraft(relationship, index, 'employeeId', '') }} className="accent-[#1e4d8c]" />External stakeholder</label> : <span />}
+                {relationship === 'peer' ? <label className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={draft.isExternal} onChange={(event) => toggleExternalDraft(relationship, index, event.target.checked)} className="accent-[#1e4d8c]" />External stakeholder</label> : <span />}
               <button
                 disabled={!canAdd}
                 onClick={() => addExternalNominee(relationship, index)}
