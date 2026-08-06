@@ -1,6 +1,7 @@
 import { processSteps } from '../data/adminData'
 
 const trackerSteps = processSteps.filter((step) => step.id !== 'application')
+const masterTrackerSteps = trackerSteps.filter((step) => !['assessment', 'report'].includes(step.id))
 
 function escapeXml(value) {
   return String(value ?? '')
@@ -139,7 +140,7 @@ export function exportParticipantNomineeStatus(participant) {
 
 export function exportCohortProcessStatus(cohort, participants) {
   const processRows = [
-    ['Participant', 'Employee ID', 'Designation', 'Business unit', 'Current stage', 'Self 360', 'Other responses received', 'Other respondents', 'Other responses pending', ...reportAuditHeaders, 'Last activity', ...trackerSteps.map((step) => step.label)],
+    ['Participant', 'Employee ID', 'Designation', 'Business unit', 'Current stage', 'Self 360', 'Other responses received', 'Other respondents', 'Other responses pending', ...reportAuditHeaders, 'Last activity', ...masterTrackerSteps.map((step) => step.label)],
     ...participants.map((participant) => [
       participant.name,
       participant.employeeId,
@@ -152,7 +153,7 @@ export function exportCohortProcessStatus(cohort, participants) {
       Math.max(0, participant.totalResponses - participant.responses),
       ...reportAuditFields(participant),
       participant.lastActivity,
-      ...trackerSteps.map((step) => doneOrNotDone(participant, step)),
+      ...masterTrackerSteps.map((step) => doneOrNotDone(participant, step)),
     ]),
   ]
 
@@ -163,7 +164,7 @@ export function exportCohortProcessStatus(cohort, participants) {
 
 export function exportBuhrProcessStatus(businessUnit, participants) {
   const processRows = [
-    ['Participant', 'Employee ID', 'Designation', 'Business unit', 'Cohort', 'Current stage', 'Nominations', 'Self 360', 'Other responses received', 'Other respondents', 'Other responses pending', ...reportAuditHeaders, 'Last activity', ...trackerSteps.map((step) => step.label)],
+    ['Participant', 'Employee ID', 'Designation', 'Business unit', 'Cohort', 'Current stage', 'Nominations', 'Self 360', 'Other responses received', 'Other respondents', 'Other responses pending', ...reportAuditHeaders, 'Last activity', ...masterTrackerSteps.map((step) => step.label)],
     ...participants.map((participant) => [
       participant.name,
       participant.employeeId,
@@ -178,7 +179,7 @@ export function exportBuhrProcessStatus(businessUnit, participants) {
       Math.max(0, participant.totalResponses - participant.responses),
       ...reportAuditFields(participant),
       participant.lastActivity,
-      ...trackerSteps.map((step) => doneOrNotDone(participant, step)),
+      ...masterTrackerSteps.map((step) => doneOrNotDone(participant, step)),
     ]),
   ]
 
