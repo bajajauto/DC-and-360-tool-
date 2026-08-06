@@ -63,7 +63,8 @@ function validate(nominees, participantEmail, participantEmployeeId) {
   if (nominees.filter((n) => n.relationship === 'skip-manager').length < 1) errors.push('At least 1 Skip / BU Head required.')
   if (nominees.filter((n) => n.relationship === 'peer').length < 4) errors.push(`At least 4 Peers required (${nominees.filter((n) => n.relationship === 'peer').length} added).`)
   const emails = nominees.map((n) => n.email.trim().toLowerCase()).filter(Boolean)
-  if (new Set(emails).size !== emails.length) errors.push('Duplicate email addresses are not allowed.')
+  const employeeIds = nominees.map((n) => n.employeeId?.trim().toLowerCase()).filter(Boolean)
+  if (new Set(emails).size !== emails.length || new Set(employeeIds).size !== employeeIds.length) errors.push('Each person can only be nominated once, regardless of category.')
   if (nominees.some((n) => !n.isExternal && !n.employeeId?.trim())) errors.push('Ticket ID is required for every internal respondent.')
   if (nominees.some((n) => n.email.trim().toLowerCase() === String(participantEmail || '').trim().toLowerCase()
     || (n.employeeId?.trim() && n.employeeId.trim().toLowerCase() === String(participantEmployeeId || '').trim().toLowerCase()))) {
@@ -226,6 +227,41 @@ export default function Nominees360() {
   }
 
   function selectDirectoryEmployee(relationship, index, employee) {
+    const employeeEmail = String(employee.email || '').trim().toLowerCase()
+    const employeeId = String(employee.employeeId || '').trim().toLowerCase()
+    const participantEmail = String(user?.email || '').trim().toLowerCase()
+    const participantEmployeeId = String(user?.employeeId || '').trim().toLowerCase()
+    const isSelfSelection = (employeeEmail && employeeEmail === participantEmail)
+      || (employeeId && employeeId === participantEmployeeId)
+    const otherDrafts = Object.entries(externalDrafts).flatMap(([draftRelationship, drafts]) => drafts.filter((_, draftIndex) => (
+      draftRelationship !== relationship || draftIndex !== index
+    )))
+    const isDuplicateSelection = [...nominees, ...otherDrafts].some((nominee) => (
+      (employeeEmail && String(nominee.email || '').trim().toLowerCase() === employeeEmail)
+      || (employeeId && String(nominee.employeeId || '').trim().toLowerCase() === employeeId)
+    ))
+
+    if (isSelfSelection || isDuplicateSelection) {
+      const message = isSelfSelection
+        ? 'You cannot nominate yourself as a 360 respondent. Your self survey is included automatically.'
+        : 'This person has already been nominated. Each person can only be nominated once, regardless of category.'
+      setExternalDrafts((prev) => ({
+        ...prev,
+        [relationship]: prev[relationship].map((draft, draftIndex) => draftIndex === index ? {
+          ...draft,
+          email: '',
+          employeeId: '',
+          positionLevel: undefined,
+          directorySelected: false,
+          directoryResults: [],
+          directoryLoading: false,
+          eligibilityError: message,
+        } : draft),
+      }))
+      window.alert(message)
+      return
+    }
+
     const isBlockedSelection = BLOCKED_SELF_SELECTION_EMPLOYEE_IDS.has(String(employee.employeeId || '').trim())
       || BLOCKED_SELF_SELECTION_EMAILS.has(String(employee.email || '').trim().toLowerCase())
 
@@ -362,10 +398,22 @@ export default function Nominees360() {
             <div className="space-y-3">
             {drafts.map((draft, index) => {
               const duplicateEmail = nominees.some((nominee) => nominee.email.toLowerCase() === draft.email.trim().toLowerCase())
-                || drafts.some((other, otherIndex) => otherIndex !== index && other.email.trim() && other.email.trim().toLowerCase() === draft.email.trim().toLowerCase())
+                || Object.entries(externalDrafts).some(([otherRelationship, otherDrafts]) => otherDrafts.some((other, otherIndex) => (
+                  (otherRelationship !== relationship || otherIndex !== index)
+                  && other.email.trim()
+                  && other.email.trim().toLowerCase() === draft.email.trim().toLowerCase()
+                )))
+              const duplicateEmployeeId = Boolean(draft.employeeId.trim()) && (
+                nominees.some((nominee) => nominee.employeeId?.trim().toLowerCase() === draft.employeeId.trim().toLowerCase())
+                || Object.entries(externalDrafts).some(([otherRelationship, otherDrafts]) => otherDrafts.some((other, otherIndex) => (
+                  (otherRelationship !== relationship || otherIndex !== index)
+                  && other.employeeId?.trim()
+                  && other.employeeId.trim().toLowerCase() === draft.employeeId.trim().toLowerCase()
+                )))
+              )
               const draftKey = `${relationship}:${index}`
               const isChecking = checkingDraft === draftKey
-              const canAdd = draft.name.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.email.trim()) && (draft.isExternal || draft.employeeId.trim()) && !duplicateEmail && !isChecking
+              const canAdd = draft.name.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.email.trim()) && (draft.isExternal || draft.employeeId.trim()) && !duplicateEmail && !duplicateEmployeeId && !isChecking
               return <div key={index} className="rounded-lg border border-slate-200 bg-white p-3">
               <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-400">Nominee {grouped[relationship].length + index + 1}</p>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -417,6 +465,7 @@ export default function Nominees360() {
               </div>
             </div>
             {duplicateEmail && <p className="mt-2 text-xs font-medium text-red-600">This email address is already in the nominee list.</p>}
+            {duplicateEmployeeId && <p className="mt-2 text-xs font-medium text-red-600">This person is already in the nominee list under another category.</p>}
             {draft.directorySelected && <p className="mt-2 text-xs font-medium text-emerald-700">Employee selected from directory{draft.positionLevel ? ` · Position level ${draft.positionLevel}` : ''}.</p>}
             {draft.eligibilityError && <p className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium leading-5 text-red-700">{draft.eligibilityError}</p>}
             </div>

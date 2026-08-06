@@ -111,6 +111,19 @@ function assertNomineeIsNotParticipant(nominee, participant) {
   }
 }
 
+function assertNomineesAreUnique(nominees) {
+  const emails = nominees.map((nominee) => normalizeEmail(nominee.email)).filter(Boolean)
+  if (new Set(emails).size !== emails.length) {
+    throw httpError(400, 'Each person can only be nominated once, regardless of respondent category.')
+  }
+  const employeeIds = nominees
+    .map((nominee) => String(nominee.employeeId || '').trim().toLowerCase())
+    .filter(Boolean)
+  if (new Set(employeeIds).size !== employeeIds.length) {
+    throw httpError(400, 'Each person can only be nominated once, regardless of respondent category.')
+  }
+}
+
 const participantWorkSchema = z.object({
   answers: z.record(z.string(), z.unknown()),
   submit: z.boolean().optional().default(false),
@@ -366,8 +379,7 @@ participantsRouter.put('/:participantId/nominees', asyncHandler(async (req, res)
   assertParticipantAccess(req, participant)
   if (hasCutoffPassed(participant.cohort.nominationDeadline)) throw httpError(409, 'The nomination deadline has passed. The nominee list can no longer be edited.')
   if (participant.nominees.some((nominee) => nominee.status === 'SUBMITTED')) throw httpError(409, 'Submitted nominations are final and cannot be edited')
-  const normalizedEmails = payload.nominees.map((nominee) => normalizeEmail(nominee.email))
-  if (new Set(normalizedEmails).size !== normalizedEmails.length) throw httpError(400, 'Each respondent email address can appear only once in the nominee list')
+  assertNomineesAreUnique(payload.nominees)
   if (payload.nominees.some((nominee) => !nominee.isExternal && !nominee.employeeId)) {
     throw httpError(400, 'Ticket ID is required for internal respondents')
   }
@@ -513,6 +525,7 @@ participantsRouter.post('/:participantId/nominees/submit', asyncHandler(async (r
   const participant = await findParticipant(req.params.participantId)
   assertParticipantAccess(req, participant)
   const nominees = participant.nominees
+  assertNomineesAreUnique(nominees)
   for (const nominee of nominees) {
     assertNomineeIsNotParticipant(nominee, participant)
     await assertNomineePositionEligibility({
