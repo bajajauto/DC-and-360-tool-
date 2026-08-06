@@ -54,7 +54,7 @@ const createInitialDrafts = () => ({
   'direct-report': [emptyDraft()],
 })
 
-function validate(nominees) {
+function validate(nominees, participantEmail, participantEmployeeId) {
   const errors = []
   if (nominees.filter((n) => n.relationship === 'reporting-manager').length < 1) errors.push('At least 1 Reporting Manager required.')
   if (nominees.filter((n) => n.relationship === 'skip-manager').length < 1) errors.push('At least 1 Skip / BU Head required.')
@@ -62,6 +62,10 @@ function validate(nominees) {
   const emails = nominees.map((n) => n.email.trim().toLowerCase()).filter(Boolean)
   if (new Set(emails).size !== emails.length) errors.push('Duplicate email addresses are not allowed.')
   if (nominees.some((n) => !n.isExternal && !n.employeeId?.trim())) errors.push('Ticket ID is required for every internal respondent.')
+  if (nominees.some((n) => n.email.trim().toLowerCase() === String(participantEmail || '').trim().toLowerCase()
+    || (n.employeeId?.trim() && n.employeeId.trim().toLowerCase() === String(participantEmployeeId || '').trim().toLowerCase()))) {
+    errors.push('You cannot nominate yourself. Your self survey is included automatically.')
+  }
   return errors
 }
 
@@ -153,7 +157,7 @@ export default function Nominees360() {
     setInstructionsAccepted(true)
   }
 
-  const errors = validate(nominees)
+  const errors = validate(nominees, user?.email, user?.employeeId)
   const grouped = {
     'reporting-manager': nominees.filter((n) => n.relationship === 'reporting-manager'),
     'skip-manager': nominees.filter((n) => n.relationship === 'skip-manager'),

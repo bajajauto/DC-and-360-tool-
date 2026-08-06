@@ -103,6 +103,23 @@ function stageItemComplete(participant, item) {
   return Boolean(participant.photoUrl)
 }
 
+function schedulerDayKey() {
+  return new Date().toISOString().slice(0, 10)
+}
+
+async function stageReminderAlreadyQueuedToday(db, participant) {
+  const startOfToday = new Date()
+  startOfToday.setHours(0, 0, 0, 0)
+  const existing = await db.emailOutbox.findFirst({
+    where: {
+      templateId: 'stage-deadline-reminder',
+      toEmail: { equals: participant.user.email, mode: 'insensitive' },
+      queuedAt: { gte: startOfToday },
+    },
+  })
+  return Boolean(existing)
+}
+
 // One consolidated Role Interview / Photograph / Self Reflection reminder per
 // participant at T-3/T-1 whenever any pending item's deadline triggers a run.
 async function sendStageDeadlineReminders(db) {
@@ -116,9 +133,10 @@ async function sendStageDeadlineReminders(db) {
       .map((item) => ({ ...item, deadline: participant.cohort[item.deadlineField] }))
     const triggeringItems = pendingItems.filter((item) => item.deadline && [3, 1].includes(daysUntil(item.deadline)))
     if (!triggeringItems.length) continue
-    if (await alreadyQueuedToday(db, 'stage-deadline-reminder', 'Participant', participant.id)) continue
+    if (await stageReminderAlreadyQueuedToday(db, participant)) continue
 
     await queueEmail({
+      dedupeKey: `stage-deadline-reminder:${participant.id}:${schedulerDayKey()}`,
       templateId: 'stage-deadline-reminder',
       toEmail: participant.user.email,
       toName: participant.user.name,
@@ -154,6 +172,7 @@ async function sendNominationReminders(db) {
     const submitted = participant.nominees.length > 0 && participant.nominees.every((nominee) => nominee.status === 'SUBMITTED')
     if (submitted || await alreadyQueuedToday(db, 'nom-reminder', 'Participant', participant.id)) continue
     await queueEmail({
+      dedupeKey: `nom-reminder:${participant.id}:${schedulerDayKey()}`,
       templateId: 'nom-reminder',
       toEmail: participant.user.email,
       toName: participant.user.name,
@@ -220,6 +239,7 @@ async function sendRespondentReminders(db) {
     })
 
     await queueEmail({
+      dedupeKey: `${templateId}:${task.id}:${schedulerDayKey()}`,
       templateId,
       toEmail,
       toName,
@@ -257,6 +277,7 @@ async function sendDailyStatusAndLowResponseAlerts(db) {
 
     if (!await alreadyQueuedToday(db, 'daily-360-status', 'Participant', participant.id)) {
       await queueEmail({
+        dedupeKey: `daily-360-status:${participant.id}:${schedulerDayKey()}`,
         templateId: 'daily-360-status',
         toEmail: participant.user.email,
         toName: participant.user.name,
@@ -269,6 +290,7 @@ async function sendDailyStatusAndLowResponseAlerts(db) {
     if (cutoff && daysUntil(cutoff) === 3 && relationshipSummary(tasks).below.length
       && !await alreadyQueuedEver(db, 'low-response-alert', 'Participant', participant.id)) {
       await queueEmail({
+        dedupeKey: `low-response-alert:${participant.id}`,
         templateId: 'low-response-alert',
         toEmail: participant.user.email,
         toName: participant.user.name,
@@ -304,6 +326,7 @@ async function sendThreeSixtyClosedNotices(db) {
 
     for (const admin of tdAdmins) {
       await queueEmail({
+        dedupeKey: `threesixty-closed:${participant.id}:${admin.id}`,
         templateId: 'threesixty-closed',
         toEmail: admin.email,
         toName: admin.name,

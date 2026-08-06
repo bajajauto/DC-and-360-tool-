@@ -286,7 +286,7 @@ export default function FeedbackForm({ returnTo = '/respondent/dashboard', taskI
   const navigate = useNavigate()
   const outletContext = useOutletContext()
   const setSurveyNavigation = outletContext?.setSurveyNavigation
-  const { user, updateRespondentTaskStatus, refreshParticipantData } = useUser()
+  const { user, logout, updateRespondentTaskStatus, refreshParticipantData } = useUser()
   const [loadedTask, setLoadedTask] = useState(null)
 
   const task = loadedTask || user?.respondentTasks.find((t) => t.id === taskId)
@@ -383,13 +383,16 @@ export default function FeedbackForm({ returnTo = '/respondent/dashboard', taskI
     const timeoutId = window.setTimeout(() => {
       import('../../lib/api').then(({ api }) => {
         api.saveFeedbackDraft(taskId, draftPayload)
-          .then(() => setSaveStatus('saved'))
+          .then(() => {
+            setSaveStatus('saved')
+            updateRespondentTaskStatus(taskId, 'saved')
+          })
           .catch(() => setSaveStatus('idle'))
       })
     }, 800)
 
     return () => window.clearTimeout(timeoutId)
-  }, [draftPayload, submitted, taskId, draftLoaded])
+  }, [draftPayload, submitted, taskId, draftLoaded, updateRespondentTaskStatus])
 
   const handleRate = useCallback((behaviourId, value) => {
     setRatings((prev) => ({ ...prev, [behaviourId]: value }))
@@ -406,7 +409,10 @@ export default function FeedbackForm({ returnTo = '/respondent/dashboard', taskI
     setSaveStatus('saving')
     import('../../lib/api').then(({ api }) => {
       api.saveFeedbackDraft(taskId, draftPayload)
-        .then(() => setSaveStatus('saved'))
+        .then(() => {
+          setSaveStatus('saved')
+          updateRespondentTaskStatus(taskId, 'saved')
+        })
         .catch(() => setSaveStatus('idle'))
     })
   }
@@ -437,7 +443,14 @@ export default function FeedbackForm({ returnTo = '/respondent/dashboard', taskI
   }
 
   if (submitted) {
-    return <SubmissionConfirmation task={task} onBack={() => navigate(returnTo)} />
+    return <SubmissionConfirmation
+      task={task}
+      buttonLabel={useWideParticipantLayout ? 'Back to Dashboard' : 'Finish'}
+      onBack={() => {
+        if (useWideParticipantLayout) navigate(returnTo)
+        else { logout(); navigate('/') }
+      }}
+    />
   }
 
   const currentSection = currentStep > 0 ? surveySections[currentStep - 1] : null
@@ -545,7 +558,7 @@ export default function FeedbackForm({ returnTo = '/respondent/dashboard', taskI
   )
 }
 
-function SubmissionConfirmation({ task, onBack }) {
+function SubmissionConfirmation({ task, onBack, buttonLabel }) {
   return (
     <div className="p-8 max-w-lg mx-auto text-center">
       <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-5">
@@ -566,7 +579,7 @@ function SubmissionConfirmation({ task, onBack }) {
         onClick={onBack}
         className="px-5 py-2.5 bg-[#1e4d8c] text-white text-sm font-medium rounded-lg hover:bg-[#183f73] transition-colors"
       >
-        Back to My Tasks
+        {buttonLabel}
       </button>
     </div>
   )

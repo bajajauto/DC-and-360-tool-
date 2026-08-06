@@ -85,6 +85,16 @@ async function assertNomineePositionEligibility(nominee, participant, db = prism
   return directoryEntry
 }
 
+function assertNomineeIsNotParticipant(nominee, participant) {
+  const nomineeEmail = normalizeEmail(nominee.email)
+  const participantEmail = normalizeEmail(participant.user.email)
+  const nomineeEmployeeId = String(nominee.employeeId || '').trim().toLowerCase()
+  const participantEmployeeId = String(participant.user.employeeId || '').trim().toLowerCase()
+  if (nomineeEmail === participantEmail || (nomineeEmployeeId && participantEmployeeId && nomineeEmployeeId === participantEmployeeId)) {
+    throw httpError(400, 'You cannot nominate yourself as a 360 respondent. Your self survey is included automatically.')
+  }
+}
+
 const participantWorkSchema = z.object({
   answers: z.record(z.string(), z.unknown()),
   submit: z.boolean().optional().default(false),
@@ -339,7 +349,10 @@ participantsRouter.put('/:participantId/nominees', asyncHandler(async (req, res)
   if (payload.nominees.some((nominee) => nominee.isExternal && nominee.relationship !== 'peer')) {
     throw httpError(400, 'External stakeholders must be added within the Peers category')
   }
-  for (const nominee of payload.nominees) await assertNomineePositionEligibility(nominee, participant)
+  for (const nominee of payload.nominees) {
+    assertNomineeIsNotParticipant(nominee, participant)
+    await assertNomineePositionEligibility(nominee, participant)
+  }
   const lockedNominees = participant.nominees.filter((nominee) => nominee.locked)
   for (const locked of lockedNominees) {
     const retained = payload.nominees.find((nominee) => normalizeEmail(nominee.email) === normalizeEmail(locked.email) && relationshipMap[nominee.relationship] === locked.relationship)
@@ -396,6 +409,7 @@ participantsRouter.post('/:participantId/nominees/check-eligibility', asyncHandl
   const nominee = nomineeEligibilitySchema.parse(req.body)
   const participant = await findParticipant(req.params.participantId)
   assertParticipantAccess(req, participant)
+  assertNomineeIsNotParticipant(nominee, participant)
   const directoryEntry = await assertNomineePositionEligibility(nominee, participant)
   res.json({
     data: {
@@ -475,6 +489,7 @@ participantsRouter.post('/:participantId/nominees/submit', asyncHandler(async (r
   assertParticipantAccess(req, participant)
   const nominees = participant.nominees
   for (const nominee of nominees) {
+    assertNomineeIsNotParticipant(nominee, participant)
     await assertNomineePositionEligibility({
       ...nominee,
       relationship: nominee.relationship.toLowerCase().replaceAll('_', '-'),

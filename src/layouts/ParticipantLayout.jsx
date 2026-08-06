@@ -74,7 +74,7 @@ export default function ParticipantLayout() {
     return <Navigate to="/" replace />
   }
 
-  const isRespondentToo = user.roles.includes('respondent')
+  const isRespondentToo = false
   const isBuhrToo = user.roles.includes('buhr')
 
   function handleSwitchToRespondent() {

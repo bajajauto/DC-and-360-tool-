@@ -18,7 +18,6 @@ import Self360Survey from './pages/participant/Self360Survey'
 
 // Respondent
 import RespondentLayout from './layouts/RespondentLayout'
-import RespondentDashboard from './pages/respondent/Dashboard'
 import FeedbackForm from './pages/respondent/FeedbackForm'
 
 // Talent Development admin
@@ -80,7 +79,7 @@ export default function App() {
 
         <Route path="/respondent" element={<RespondentLayout />}>
           <Route index element={<Navigate to="/respondent/dashboard" replace />} />
-          <Route path="dashboard" element={<RespondentDashboard />} />
+          <Route path="dashboard" element={<Navigate to="/" replace />} />
           <Route path="feedback/:taskId" element={<FeedbackForm />} />
         </Route>
 

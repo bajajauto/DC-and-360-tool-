@@ -240,6 +240,7 @@ async function deliverEmail(email, db = prisma) {
 // transaction timeout once there are more than a couple of recipients); call
 // sendEmail() for each returned row's id after the transaction commits.
 export async function createQueuedEmail({
+  dedupeKey = null,
   templateId,
   toEmail,
   toName,
@@ -261,31 +262,40 @@ export async function createQueuedEmail({
   }
 
   const cc = await resolveCcRecipients({ templateId, toEmail, entity, entityId, metadata }, db)
-  return db.emailOutbox.create({
-    data: {
-      templateId,
-      toEmail,
-      toName,
-      recipientRole: template.recipient,
-      subject: renderTemplate(subject || template.subject, context),
-      body: renderTemplate(body || template.body, context),
-      magicLinkId,
-      entity,
-      entityId,
-      actorId,
-      metadata: {
-        ...metadata,
-        context,
-        cc,
+  try {
+    return await db.emailOutbox.create({
+      data: {
+        dedupeKey,
+        templateId,
+        toEmail,
+        toName,
+        recipientRole: template.recipient,
+        subject: renderTemplate(subject || template.subject, context),
+        body: renderTemplate(body || template.body, context),
+        magicLinkId,
+        entity,
+        entityId,
+        actorId,
+        metadata: {
+          ...metadata,
+          context,
+          cc,
+        },
       },
-    },
-  })
+    })
+  } catch (error) {
+    // Scheduled jobs can run concurrently on more than one app instance.
+    // The unique key turns queueing into one atomic, database-enforced claim.
+    if (dedupeKey && error?.code === 'P2002') return null
+    throw error
+  }
 }
 
 export async function queueEmail(params, db = prisma) {
   const template = await db.notificationTemplate.findUnique({ where: { templateId: params.templateId } })
   if (template && !template.active) return null
   const email = await createQueuedEmail(params, db)
+  if (!email) return null
   return deliverEmail(email, db)
 }
 
