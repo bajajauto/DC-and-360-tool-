@@ -81,6 +81,7 @@ function buildParticipantContext(participant, recipientName) {
     'Participant Email': participantUser?.email || '',
     'Participant Password': process.env.MOCK_USER_PASSWORD || 'Welcome@123',
     'Login Link': process.env.APP_URL || 'http://localhost:5173',
+    'App Link': process.env.APP_URL || process.env.CLIENT_ORIGIN || 'http://localhost:5173',
     'BUHR Name': recipientName || '',
     Cohort: cohort?.name || '',
     'Financial Year': financialYear(cohort?.eventStart),
@@ -110,6 +111,36 @@ function buildParticipantContext(participant, recipientName) {
     'Peer Status': status(peer.responded, 2),
     'Item Name': '',
     Deadline: '',
+  }
+}
+
+async function buildBuhrCredentialContext(recipient) {
+  const buhrEmail = recipient.email.toLowerCase()
+  const participants = await prisma.participant.findMany({
+    include: { user: true, cohort: true },
+    orderBy: [{ cohort: { createdAt: 'desc' } }, { user: { name: 'asc' } }],
+  })
+  const mappedParticipants = participants.filter((participant) => {
+    const masterData = participant.masterData && typeof participant.masterData === 'object' ? participant.masterData : {}
+    return String(masterData.buhrEmail || '').trim().toLowerCase() === buhrEmail
+  })
+  if (!mappedParticipants.length) {
+    throw httpError(400, `No participants are mapped to BUHR ${recipient.email}`)
+  }
+
+  const latestCohort = mappedParticipants[0].cohort
+  const cohortParticipants = mappedParticipants.filter((participant) => participant.cohortId === latestCohort.id)
+  const password = process.env.MOCK_USER_PASSWORD || 'Welcome@123'
+  return {
+    ...recipient.context,
+    'BUHR Name': recipient.name || recipient.email,
+    'BUHR Email': recipient.email,
+    'BUHR Password': password,
+    Cohort: latestCohort.name,
+    'Login Link': process.env.APP_URL || process.env.CLIENT_ORIGIN || 'http://localhost:5173',
+    'Participant Credentials': cohortParticipants
+      .map((participant) => `${participant.user.name} | ${participant.user.employeeId || '-'} | ${participant.user.email} | ${password}`)
+      .join('\n'),
   }
 }
 
@@ -394,6 +425,13 @@ notificationsRouter.post('/send', asyncHandler(async (req, res) => {
       })
       recipient.context = { ...recipient.context, 'Login Link': participantLink.inviteUrl }
       recipient.magicLinkId = participantLink.magicLink.id
+    }
+  }
+
+  if (template.templateId === 'buhr-participant-credentials') {
+    for (const recipient of resolvedRecipients) {
+      if (recipient.sourceType !== 'user') continue
+      recipient.context = await buildBuhrCredentialContext(recipient)
     }
   }
 

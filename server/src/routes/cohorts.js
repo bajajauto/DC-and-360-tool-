@@ -200,7 +200,7 @@ cohortsRouter.post('/', asyncHandler(async (req, res) => {
         })
       }
       const participantLink = await createParticipantMagicLink(tx, { userId: user.id, email: user.email, participantId: participant.id })
-      const welcomeEmail = await createQueuedEmail({ templateId: 'welcome', toEmail: user.email, toName: user.name, context: { 'Participant Name': user.name, 'Participant Email': user.email, 'Participant Password': process.env.MOCK_USER_PASSWORD || 'Welcome@123', 'Login Link': participantLink.inviteUrl, Cohort: created.name, 'Financial Year': financialYear(created.eventStart), 'Prework Deadline': created.preWorkDeadline?.toLocaleDateString('en-GB') || 'TBD' }, magicLinkId: participantLink.magicLink.id, entity: 'Participant', entityId: participant.id }, tx)
+      const welcomeEmail = await createQueuedEmail({ templateId: 'welcome', toEmail: user.email, toName: user.name, context: { 'Participant Name': user.name, 'Participant Email': user.email, 'Participant Password': process.env.MOCK_USER_PASSWORD || 'Welcome@123', 'Login Link': participantLink.inviteUrl, 'App Link': process.env.APP_URL || process.env.CLIENT_ORIGIN || 'http://localhost:5173', Cohort: created.name, 'Financial Year': financialYear(created.eventStart), 'Prework Deadline': created.preWorkDeadline?.toLocaleDateString('en-GB') || 'TBD' }, magicLinkId: participantLink.magicLink.id, entity: 'Participant', entityId: participant.id }, tx)
       if (welcomeEmail) pendingEmailIds.push(welcomeEmail.id)
       addToBuhrGroup(buhrGroups, row.buhr, { name: user.name, employeeId: user.employeeId, email: user.email })
     }
@@ -441,7 +441,7 @@ cohortsRouter.post('/:cohortId/participants', asyncHandler(async (req, res) => {
       })
     }
     const participantLink = await createParticipantMagicLink(tx, { userId: user.id, email: user.email, participantId: created.id })
-    const welcomeEmail = await createQueuedEmail({ templateId: 'welcome', toEmail: user.email, toName: user.name, context: { 'Participant Name': user.name, 'Participant Email': user.email, 'Participant Password': process.env.MOCK_USER_PASSWORD || 'Welcome@123', 'Login Link': participantLink.inviteUrl, Cohort: cohort.name, 'Financial Year': financialYear(cohort.eventStart), 'Prework Deadline': cohort.preWorkDeadline?.toLocaleDateString('en-GB') || 'TBD' }, magicLinkId: participantLink.magicLink.id, entity: 'Participant', entityId: created.id }, tx)
+    const welcomeEmail = await createQueuedEmail({ templateId: 'welcome', toEmail: user.email, toName: user.name, context: { 'Participant Name': user.name, 'Participant Email': user.email, 'Participant Password': process.env.MOCK_USER_PASSWORD || 'Welcome@123', 'Login Link': participantLink.inviteUrl, 'App Link': process.env.APP_URL || process.env.CLIENT_ORIGIN || 'http://localhost:5173', Cohort: cohort.name, 'Financial Year': financialYear(cohort.eventStart), 'Prework Deadline': cohort.preWorkDeadline?.toLocaleDateString('en-GB') || 'TBD' }, magicLinkId: participantLink.magicLink.id, entity: 'Participant', entityId: created.id }, tx)
     return { created, welcomeEmailId: welcomeEmail?.id || null }
   })
 

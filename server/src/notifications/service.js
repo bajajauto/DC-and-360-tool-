@@ -33,7 +33,7 @@ function buildEmailHtml(body, context = {}) {
     const tableHtml = `<table style="width:100%;border-collapse:collapse;margin:12px 0;"><thead><tr>${['Participant Name', 'Ticket ID', 'Login Email', 'Password'].map((heading) => `<th style="border:1px solid #cbd5e1;background:#ebf2fa;padding:8px;text-align:left;">${heading}</th>`).join('')}</tr></thead><tbody>${rows.map((row) => `<tr>${row.map((cell) => `<td style="border:1px solid #cbd5e1;padding:8px;">${escapeHtml(cell)}</td>`).join('')}</tr>`).join('')}</tbody></table>`
     html = html.replace(escapeHtml(plainTable), tableHtml)
   }
-  const secureLinks = [context['Login Link'], context['Magic Link']]
+  const secureLinks = [context['Login Link'], context['App Link'], context['Magic Link']]
     .filter((link) => typeof link === 'string' && /^https?:\/\//i.test(link))
 
   for (const link of new Set(secureLinks)) {
