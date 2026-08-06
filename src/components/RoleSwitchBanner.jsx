@@ -15,9 +15,7 @@ export default function RoleSwitchBanner({ target, onSwitch }) {
             <p className="text-xs font-bold text-slate-800 sm:text-sm">
               {toBuhr ? 'Track employees in your business unit' : 'Continue your own development journey'}
             </p>
-            <p className="hidden text-[11px] text-slate-500 sm:block">
-              {toBuhr ? 'Open your BUHR workspace without signing out.' : 'Return to your participant tasks without signing out.'}
-            </p>
+            {!toBuhr && <p className="hidden text-[11px] text-slate-500 sm:block">Return to your participant tasks without signing out.</p>}
           </div>
         </div>
         <button
