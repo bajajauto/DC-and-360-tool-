@@ -5,7 +5,7 @@ import { api } from '../../lib/api'
 
 const transitionFields = [['role', 'Role'], ['roleDescription', 'Role Description'], ['bu', 'BU'], ['duration', 'Duration']]
 const transitions = [1, 2, 3].map((n) => ({ n, fields: transitionFields }))
-const transitionKeys = [1, 2, 3].flatMap((number) => transitionFields.map(([key]) => `transition${number}_${key}`))
+const transitionKeys = transitionFields.map(([key]) => `transition1_${key}`)
 const shortRequiredKeys = ['currentRole', ...transitionKeys]
 const reflectionKeys = ['responsibilities', 'highlight1', 'highlight2', 'challenge1', 'challenge2']
 const allRequiredKeys = [...shortRequiredKeys, ...reflectionKeys]
@@ -22,21 +22,21 @@ const validReflection = (value) => {
   return text.length >= 15 && !placeholderPattern.test(text)
 }
 
-function MonthYearSelect({ value, onChange }) {
+function MonthYearSelect({ value, onChange, required = false }) {
   const [month = '', year = ''] = String(value || '').split('/')
   return (
     <div>
       <div className="grid grid-cols-2 gap-2">
-        <select required aria-label="Duration month" value={monthOptions.includes(month) ? month : ''} onChange={(event) => onChange(`${event.target.value}/${year}`)} className="rounded-lg border bg-white px-2 py-2 text-sm">
+        <select required={required} aria-label="Duration month" value={monthOptions.includes(month) ? month : ''} onChange={(event) => onChange(`${event.target.value}/${year}`)} className="rounded-lg border bg-white px-2 py-2 text-sm">
           <option value="">Month</option>
           {monthOptions.map((option) => <option key={option} value={option}>{option}</option>)}
         </select>
-        <select required aria-label="Duration year" value={yearOptions.includes(year) ? year : ''} onChange={(event) => onChange(`${month}/${event.target.value}`)} className="rounded-lg border bg-white px-2 py-2 text-sm">
+        <select required={required} aria-label="Duration year" value={yearOptions.includes(year) ? year : ''} onChange={(event) => onChange(`${month}/${event.target.value}`)} className="rounded-lg border bg-white px-2 py-2 text-sm">
           <option value="">Year</option>
           {yearOptions.map((option) => <option key={option} value={option}>{option}</option>)}
         </select>
       </div>
-      <p className={`mt-1 text-[10px] ${value && !validMonthYear(value) ? 'text-red-500' : 'text-slate-400'}`}>{value && !validMonthYear(value) ? 'Select both month and year.' : 'MM/YYYY *'}</p>
+      <p className={`mt-1 text-[10px] ${value && !validMonthYear(value) ? 'text-red-500' : 'text-slate-400'}`}>{value && !validMonthYear(value) ? 'Select both month and year.' : `MM/YYYY${required ? ' *' : ''}`}</p>
     </div>
   )
 }
@@ -54,7 +54,7 @@ function RoleInterviewInstructions() {
       <div className="mt-4 border-t border-blue-200 pt-4">
         <h2 className="text-xs font-bold uppercase tracking-wide text-[#1e5fba]">How to fill it</h2>
         <ol className="mt-2 list-decimal space-y-1.5 pl-5 leading-6">
-          <li>Please answer every required field. The third Highlight and third Challenge are optional.</li>
+          <li>Please answer every required field. Only the first Career Transition is mandatory; the second and third are optional. The third Highlight and third Challenge are also optional.</li>
           <li>Please write in as much detail as you need. There is no word limit, and a considered answer is far more useful than a brief one.</li>
           <li>Please do not enter placeholder text such as NA, N/A, None, hyphens, dots or any other special characters in place of an answer. If a question genuinely does not apply to you, write a line explaining why.</li>
           <li>For Highlights and Challenges, please mention the initiative or event, what prompted it, and what made it a significant accomplishment or a difficult situation to overcome.</li>
@@ -182,12 +182,12 @@ export default function RoleInterview() {
         <section className="rounded-xl border bg-white p-5">
           <h2 className="mb-1 font-semibold">Last 3 Career Transitions</h2>
           <p className="mb-4 text-xs leading-5 text-slate-500">List the last 3 roles you have held over your career, with designation, BU and duration.</p>
-          {transitions.map(({ n, fields }) => <div key={n} className="mb-3"><p className="mb-2 text-xs font-bold uppercase tracking-wide text-[#1e5fba]">Transition {n}</p><div className="grid gap-3 rounded-lg bg-slate-50 p-3 sm:grid-cols-4">{fields.map(([key, label]) => {
+          {transitions.map(({ n, fields }) => { const required = n === 1; return <div key={n} className="mb-3"><p className="mb-2 text-xs font-bold uppercase tracking-wide text-[#1e5fba]">Transition {n}{required ? <span className="text-red-500"> *</span> : <span className="ml-1 font-normal normal-case text-slate-400">(Optional)</span>}</p><div className="grid gap-3 rounded-lg bg-slate-50 p-3 sm:grid-cols-4">{fields.map(([key, label]) => {
             const answerKey = `transition${n}_${key}`
             return key === 'duration'
-              ? <MonthYearSelect key={key} value={answers[answerKey]} onChange={(value) => set(answerKey, value)} />
-              : <input required key={key} value={answers[answerKey] || ''} onChange={(event) => set(answerKey, event.target.value)} placeholder={`${label} *`} className="rounded-lg border px-3 py-2 text-sm" />
-          })}</div></div>)}
+              ? <MonthYearSelect key={key} required={required} value={answers[answerKey]} onChange={(value) => set(answerKey, value)} />
+              : <input required={required} key={key} value={answers[answerKey] || ''} onChange={(event) => set(answerKey, event.target.value)} placeholder={`${label}${required ? ' *' : ''}`} className="rounded-lg border px-3 py-2 text-sm" />
+          })}</div></div>})}
         </section>
         <section className="rounded-xl border bg-white p-5">
           <h2 className="mb-1 font-semibold">Summary of current role and responsibilities</h2>

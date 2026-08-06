@@ -480,7 +480,7 @@ export default function FeedbackForm({ returnTo = '/respondent/dashboard', taskI
             <h1 className="mt-1 text-2xl font-semibold text-[#172033]">
               {currentStep === 0 ? 'Instructions' : `Section ${sectionLabels[currentStep - 1]}: ${currentSection.title}`}
             </h1>
-            <p className="mt-1 text-sm text-slate-500">Rate {task.participantName} only on behaviour you have personally observed.</p>
+            {task.relationship !== 'Self' && <p className="mt-1 text-sm text-slate-500">Rate {task.participantName} only on behaviour you have personally observed.</p>}
           </div>
           <p className="text-xs text-slate-400">{currentStep === 0 ? 'Read before beginning' : `Section ${currentStep} of ${surveySections.length}`}</p>
         </div>

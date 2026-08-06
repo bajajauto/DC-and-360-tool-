@@ -111,8 +111,6 @@ export default function Nominees360() {
   const participantId = user?.participantId
 
   const [nominees, setNominees] = useState([])
-  const [inviteLinks, setInviteLinks] = useState([])
-  const [selectedInvite, setSelectedInvite] = useState(null)
   const [externalDrafts, setExternalDrafts] = useState(createInitialDrafts)
   const [mode, setMode] = useState('edit')
   const [loading, setLoading] = useState(true)
@@ -438,8 +436,6 @@ export default function Nominees360() {
     try {
       const result = await api.submitNominees(participantId)
       setNominees(result.data)
-      setInviteLinks(result.invites || [])
-      setSelectedInvite(null)
       refreshParticipantData(participantId)
       setMode('submitted')
     } catch (err) {
@@ -447,17 +443,6 @@ export default function Nominees360() {
     } finally {
       setSubmitting(false)
     }
-  }
-
-  function showInviteLink(nominee) {
-    const invite = inviteLinks.find(link => link.nomineeId === nominee.id)
-    if (!invite) return
-    setSelectedInvite({ ...invite, name: nominee.name, email: nominee.email })
-  }
-
-  async function copySelectedInvite() {
-    if (!selectedInvite?.inviteUrl) return
-    await navigator.clipboard?.writeText(selectedInvite.inviteUrl)
   }
 
   if (loading) {
@@ -543,11 +528,7 @@ export default function Nominees360() {
                 <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700">Self</span>
               </div>
             </div>
-            {nominees.map((n) => {
-              const invite = inviteLinks.find(l => l.nomineeId === n.id)
-              const isSelected = selectedInvite?.nomineeId === n.id
-
-              return (
+            {nominees.map((n) => (
                 <div key={n.id} className="px-5 py-3.5">
                   <div className="flex items-center gap-4">
                     <div className="w-8 h-8 rounded-full bg-[#dbeafe] flex items-center justify-center text-[#1e4d8c] text-xs font-semibold shrink-0">
@@ -562,41 +543,9 @@ export default function Nominees360() {
                         {REL_LABELS[n.relationship] || n.relationship}
                       </span>
                     </div>
-                    {invite && (
-                      <div className="shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => showInviteLink(n)}
-                          className="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-100 px-2 py-0.5 rounded-full hover:bg-green-200 transition-colors"
-                        >
-                          View link
-                        </button>
-                      </div>
-                    )}
                   </div>
-                  {isSelected && (
-                    <div className="mt-3 ml-12 rounded-lg border border-[#e2e8f0] bg-[#f8f9fc] p-3">
-                      <div className="flex items-start justify-between gap-3 mb-2">
-                        <div>
-                          <p className="text-xs font-semibold text-[#1a1f2e]">Magic link</p>
-                          <p className="text-[10px] text-gray-400">{selectedInvite.email}</p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={copySelectedInvite}
-                          className="shrink-0 rounded-lg border border-[#bfdbfe] bg-white px-3 py-1.5 text-xs font-medium text-[#1e4d8c] hover:bg-blue-50"
-                        >
-                          Copy
-                        </button>
-                      </div>
-                      <div className="rounded-lg border border-[#e2e8f0] bg-white px-3 py-2">
-                        <p className="break-all text-xs leading-5 text-gray-600">{selectedInvite.inviteUrl}</p>
-                      </div>
-                    </div>
-                  )}
                 </div>
-              )
-            })}
+              ))}
           </div>
           <div className="px-5 py-4 bg-[#f8f9fc]">
             <Link to="/participant/dashboard" className="text-xs text-[#1e4d8c] font-medium hover:underline">Back to Dashboard</Link>

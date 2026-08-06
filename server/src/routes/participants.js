@@ -105,13 +105,20 @@ function validateParticipantWork(type, answers) {
     return
   }
 
-  const transitionKeys = [1, 2, 3].flatMap((number) => ['role', 'roleDescription', 'bu', 'duration'].map((key) => `transition${number}_${key}`))
+  const transitionFields = ['role', 'roleDescription', 'bu', 'duration']
+  const transitionKeys = transitionFields.map((key) => `transition1_${key}`)
   const shortFields = ['currentRole', ...transitionKeys]
   const reflectionFields = ['responsibilities', 'highlight1', 'highlight2', 'challenge1', 'challenge2']
   const optionalReflectionFields = ['highlight3', 'challenge3']
   const invalidOptionalResponse = optionalReflectionFields.some((key) => answers[key] && !validResponse(answers[key], 15))
-  const invalidDuration = [1, 2, 3].some((number) => !/^(0[1-9]|1[0-2])\/(19[6-9]\d|20\d{2})$/.test(String(answers[`transition${number}_duration`] || '')))
-  if (shortFields.some((key) => !validResponse(answers[key])) || invalidDuration || reflectionFields.some((key) => !validResponse(answers[key], 15)) || invalidOptionalResponse) {
+  const validDuration = (value) => /^(0[1-9]|1[0-2])\/(19[6-9]\d|20\d{2})$/.test(String(value || ''))
+  const invalidRequiredDuration = !validDuration(answers.transition1_duration)
+  const invalidOptionalTransition = [2, 3].some((number) => {
+    const values = transitionFields.map((key) => answers[`transition${number}_${key}`])
+    return values.some((value) => String(value || '').trim())
+      && (values.slice(0, 3).some((value) => !validResponse(value)) || !validDuration(values[3]))
+  })
+  if (shortFields.some((key) => !validResponse(answers[key])) || invalidRequiredDuration || invalidOptionalTransition || reflectionFields.some((key) => !validResponse(answers[key], 15)) || invalidOptionalResponse) {
     throw httpError(400, 'Please complete every required Role Interview field. Detailed responses require at least 15 characters, and placeholder responses are not accepted.')
   }
 }
@@ -164,7 +171,7 @@ const ROLE_INTERVIEW_KEYS = [
   'highlight2',
   'challenge1',
   'challenge2',
-  ...[1, 2, 3].flatMap((number) => ['role', 'roleDescription', 'bu', 'duration'].map((key) => `transition${number}_${key}`)),
+  ...['role', 'roleDescription', 'bu', 'duration'].map((key) => `transition1_${key}`),
 ]
 
 function countAnsweredPreWork(preWork) {
@@ -486,7 +493,7 @@ participantsRouter.post('/:participantId/nominees/submit', asyncHandler(async (r
     throw httpError(400, 'At least 4 peer nominees are required')
   }
 
-  const { submittedNominees, invites, pendingEmailIds } = await prisma.$transaction(async (tx) => {
+  const { submittedNominees, pendingEmailIds } = await prisma.$transaction(async (tx) => {
     await tx.nominee.updateMany({
       where: { participantId: participant.id },
       data: {
@@ -495,7 +502,6 @@ participantsRouter.post('/:participantId/nominees/submit', asyncHandler(async (r
       },
     })
 
-    const generatedInvites = []
     const queuedEmailIds = []
     const cutoffDate = participant.cohort.threeSixtyCutoff
     const cutoffLabel = formatCutoff(cutoffDate)
@@ -599,15 +605,6 @@ participantsRouter.post('/:participantId/nominees/submit', asyncHandler(async (r
         }, tx)
         queuedEmailIds.push(inviteEmail.id)
 
-        generatedInvites.push({
-          nomineeId: nominee.id,
-          taskId: task.id,
-          name: nominee.name,
-          email: normalizeEmail(nominee.email),
-          nomineeType,
-          inviteUrl,
-          expiresAt: expiresAt.toISOString(),
-        })
       }
     }
 
@@ -628,20 +625,22 @@ participantsRouter.post('/:participantId/nominees/submit', asyncHandler(async (r
     }, tx)
     queuedEmailIds.push(confirmationEmail.id)
 
-    const buhrs = await tx.user.findMany({
-      where: {
-        roles: { has: 'BUHR' },
-        businessUnit: participant.user.businessUnit,
-      },
-    })
+    const masterData = participant.masterData && typeof participant.masterData === 'object' ? participant.masterData : {}
+    const mappedBuhrEmail = normalizeEmail(masterData.buhrEmail)
+    const participantEmail = normalizeEmail(participant.user.email)
 
-    for (const buhr of buhrs) {
+    // Notify only the BUHR explicitly mapped to this participant. A BUHR role on
+    // the participant's own account, or another BUHR in the same BU, must not
+    // make the participant a recipient of this operational notification.
+    if (mappedBuhrEmail && mappedBuhrEmail !== participantEmail) {
+      const mappedBuhr = await tx.user.findUnique({ where: { email: mappedBuhrEmail } })
+      const buhrName = String(masterData.buhrName || mappedBuhr?.name || mappedBuhrEmail).trim()
       const buhrEmail = await createQueuedEmail({
         templateId: 'nominees-submitted-buhr',
-        toEmail: normalizeEmail(buhr.email),
-        toName: buhr.name,
+        toEmail: mappedBuhrEmail,
+        toName: buhrName,
         context: {
-          'BUHR Name': buhr.name,
+          'BUHR Name': buhrName,
           'Participant Name': participant.user.name,
           Cohort: participant.cohort.name,
           'Respondent Count': String(nominees.length),
@@ -666,7 +665,7 @@ participantsRouter.post('/:participantId/nominees/submit', asyncHandler(async (r
       orderBy: { createdAt: 'asc' },
     })
 
-    return { submittedNominees: submitted, invites: generatedInvites, pendingEmailIds: queuedEmailIds }
+    return { submittedNominees: submitted, pendingEmailIds: queuedEmailIds }
   })
 
   // Real SMTP sends happen after the transaction commits — doing them inside the
@@ -676,6 +675,5 @@ participantsRouter.post('/:participantId/nominees/submit', asyncHandler(async (r
 
   res.json({
     data: submittedNominees.map(toNomineeDto),
-    invites,
   })
 }))
