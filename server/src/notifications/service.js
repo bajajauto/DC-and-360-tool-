@@ -24,7 +24,7 @@ function escapeHtml(value) {
     .replaceAll("'", '&#039;')
 }
 
-function buildEmailHtml(body, context = {}) {
+export function buildEmailHtml(body, context = {}) {
   let html = escapeHtml(body)
   const credentials = context['Participant Credentials']
   if (typeof credentials === 'string' && credentials.trim()) {
@@ -39,11 +39,17 @@ function buildEmailHtml(body, context = {}) {
     [context['Magic Link'], 'Open feedback form'],
   ].filter(([link]) => typeof link === 'string' && /^https?:\/\//i.test(link))
 
-  for (const [link, label] of secureLinks) {
-    const escapedLink = escapeHtml(link)
+  const protectedLinks = [...secureLinks]
+    .sort(([left], [right]) => right.length - left.length)
+    .map(([link, label], index) => ({ link, label, token: `__EMAIL_LINK_${index}__` }))
+
+  for (const { link, token } of protectedLinks) {
+    html = html.replaceAll(escapeHtml(link), token)
+  }
+  for (const { link, label, token } of protectedLinks) {
     html = html.replaceAll(
-      escapedLink,
-      `<a href="${escapedLink}" style="color:#1e4d8c;font-weight:600;text-decoration:underline;">${label}</a>`,
+      token,
+      `<a href="${escapeHtml(link)}" style="color:#1e4d8c;font-weight:600;text-decoration:underline;">${escapeHtml(label)}</a>`,
     )
   }
 
