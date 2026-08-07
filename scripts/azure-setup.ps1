@@ -22,6 +22,7 @@ param(
   [string]$NodeVersion  = 'NODE|22-lts',
   [string]$PgAdminUser  = 'dctooladmin',
   [string]$ResourceGroup = 'rg-hrtraining-ci-01',
+  [string]$PublicUrl    = 'https://dc-and-360-tool.bajajauto.com',
   [switch]$AllowAzureServicesInsteadOfIps
 )
 
@@ -71,8 +72,21 @@ if ($hasPgAccess) {
 }
 
 $defaultHostName = az webapp show -g $webAppRg -n $WebAppName --query defaultHostName -o tsv
-$appUrl = "https://$defaultHostName"
+$defaultUrl = "https://$defaultHostName"
+
+# The app is reached through the custom domain, so APP_URL (which builds invite and
+# magic links in emails) must be that name and not the azurewebsites.net one -- an
+# earlier version of this script derived it from defaultHostName, which quietly
+# reverted the custom domain every time it was re-run. Pass -PublicUrl for a new
+# environment that has no custom domain yet.
+$appUrl = $PublicUrl.TrimEnd('/')
 Write-Ok "Public URL: $appUrl"
+Write-Ok "Default URL: $defaultUrl"
+
+# CORS allows both: the default hostname stays usable for smoke tests and for admin
+# access while DNS for the custom domain is still propagating. server/src/index.js
+# splits CLIENT_ORIGIN on commas.
+$clientOrigin = if ($appUrl -eq $defaultUrl) { $appUrl } else { "$appUrl,$defaultUrl" }
 
 # ------------------------------------------------------------------ secrets ---
 
@@ -163,7 +177,7 @@ $settings = [ordered]@{
   DATABASE_URL                    = $databaseUrl
   JWT_SECRET                      = $jwtSecret
   APP_URL                         = $appUrl
-  CLIENT_ORIGIN                   = $appUrl
+  CLIENT_ORIGIN                   = $clientOrigin
   REPORTS_DIR                     = '/home/data/reports'
   SCM_DO_BUILD_DURING_DEPLOYMENT  = 'false'
   EMAIL_MODE                      = 'smtp'
