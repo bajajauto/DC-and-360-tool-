@@ -132,6 +132,23 @@ export default function Nominees360() {
   const acceptanceKey = participantId ? `nomination-instructions-accepted:${participantId}` : ''
   const [instructionsAccepted, setInstructionsAccepted] = useState(() => participantId ? window.localStorage.getItem(`nomination-instructions-accepted:${participantId}`) === 'true' : false)
 
+  useEffect(() => {
+    function closeDirectoryDropdownsOnOutsideClick(event) {
+      if (event.target.closest('[data-directory-dropdown]')) return
+      setExternalDrafts((prev) => Object.fromEntries(
+        Object.entries(prev).map(([relationship, drafts]) => [
+          relationship,
+          drafts.map((draft) => draft.directoryOpen || draft.directoryLoading || draft.directoryResults.length
+            ? { ...draft, directoryOpen: false, directoryLoading: false, directoryResults: [] }
+            : draft),
+        ]),
+      ))
+    }
+
+    document.addEventListener('mousedown', closeDirectoryDropdownsOnOutsideClick)
+    return () => document.removeEventListener('mousedown', closeDirectoryDropdownsOnOutsideClick)
+  }, [])
+
   const isEditing = mode === 'edit'
   const isReviewing = mode === 'review'
   const submitted = mode === 'submitted'
@@ -196,14 +213,20 @@ export default function Nominees360() {
     directorySearchTimers.current[draftKey] = window.setTimeout(async () => {
       try {
         const result = await api.searchEmployeeDirectory(participantId, value.trim())
+        const directoryResults = result.data || []
         setExternalDrafts((prev) => ({
           ...prev,
-          [relationship]: prev[relationship].map((draft, draftIndex) => draftIndex === index && draft.name === value ? { ...draft, directoryResults: result.data || [], directoryLoading: false } : draft),
+          [relationship]: prev[relationship].map((draft, draftIndex) => draftIndex === index && draft.name === value ? {
+            ...draft,
+            directoryResults,
+            directoryLoading: false,
+            directoryOpen: directoryResults.length > 0,
+          } : draft),
         }))
       } catch (err) {
         setExternalDrafts((prev) => ({
           ...prev,
-          [relationship]: prev[relationship].map((draft, draftIndex) => draftIndex === index && draft.name === value ? { ...draft, directoryResults: [], directoryLoading: false, eligibilityError: err.message } : draft),
+          [relationship]: prev[relationship].map((draft, draftIndex) => draftIndex === index && draft.name === value ? { ...draft, directoryResults: [], directoryLoading: false, directoryOpen: false, eligibilityError: err.message } : draft),
         }))
       }
     }, 250)
@@ -437,7 +460,7 @@ export default function Nominees360() {
               return <div key={index} className="rounded-lg border border-slate-200 bg-white p-3">
               <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-400">Nominee {grouped[relationship].length + index + 1}</p>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <div className="relative">
+              <div className="relative" data-directory-dropdown>
                 <input
                   type="text"
                   autoComplete="off"
