@@ -519,7 +519,27 @@ notificationsRouter.post('/send', asyncHandler(async (req, res) => {
 }))
 
 notificationsRouter.get('/outbox', asyncHandler(async (req, res) => {
+  const cohortId = typeof req.query.cohortId === 'string' ? req.query.cohortId.trim() : ''
+  let where
+  if (cohortId) {
+    const [participants, feedbackTasks, reports] = await Promise.all([
+      prisma.participant.findMany({ where: { cohortId }, select: { id: true } }),
+      prisma.feedbackTask.findMany({ where: { participant: { cohortId } }, select: { id: true } }),
+      prisma.report.findMany({ where: { participant: { cohortId } }, select: { id: true } }),
+    ])
+    const participantIds = participants.map((participant) => participant.id)
+    where = {
+      OR: [
+        { entity: 'Cohort', entityId: cohortId },
+        ...(participantIds.length ? [{ entity: 'Participant', entityId: { in: participantIds } }] : []),
+        ...(participantIds.length ? participantIds.map((participantId) => ({ entity: 'ParticipantTask', entityId: { startsWith: `${participantId}:` } })) : []),
+        ...(feedbackTasks.length ? [{ entity: 'FeedbackTask', entityId: { in: feedbackTasks.map((task) => task.id) } }] : []),
+        ...(reports.length ? [{ entity: 'Report', entityId: { in: reports.map((report) => report.id) } }] : []),
+      ],
+    }
+  }
   const emails = await prisma.emailOutbox.findMany({
+    where,
     orderBy: { queuedAt: 'desc' },
     take: 200,
   })

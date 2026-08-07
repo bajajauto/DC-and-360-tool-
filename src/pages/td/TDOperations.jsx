@@ -172,6 +172,8 @@ function renderStoredEmail(value, metadata) {
 
 export function EmailOutbox() {
   const [outbox, setOutbox] = useState([])
+  const [cohorts, setCohorts] = useState([])
+  const [selectedCohortId, setSelectedCohortId] = useState('')
   const [selected, setSelected] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -179,7 +181,7 @@ export function EmailOutbox() {
   function load() {
     setLoading(true)
     setError('')
-    api.getOutbox()
+    api.getOutbox(selectedCohortId)
       .then((result) => {
         const rows = result.data || []
         setOutbox(rows)
@@ -188,7 +190,13 @@ export function EmailOutbox() {
       .finally(() => setLoading(false))
   }
 
-  useEffect(load, [])
+  useEffect(load, [selectedCohortId])
+
+  useEffect(() => {
+    api.getCohorts()
+      .then((result) => setCohorts(result.data || []))
+      .catch((err) => setError(err.message))
+  }, [])
 
   useEffect(() => {
     if (!selected) return undefined
@@ -209,6 +217,16 @@ export function EmailOutbox() {
       <div>
         <Card>
           <CardHeader title="Delivery history" subtitle="Welcome emails, 360 invitations, reminders, and report-release notifications." />
+          <div className="mb-4 flex flex-wrap items-end gap-3">
+            <div className="w-full max-w-sm">
+              <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500">Cohort</label>
+              <select value={selectedCohortId} onChange={(event) => { setSelected(null); setSelectedCohortId(event.target.value) }} className="w-full rounded-lg border border-[#c2ccda] bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#d6e4f7]">
+                <option value="">All cohorts</option>
+                {cohorts.map((cohort) => <option key={cohort.id} value={cohort.id}>{cohort.name} · {cohort.programme}</option>)}
+              </select>
+            </div>
+            <p className="pb-2.5 text-xs text-slate-500">{loading ? 'Loading emails…' : `${outbox.length} email${outbox.length === 1 ? '' : 's'}`}</p>
+          </div>
           <div className="overflow-hidden rounded-xl border border-[#d5dce5]">
             <table className="w-full border-collapse bg-white text-left text-[13px]">
               <thead className="bg-[#ebf2fa]">

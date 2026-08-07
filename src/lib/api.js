@@ -163,7 +163,7 @@ export const api = {
 
   getReportRepository: () => apiFetch('/api/reports/repository'),
 
-  getOutbox: () => apiFetch('/api/notifications/outbox'),
+  getOutbox: (cohortId = '') => apiFetch(`/api/notifications/outbox${cohortId ? `?cohortId=${encodeURIComponent(cohortId)}` : ''}`),
 
 
   getNotificationTemplates: () => apiFetch('/api/notifications/templates'),

@@ -450,6 +450,8 @@ cohortsRouter.post('/:cohortId/participants', asyncHandler(async (req, res) => {
   if (existingByEmail && existingByEmployeeId && existingByEmail.id !== existingByEmployeeId.id) throw httpError(409, 'Email and Ticket ID belong to different existing accounts')
   if (existing?.participant) throw httpError(409, 'This employee already belongs to a cohort')
 
+  const participantPassword = generatePassword()
+  const participantPasswordHash = await hashPassword(participantPassword)
   const buhrPasswordHash = await hashPassword(process.env.MOCK_USER_PASSWORD || 'Welcome@123')
   const participant = await prisma.$transaction(async (tx) => {
     const participantUserData = {

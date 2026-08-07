@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../../lib/api'
 import ParticipantSubmissionSuccess from '../../components/ParticipantSubmissionSuccess'
+import ParticipantSubmissionModal from '../../components/ParticipantSubmissionModal'
 import { useUser } from '../../context/UserContext'
 
 const questions = [
@@ -66,6 +67,7 @@ export default function PreWork() {
   const [cutoff, setCutoff] = useState(null)
   const [draftLoaded, setDraftLoaded] = useState(false)
   const [autoSaveStatus, setAutoSaveStatus] = useState('idle')
+  const [showSubmissionModal, setShowSubmissionModal] = useState(false)
   const submittedSnapshot = useRef({})
   const firstQuestionRef = useRef(null)
 
@@ -114,7 +116,8 @@ export default function PreWork() {
       setStatus(data.status)
       if (submit) {
         submittedSnapshot.current = data.answers || answers
-        setEditing(canEdit)
+        setEditing(false)
+        setShowSubmissionModal(true)
         await refreshParticipantData(user.participantId)
       }
       setMessage(submit ? '' : 'Draft saved.')
@@ -127,6 +130,7 @@ export default function PreWork() {
 
   return (
     <div className="p-6">
+      {showSubmissionModal && <ParticipantSubmissionModal stepName="Self Reflection" canEdit={canEdit} cutoff={cutoff} onClose={() => setShowSubmissionModal(false)} onEdit={() => { setShowSubmissionModal(false); startEditing() }} />}
       <div className="mb-5 flex gap-2 text-xs text-gray-400">
         <Link to="/participant/dashboard">Dashboard</Link><span>/</span><span>Self Reflection</span>
       </div>
@@ -134,7 +138,6 @@ export default function PreWork() {
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-xl font-bold">Participant Self Reflection</h1>
           {status === 'submitted' && <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-700">Submitted</span>}
-          {status === 'submitted' && canEdit && !editing && <button type="button" onClick={startEditing} className="rounded-md bg-[#1e5fba] px-3 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-[#0e3f87]">Edit Submission</button>}
         </div>
         <p className="mt-1 text-sm text-gray-500">Self-Reflection Worksheet · All questions are mandatory · {answered}/{questions.length} answered</p>
         {autoSaveStatus !== 'idle' && <p className={`mt-1 text-xs ${autoSaveStatus === 'saved' ? 'text-emerald-600' : 'text-slate-400'}`}>{autoSaveStatus === 'saved' ? 'Saved automatically' : 'Saving...'}</p>}
@@ -144,7 +147,7 @@ export default function PreWork() {
         <span className="ml-1">{canEdit ? `— ${cutoff ? new Date(cutoff).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'the deadline configured for your cohort'}. You may submit now and return to edit before this deadline.` : '— this form is now read-only.'}</span>
       </div>
       {message && status !== 'submitted' && <div className="mb-4 rounded-lg border bg-white px-4 py-3 text-sm">{message}</div>}
-      {status === 'submitted' && <div className="mb-4"><ParticipantSubmissionSuccess stepName="Self Reflection" nextTo="/participant/role-interview" nextLabel="Role Interview" detail={canEdit ? `Editable until ${cutoff ? new Date(cutoff).toLocaleDateString('en-GB') : 'the cohort cutoff'}.` : 'The cutoff has passed and this submission is now locked.'} /></div>}
+      {status === 'submitted' && <div className="mb-4"><ParticipantSubmissionSuccess heading="Already submitted" stepName="Self Reflection" nextTo="/participant/role-interview" nextLabel="Role Interview" onEdit={canEdit && !editing ? startEditing : null} detail={canEdit ? `Editable until ${cutoff ? new Date(cutoff).toLocaleDateString('en-GB') : 'the cohort cutoff'}.` : 'The cutoff has passed and this submission is now locked.'} /></div>}
       <PreWorkInstructions />
       <div ref={firstQuestionRef} className="scroll-mt-6 space-y-4">
         {questions.map((question, index) => {

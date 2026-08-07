@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useUser } from '../../context/UserContext'
 import { api } from '../../lib/api'
 import ParticipantSubmissionSuccess from '../../components/ParticipantSubmissionSuccess'
+import ParticipantSubmissionModal from '../../components/ParticipantSubmissionModal'
 
 const transitionFields = [['role', 'Role'], ['roleDescription', 'Role Description'], ['bu', 'BU'], ['duration', 'Duration']]
 const transitions = [1, 2, 3].map((n) => ({ n, fields: transitionFields }))
@@ -91,6 +92,7 @@ export default function RoleInterview() {
   const [autoSaveStatus, setAutoSaveStatus] = useState('idle')
   const [validationError, setValidationError] = useState('')
   const [invalidTransitionFields, setInvalidTransitionFields] = useState([])
+  const [showSubmissionModal, setShowSubmissionModal] = useState(false)
   const submittedSnapshot = useRef({})
   const firstQuestionRef = useRef(null)
   const transitionsRef = useRef(null)
@@ -165,7 +167,8 @@ export default function RoleInterview() {
       setStatus(data.status)
       if (submit) {
         submittedSnapshot.current = data.answers || answers
-        setEditing(canEdit)
+        setEditing(false)
+        setShowSubmissionModal(true)
         await refreshParticipantData(user.participantId)
       }
       setMessage(submit ? '' : 'Draft saved.')
@@ -189,12 +192,12 @@ export default function RoleInterview() {
 
   return (
     <div className="p-6">
+      {showSubmissionModal && <ParticipantSubmissionModal stepName="Role Interview" canEdit={canEdit} cutoff={cutoff} onClose={() => setShowSubmissionModal(false)} onEdit={() => { setShowSubmissionModal(false); startEditing() }} />}
       <div className="mb-5 flex gap-2 text-xs text-gray-400"><Link to="/participant/dashboard">Dashboard</Link><span>/</span><span>Role Interview</span></div>
       <div className="mb-5">
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-xl font-bold">Role Interview</h1>
           {status === 'submitted' && <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-700">Submitted</span>}
-          {status === 'submitted' && canEdit && !editing && <button type="button" onClick={startEditing} className="rounded-md bg-[#1e5fba] px-3 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-[#0e3f87]">Edit Submission</button>}
         </div>
         <p className="mt-1 text-sm text-gray-500">Career history, current role, highlights and challenges · {completed}/{allRequiredKeys.length} required fields complete</p>
         {autoSaveStatus !== 'idle' && <p className={`mt-1 text-xs ${autoSaveStatus === 'saved' ? 'text-emerald-600' : 'text-slate-400'}`}>{autoSaveStatus === 'saved' ? 'Saved automatically' : 'Saving...'}</p>}
@@ -204,7 +207,7 @@ export default function RoleInterview() {
         <span className="ml-1">{canEdit ? `— ${cutoff ? new Date(cutoff).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'the deadline configured for your cohort'}. You may submit now and return to edit before this deadline.` : '— this form is now read-only.'}</span>
       </div>
       {message && status !== 'submitted' && <div className="mb-4 rounded-lg border bg-white px-4 py-3 text-sm">{message}</div>}
-      {status === 'submitted' && <div className="mb-4"><ParticipantSubmissionSuccess stepName="Role Interview" nextTo="/participant/360-nominees" nextLabel="360 Nominees" detail={canEdit ? `Editable until ${cutoff ? new Date(cutoff).toLocaleDateString('en-GB') : 'the cohort cutoff'}.` : 'The cutoff has passed and this submission is now locked.'} /></div>}
+      {status === 'submitted' && <div className="mb-4"><ParticipantSubmissionSuccess heading="Already submitted" stepName="Role Interview" nextTo="/participant/360-nominees" nextLabel="360 Nominees" onEdit={canEdit && !editing ? startEditing : null} detail={canEdit ? `Editable until ${cutoff ? new Date(cutoff).toLocaleDateString('en-GB') : 'the cohort cutoff'}.` : 'The cutoff has passed and this submission is now locked.'} /></div>}
       <section className="mb-5 rounded-xl border bg-slate-50 p-5">
         <h2 className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500">Participant details</h2>
         <div className="grid gap-3 sm:grid-cols-2">{profile.map(([label, value]) => <div key={label}><span className="text-xs text-slate-400">{label}</span><p className="text-sm font-semibold">{value || '—'}</p></div>)}</div>

@@ -71,7 +71,7 @@ export default function LoginPage() {
                 type="email"
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
-                placeholder="name@company.com"
+                placeholder="Enter email"
                 autoComplete="email"
                 className="w-full px-4 py-2.5 rounded-lg border border-[#e2e8f0] bg-white text-[#1a1f2e] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1e4d8c] focus:border-transparent text-sm"
               />
