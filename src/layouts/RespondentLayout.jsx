@@ -197,7 +197,7 @@ export default function RespondentLayout() {
       </aside>
 
       {/* Page content */}
-      <main className="flex-1 overflow-auto" onClick={() => setDropdownOpen(false)}>
+      <main data-route-scroll className="flex-1 overflow-auto" onClick={() => setDropdownOpen(false)}>
         {/* DC journey pending alert — kept minimal */}
         {isParticipantToo && pendingParticipantCount > 0 && (
           <div className="bg-amber-50 border-b border-amber-200 px-6 py-2.5 flex items-center gap-3">

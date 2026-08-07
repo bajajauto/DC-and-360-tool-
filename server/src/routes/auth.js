@@ -57,6 +57,7 @@ authRouter.post('/login', asyncHandler(async (req, res) => {
   if (!user) throw httpError(401, 'Invalid employee ID/email or password')
   const validPassword = await verifyPassword(payload.password, user.passwordHash)
   if (!validPassword) throw httpError(401, 'Invalid employee ID/email or password')
+  if (!user.roles.length) throw httpError(403, 'This account no longer has access to the application')
 
   const roles = user.roles.map(roleToClient)
   const token = signToken({

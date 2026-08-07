@@ -47,6 +47,8 @@ const nomineeEligibilitySchema = nomineeSchema.pick({
 })
 
 const RESTRICTED_POSITION_LEVELS = new Set(['MX', 'CX', 'DX', 'L0', 'L1'])
+const RESTRICTED_POSITION_RELATIONSHIPS = new Set(['peer', 'direct-report'])
+const EXTERNAL_ALLOWED_RELATIONSHIPS = new Set(['peer', 'direct-report'])
 const RESTRICTED_NOMINATION_MESSAGE = 'You cannot choose the selected user as your 360 respondent for this category. You may add them under the Reporting Manager, Skip Manager, or BU Head category (wherever applicable) instead.'
 const BLOCKED_SELF_SELECTION_MESSAGE = 'Selection of this user as a 360° respondent is restricted.'
 const BLOCKED_SELF_SELECTION_EMPLOYEE_IDS = new Set(['26207', '36020', '10258', '54521'])
@@ -61,22 +63,6 @@ function normalizedPositionLevel(value) {
   return String(value || '').trim().toUpperCase()
 }
 
-function matchesMasterContact(nominee, masterData, prefix) {
-  const email = normalizeEmail(nominee.email)
-  const employeeId = String(nominee.employeeId || '').trim().toLowerCase()
-  const masterEmail = String(masterData[`${prefix}Email`] || '').trim()
-  return (masterEmail && email === normalizeEmail(masterEmail))
-    || (employeeId && employeeId === String(masterData[`${prefix}EmployeeId`] || '').trim().toLowerCase())
-}
-
-function restrictedNomineeIsApplicable(nominee, masterData) {
-  if (nominee.relationship === 'reporting-manager') return matchesMasterContact(nominee, masterData, 'reportingManager')
-  if (nominee.relationship === 'skip-manager') {
-    return matchesMasterContact(nominee, masterData, 'skipManager') || matchesMasterContact(nominee, masterData, 'buHead')
-  }
-  return false
-}
-
 async function findDirectoryEntry(nominee, db = prisma) {
   if (nominee.isExternal) return null
   const email = normalizeEmail(nominee.email)
@@ -86,7 +72,7 @@ async function findDirectoryEntry(nominee, db = prisma) {
   })
 }
 
-async function assertNomineePositionEligibility(nominee, participant, db = prisma) {
+async function assertNomineePositionEligibility(nominee, db = prisma) {
   const employeeId = String(nominee.employeeId || '').trim()
   if (BLOCKED_SELF_SELECTION_EMPLOYEE_IDS.has(employeeId) || BLOCKED_SELF_SELECTION_EMAILS.has(normalizeEmail(nominee.email))) {
     throw httpError(400, BLOCKED_SELF_SELECTION_MESSAGE)
@@ -96,9 +82,10 @@ async function assertNomineePositionEligibility(nominee, participant, db = prism
     || BLOCKED_SELF_SELECTION_EMAILS.has(normalizeEmail(directoryEntry.email)))) {
     throw httpError(400, BLOCKED_SELF_SELECTION_MESSAGE)
   }
-  if (!directoryEntry || !RESTRICTED_POSITION_LEVELS.has(normalizedPositionLevel(directoryEntry.positionLevel))) return directoryEntry
-  const masterData = participant.masterData && typeof participant.masterData === 'object' ? participant.masterData : {}
-  if (!restrictedNomineeIsApplicable(nominee, masterData)) throw httpError(400, RESTRICTED_NOMINATION_MESSAGE)
+  if (!directoryEntry || !RESTRICTED_POSITION_RELATIONSHIPS.has(nominee.relationship)) return directoryEntry
+  if (RESTRICTED_POSITION_LEVELS.has(normalizedPositionLevel(directoryEntry.positionLevel))) {
+    throw httpError(400, RESTRICTED_NOMINATION_MESSAGE)
+  }
   return directoryEntry
 }
 
@@ -380,12 +367,12 @@ participantsRouter.put('/:participantId/nominees', asyncHandler(async (req, res)
   if (payload.nominees.some((nominee) => !nominee.isExternal && !nominee.employeeId)) {
     throw httpError(400, 'Ticket ID is required for internal respondents')
   }
-  if (payload.nominees.some((nominee) => nominee.isExternal && nominee.relationship !== 'peer')) {
-    throw httpError(400, 'External stakeholders must be added within the Peers category')
+  if (payload.nominees.some((nominee) => nominee.isExternal && !EXTERNAL_ALLOWED_RELATIONSHIPS.has(nominee.relationship))) {
+    throw httpError(400, 'External stakeholders can only be added within the Peers or Direct Reports categories')
   }
   for (const nominee of payload.nominees) {
     assertNomineeIsNotParticipant(nominee, participant)
-    await assertNomineePositionEligibility(nominee, participant)
+    await assertNomineePositionEligibility(nominee)
   }
   const lockedNominees = participant.nominees.filter((nominee) => nominee.locked)
   for (const locked of lockedNominees) {
@@ -444,7 +431,7 @@ participantsRouter.post('/:participantId/nominees/check-eligibility', asyncHandl
   const participant = await findParticipant(req.params.participantId)
   assertParticipantAccess(req, participant)
   assertNomineeIsNotParticipant(nominee, participant)
-  const directoryEntry = await assertNomineePositionEligibility(nominee, participant)
+  const directoryEntry = await assertNomineePositionEligibility(nominee)
   res.json({
     data: {
       eligible: true,
@@ -528,7 +515,7 @@ participantsRouter.post('/:participantId/nominees/submit', asyncHandler(async (r
     await assertNomineePositionEligibility({
       ...nominee,
       relationship: nominee.relationship.toLowerCase().replaceAll('_', '-'),
-    }, participant)
+    })
   }
   if (nominees.some((nominee) => nominee.status === 'SUBMITTED')) throw httpError(409, 'These nominations have already been submitted and are final')
 
@@ -541,6 +528,9 @@ participantsRouter.post('/:participantId/nominees/submit', asyncHandler(async (r
   }
   if (nominees.filter((nominee) => nominee.relationship === 'PEER').length < 4) {
     throw httpError(400, 'At least 4 peer nominees are required')
+  }
+  if (nominees.filter((nominee) => nominee.relationship === 'DIRECT_REPORT').length === 1) {
+    throw httpError(400, 'Direct Reports must either be left empty or include at least 2 nominees')
   }
 
   const { submittedNominees, pendingEmailIds } = await prisma.$transaction(async (tx) => {

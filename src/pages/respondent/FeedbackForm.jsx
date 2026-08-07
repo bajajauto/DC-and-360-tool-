@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from 'react'
+import { useState, useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { useOutletContext, useParams, useNavigate } from 'react-router-dom'
 import { Check, ChevronLeft, ChevronRight, Info, Lock, MessageSquare, X } from 'lucide-react'
 import { useUser } from '../../context/UserContext'
@@ -287,6 +287,7 @@ export default function FeedbackForm({ returnTo = '/respondent/dashboard', taskI
   const outletContext = useOutletContext()
   const setSurveyNavigation = outletContext?.setSurveyNavigation
   const { user, logout, updateRespondentTaskStatus, refreshParticipantData } = useUser()
+  const formRootRef = useRef(null)
   const [loadedTask, setLoadedTask] = useState(null)
 
   const task = loadedTask || user?.respondentTasks.find((t) => t.id === taskId)
@@ -308,6 +309,17 @@ export default function FeedbackForm({ returnTo = '/respondent/dashboard', taskI
   const [currentStep, setCurrentStep] = useState(0)
   const [instructionsVisited, setInstructionsVisited] = useState(false)
   const [showWelcome, setShowWelcome] = useState(!useWideParticipantLayout)
+
+  const scrollFeedbackToTop = useCallback((behavior = 'instant') => {
+    window.scrollTo({ top: 0, left: 0, behavior })
+    formRootRef.current?.closest('[data-route-scroll]')?.scrollTo({ top: 0, left: 0, behavior })
+  }, [])
+
+  useLayoutEffect(() => {
+    scrollFeedbackToTop('instant')
+    const frameId = window.requestAnimationFrame(() => scrollFeedbackToTop('instant'))
+    return () => window.cancelAnimationFrame(frameId)
+  }, [scrollFeedbackToTop, taskId])
 
   // Load existing draft/response from API on mount
   useEffect(() => {
@@ -363,8 +375,8 @@ export default function FeedbackForm({ returnTo = '/respondent/dashboard', taskI
   const goToStep = useCallback((step) => {
     if (step > 0) setInstructionsVisited(true)
     setCurrentStep(step)
-    window.scrollTo({ top: 0, behavior: 'smooth' })
-  }, [])
+    scrollFeedbackToTop('smooth')
+  }, [scrollFeedbackToTop])
 
   useEffect(() => {
     if (!setSurveyNavigation || useWideParticipantLayout) return
@@ -456,7 +468,7 @@ export default function FeedbackForm({ returnTo = '/respondent/dashboard', taskI
   const sectionLabels = ['I', 'II', 'III', 'IV']
 
   return (
-    <div className="pb-28">
+    <div ref={formRootRef} className="pb-28">
       {showWelcome && <WelcomeModal task={task} onClose={() => setShowWelcome(false)} />}
 
       <div className="sticky top-0 z-20 border-b border-[#d5dce5] bg-white px-6 py-3">

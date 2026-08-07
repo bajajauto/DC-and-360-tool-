@@ -140,6 +140,7 @@ feedbackTasksRouter.post('/:taskId/submit', asyncHandler(async (req, res) => {
   const respondentName = task.nominee?.name || task.respondent?.name
   if (respondentEmail) {
     await queueEmail({
+      dedupeKey: `respondent-thank-you:${task.id}`,
       templateId: 'respondent-thank-you',
       toEmail: respondentEmail,
       toName: respondentName,

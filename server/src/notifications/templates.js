@@ -38,8 +38,6 @@ Immediate Next Steps
 3. Submit your 360 Degree Feedback nominations
 4. Complete the Self Reflection Form
 
-Deadline: {{Prework Deadline}} EOD
-
 ${support}
 
 We wish you the very best for this development journey.

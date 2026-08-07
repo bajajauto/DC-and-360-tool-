@@ -14,7 +14,7 @@ const REL_REQUIREMENTS = {
   'reporting-manager': '1 or more',
   'skip-manager': '1 or more',
   peer: 'Minimum 4',
-  'direct-report': 'Optional',
+  'direct-report': '0 or 2 or more',
 }
 
 const addableRelationships = ['reporting-manager', 'skip-manager', 'peer', 'direct-report']
@@ -30,7 +30,7 @@ const NOMINATION_CATEGORIES = [
   ['Self', 'Self-assessment completed by you.', '1', '1'],
   ['Reporting Manager', 'Your immediate reporting manager.', '1 or more', '1'],
   ['Skip / BU Head', 'Your skip-level manager or relevant BU Head.', '1 or more', '1'],
-  ['Direct Reports', 'Team members (on-roll or off-roll) reporting directly to you, if applicable.', 'Optional', '0'],
+  ['Direct Reports', 'Team members (on-roll or off-roll) reporting directly to you, if applicable.', 'Either 0 or 2 or more', 'Minimum 2 (if nominated)'],
   ['Peers / Internal Customers / External Stakeholders', 'Peers, internal customers, cross-functional partners, and external stakeholders who regularly interact with you.', '4 or more', '2'],
 ]
 
@@ -63,6 +63,8 @@ function validate(nominees, participantEmail, participantEmployeeId) {
   if (nominees.filter((n) => n.relationship === 'reporting-manager').length < 1) errors.push('At least 1 Reporting Manager required.')
   if (nominees.filter((n) => n.relationship === 'skip-manager').length < 1) errors.push('At least 1 Skip / BU Head required.')
   if (nominees.filter((n) => n.relationship === 'peer').length < 4) errors.push(`At least 4 Peers required (${nominees.filter((n) => n.relationship === 'peer').length} added).`)
+  const directReportCount = nominees.filter((n) => n.relationship === 'direct-report').length
+  if (directReportCount === 1) errors.push('Add at least 2 Direct Reports, or remove the Direct Report nomination.')
   const emails = nominees.map((n) => n.email.trim().toLowerCase()).filter(Boolean)
   const employeeIds = nominees.map((n) => n.employeeId?.trim().toLowerCase()).filter(Boolean)
   if (new Set(emails).size !== emails.length || new Set(employeeIds).size !== employeeIds.length) errors.push('Each person can only be nominated once.')
@@ -129,13 +131,18 @@ export default function Nominees360() {
   const [validationAttempted, setValidationAttempted] = useState(false)
   const [checkingDraft, setCheckingDraft] = useState('')
   const directorySearchTimers = useRef({})
+  const directorySearchVersions = useRef({})
   const [cohort, setCohort] = useState({})
   const acceptanceKey = participantId ? `nomination-instructions-accepted:${participantId}` : ''
   const [instructionsAccepted, setInstructionsAccepted] = useState(() => participantId ? window.localStorage.getItem(`nomination-instructions-accepted:${participantId}`) === 'true' : false)
 
   useEffect(() => {
     function closeDirectoryDropdownsOnOutsideClick(event) {
-      if (event.target.closest('[data-directory-dropdown]')) return
+      if (event.target instanceof Element && event.target.closest('[data-directory-dropdown]')) return
+      Object.keys(directorySearchVersions.current).forEach((draftKey) => {
+        directorySearchVersions.current[draftKey] = (directorySearchVersions.current[draftKey] || 0) + 1
+        window.clearTimeout(directorySearchTimers.current[draftKey])
+      })
       setExternalDrafts((prev) => Object.fromEntries(
         Object.entries(prev).map(([relationship, drafts]) => [
           relationship,
@@ -146,8 +153,8 @@ export default function Nominees360() {
       ))
     }
 
-    document.addEventListener('mousedown', closeDirectoryDropdownsOnOutsideClick)
-    return () => document.removeEventListener('mousedown', closeDirectoryDropdownsOnOutsideClick)
+    document.addEventListener('pointerdown', closeDirectoryDropdownsOnOutsideClick, true)
+    return () => document.removeEventListener('pointerdown', closeDirectoryDropdownsOnOutsideClick, true)
   }, [])
 
   const isEditing = mode === 'edit'
@@ -207,6 +214,8 @@ export default function Nominees360() {
   function updateDraftName(relationship, index, value) {
     const draftKey = `${relationship}:${index}`
     window.clearTimeout(directorySearchTimers.current[draftKey])
+    const searchVersion = (directorySearchVersions.current[draftKey] || 0) + 1
+    directorySearchVersions.current[draftKey] = searchVersion
     const isExternal = externalDrafts[relationship][index]?.isExternal
     setExternalDrafts((prev) => ({
       ...prev,
@@ -224,6 +233,7 @@ export default function Nominees360() {
     directorySearchTimers.current[draftKey] = window.setTimeout(async () => {
       try {
         const result = await api.searchEmployeeDirectory(participantId, value.trim())
+        if (directorySearchVersions.current[draftKey] !== searchVersion) return
         const directoryResults = result.data || []
         setExternalDrafts((prev) => ({
           ...prev,
@@ -235,6 +245,7 @@ export default function Nominees360() {
           } : draft),
         }))
       } catch (err) {
+        if (directorySearchVersions.current[draftKey] !== searchVersion) return
         setExternalDrafts((prev) => ({
           ...prev,
           [relationship]: prev[relationship].map((draft, draftIndex) => draftIndex === index && draft.name === value ? { ...draft, directoryResults: [], directoryLoading: false, directoryOpen: false, eligibilityError: err.message } : draft),
@@ -246,6 +257,7 @@ export default function Nominees360() {
   function closeDirectoryDropdown(relationship, index) {
     const draftKey = `${relationship}:${index}`
     window.clearTimeout(directorySearchTimers.current[draftKey])
+    directorySearchVersions.current[draftKey] = (directorySearchVersions.current[draftKey] || 0) + 1
     setExternalDrafts((prev) => ({
       ...prev,
       [relationship]: prev[relationship].map((draft, draftIndex) => draftIndex === index ? {
@@ -260,6 +272,7 @@ export default function Nominees360() {
   function toggleExternalDraft(relationship, index, isExternal) {
     const draftKey = `${relationship}:${index}`
     window.clearTimeout(directorySearchTimers.current[draftKey])
+    directorySearchVersions.current[draftKey] = (directorySearchVersions.current[draftKey] || 0) + 1
     setExternalDrafts((prev) => ({
       ...prev,
       [relationship]: prev[relationship].map((draft, draftIndex) => draftIndex === index ? {
@@ -378,6 +391,7 @@ export default function Nominees360() {
     if (relationship === 'reporting-manager' && grouped[relationship].length < 1) return 'Add at least one Reporting Manager.'
     if (relationship === 'skip-manager' && grouped[relationship].length < 1) return 'Add at least one Skip / BU Head.'
     if (relationship === 'peer' && grouped[relationship].length < 4) return `Add ${4 - grouped[relationship].length} more ${4 - grouped[relationship].length === 1 ? 'respondent' : 'respondents'} in this category.`
+    if (relationship === 'direct-report' && grouped[relationship].length === 1) return 'Add one more Direct Report, or remove this nomination.'
     const allEmails = nominees.map((nominee) => nominee.email.trim().toLowerCase())
     if (grouped[relationship].some((nominee) => allEmails.filter((email) => email === nominee.email.trim().toLowerCase()).length > 1)) return 'Remove the duplicate email address from this category.'
     if (grouped[relationship].some((nominee) => !nominee.isExternal && !nominee.employeeId?.trim())) return 'Add the missing Ticket ID for each internal respondent.'
@@ -395,6 +409,15 @@ export default function Nominees360() {
   async function addExternalNominee(relationship, index) {
     const draft = externalDrafts[relationship][index]
     const draftKey = `${relationship}:${index}`
+    const isBlockedSelection = BLOCKED_SELF_SELECTION_EMPLOYEE_IDS.has(String(draft.employeeId || '').trim())
+      || BLOCKED_SELF_SELECTION_EMAILS.has(String(draft.email || '').trim().toLowerCase())
+    if (isBlockedSelection) {
+      setExternalDrafts((prev) => ({
+        ...prev,
+        [relationship]: prev[relationship].map((item, draftIndex) => draftIndex === index ? { ...item, eligibilityError: BLOCKED_SELF_SELECTION_MESSAGE } : item),
+      }))
+      return
+    }
     if (!draft.isExternal) {
       setCheckingDraft(draftKey)
       try {
@@ -509,7 +532,7 @@ export default function Nominees360() {
                 className="rounded-lg border border-[#e2e8f0] bg-white px-3 py-2 text-sm placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-[#1e4d8c] disabled:bg-slate-100"
               />
               <div className="flex items-center justify-between gap-3">
-                {relationship === 'peer' ? <label className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={draft.isExternal} onChange={(event) => toggleExternalDraft(relationship, index, event.target.checked)} className="accent-[#1e4d8c]" />External stakeholder</label> : <span />}
+                {RESTRICTED_RELATIONSHIPS.has(relationship) ? <label className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={draft.isExternal} onChange={(event) => toggleExternalDraft(relationship, index, event.target.checked)} className="accent-[#1e4d8c]" />External stakeholder</label> : <span />}
               <button
                 disabled={!canAdd}
                 onClick={() => addExternalNominee(relationship, index)}

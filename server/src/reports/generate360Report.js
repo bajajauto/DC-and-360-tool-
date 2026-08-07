@@ -203,6 +203,7 @@ function buildReportTokens(participant) {
   const respondedCounts = countByGroup(submittedTasks, (task) => task.relationship)
   const peerIcNom = nominatedCounts.peer || 0
   const peerIcResp = respondedCounts.peer || 0
+  const directReportsMeetMinimum = (respondedCounts.dr || 0) >= 2
   const totalNom = (nominatedCounts.rm || 0) + (nominatedCounts.skip || 0) + peerIcNom + (nominatedCounts.dr || 0)
   const totalResp = submittedTasks.length
 
@@ -228,6 +229,8 @@ function buildReportTokens(participant) {
     for (const group of GROUP_KEYS) {
       if (group === 'skip' && !behaviour.seniorLeader) {
         tokens[`${key}_${group}`] = 'NA' // Rule 4: outside Skip/BU Head's 15-statement subset
+      } else if (group === 'dr' && !directReportsMeetMinimum) {
+        tokens[`${key}_${group}`] = 'NA'
       } else {
         tokens[`${key}_${group}`] = formatScore(getScore(submittedTasks, [behaviour.id], group))
       }
@@ -263,7 +266,9 @@ function buildReportTokens(participant) {
       tokens[`${overviewCode}_ov_skip`] = seniorLeaderBehaviourIds.length
         ? formatScore(getCompetencyOverall(submittedTasks, seniorLeaderBehaviourIds, 'skip'))
         : 'NA'
-      tokens[`${overviewCode}_ov_dr`] = formatScore(getCompetencyOverall(submittedTasks, behaviourIds, 'dr'))
+      tokens[`${overviewCode}_ov_dr`] = directReportsMeetMinimum
+        ? formatScore(getCompetencyOverall(submittedTasks, behaviourIds, 'dr'))
+        : 'NA'
       tokens[`${overviewCode}_ov_peer`] = formatScore(getCompetencyOverall(submittedTasks, behaviourIds, 'peer'))
     }
   }

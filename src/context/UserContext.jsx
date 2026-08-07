@@ -88,7 +88,7 @@ export function UserProvider({ children }) {
     // The token is persisted separately by the api client; keep it out of the
     // stored user object.
     const { token, ...userFields } = apiData
-    const roles = userFields.roles?.length ? userFields.roles : ['participant']
+    const roles = Array.isArray(userFields.roles) ? userFields.roles : []
     const nextUser = { ...userFields, roles, magicLink: null }
     setUser(nextUser)
     setActiveRole(roles[0])
