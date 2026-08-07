@@ -4,13 +4,6 @@ import { useUser } from '../context/UserContext'
 import { api } from '../lib/api'
 import bajajBrandLockup from '../assets/bajaj-brand-lockup.png'
 
-const demoCredentials = [
-  { label: 'TD Admin', identifier: 'td.admin@bajajauto.co.in', password: 'Admin@123' },
-  { label: 'Assessor', identifier: 'assessor@bajajauto.co.in', password: 'Assessor@123' },
-  { label: 'BUHR', identifier: 'buhr.ev@bajajauto.co.in', password: 'Buhr@123' },
-  { label: 'Participant', identifier: '', password: 'Welcome@123', hint: 'Enter employee ID above' },
-]
-
 function destinationForUser(user) {
   if (user.roles.includes('td')) return '/td/dashboard'
   if (user.roles.includes('assessor')) return '/assessor/candidates'
@@ -55,57 +48,31 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex">
-      {/* Left panel – branding */}
-      <div className="hidden lg:flex lg:w-1/2 bg-[#1e4d8c] flex-col px-7 py-6">
-        <div>
-          <img
-            src={bajajBrandLockup}
-            alt="Bajaj"
-            className="h-auto w-56 max-w-full"
-          />
-        </div>
-
+    <main className="flex min-h-screen bg-[#f8f9fc]">
+      <section className="hidden w-1/2 flex-col bg-[#1e4d8c] px-7 py-6 lg:flex">
+        <img src={bajajBrandLockup} alt="Bajaj Auto" className="h-auto w-56 max-w-full" />
         <div className="mt-10">
-          <h1 className="text-white text-4xl font-bold leading-tight mb-4">
-            DC and 360
-            <br />
-            <span className="text-blue-200">Tool</span>
-          </h1>
-          <p className="text-blue-200 text-base leading-relaxed max-w-md">
-            Your DC journey, organized in one place.
-          </p>
+          <h1 className="text-4xl font-bold leading-tight text-white">DC and 360<br /><span className="text-blue-200">Tool</span></h1>
+          <p className="mt-4 max-w-md text-base leading-relaxed text-blue-200">Your DC journey, organized in one place.</p>
         </div>
+      </section>
 
-      </div>
-
-      {/* Right panel – login form */}
-      <div className="flex-1 flex items-center justify-center p-8 bg-[#f8f9fc]">
-        <div className="w-full max-w-md">
-          {/* Mobile logo */}
-          <div className="flex items-center gap-3 mb-8 lg:hidden">
-            <div className="w-9 h-9 bg-[#1e4d8c] rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold">B</span>
-            </div>
-            <div>
-              <p className="font-semibold text-[#1a1f2e]">Bajaj Auto</p>
-              <p className="text-xs text-gray-500">Talent Development</p>
-            </div>
-          </div>
-
-          <h2 className="text-2xl font-bold text-[#1a1f2e] mb-1">Sign in</h2>
-          <p className="text-gray-500 text-sm mb-8">Use your employee ID or email to access the portal.</p>
+      <div className="flex flex-1 items-center justify-center px-4 py-10 sm:px-8">
+        <section className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+          <img src={bajajBrandLockup} alt="Bajaj Auto" className="mb-7 h-auto w-44 lg:hidden" />
+          <h1 className="mb-6 text-2xl font-bold text-[#1a1f2e]">Sign in</h1>
 
           <form onSubmit={handleCredentialLogin} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-[#1a1f2e] mb-1.5">
-                Employee ID or email
+                Email
               </label>
               <input
-                type="text"
+                type="email"
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
-                placeholder="TD-ADMIN"
+                placeholder="name@company.com"
+                autoComplete="email"
                 className="w-full px-4 py-2.5 rounded-lg border border-[#e2e8f0] bg-white text-[#1a1f2e] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1e4d8c] focus:border-transparent text-sm"
               />
             </div>
@@ -119,6 +86,7 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Enter password"
+                autoComplete="current-password"
                 className="w-full px-4 py-2.5 rounded-lg border border-[#e2e8f0] bg-white text-[#1a1f2e] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1e4d8c] focus:border-transparent text-sm"
               />
             </div>
@@ -138,13 +106,7 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <div className="mt-6 space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="flex-1 h-px bg-[#e2e8f0]" />
-              <span className="text-gray-400 text-xs">magic link</span>
-              <div className="flex-1 h-px bg-[#e2e8f0]" />
-            </div>
-
+          <div className="mt-7 space-y-4 border-t border-slate-200 pt-6">
             <div>
               <label className="block text-sm font-medium text-[#1a1f2e] mb-1.5">
                 Paste magic link
@@ -166,38 +128,12 @@ export default function LoginPage() {
               Continue with Magic Link
             </button>
           </div>
-
-          <div className="mt-6 flex items-center gap-3">
-            <div className="flex-1 h-px bg-[#e2e8f0]" />
-            <span className="text-gray-400 text-xs">demo</span>
-            <div className="flex-1 h-px bg-[#e2e8f0]" />
-          </div>
-
-          <div className="mt-4 grid grid-cols-1 gap-3">
-            {demoCredentials.map((demo) => (
-              <button
-                key={demo.label}
-                onClick={() => {
-                  if (demo.identifier) setIdentifier(demo.identifier)
-                  setPassword(demo.password)
-                  setError('')
-                }}
-                className="flex items-center justify-between gap-2 border border-[#e2e8f0] bg-white px-4 py-2.5 rounded-lg text-sm font-medium text-[#1a1f2e] hover:bg-gray-50 transition-colors"
-              >
-                <span>{demo.label}</span>
-                <span className="text-xs text-gray-400 font-normal">
-                  {demo.hint || demo.identifier}
-                </span>
-              </button>
-            ))}
-          </div>
-
-          <p className="text-center text-xs text-gray-400 mt-8">
-            Need a new link?{' '}
-            <span className="text-[#1e4d8c] cursor-pointer hover:underline">Contact TD Admin</span>
+          <p className="mt-7 text-center text-xs text-slate-500">
+            Need help? Contact TD Admin at{' '}
+            <a href="mailto:learn@bajajauto.co.in" className="font-semibold text-[#1e4d8c] hover:underline">learn@bajajauto.co.in</a>
           </p>
-        </div>
+        </section>
       </div>
-    </div>
+    </main>
   )
 }
