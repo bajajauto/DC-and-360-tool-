@@ -148,6 +148,15 @@ const COHORT_TEMPLATE_HEADERS = [
   'BU head Name ', 'Ticket Id ', 'Email', 'BUHR Name ', 'Ticket id ', 'email ',
 ]
 
+function cohortDateValidationError(form) {
+  if (form.eventStart && form.eventEnd && form.eventEnd <= form.eventStart) {
+    return 'DC Event End must be later than DC Event Start.'
+  }
+  if (!form.eventEnd) return ''
+  const invalidDeadline = deadlineFieldDefs.find((field) => form[field.key] && form[field.key] > form.eventEnd)
+  return invalidDeadline ? `${invalidDeadline.label} must be on or before DC Event End.` : ''
+}
+
 const COHORT_TEMPLATE_HEADER_COLORS = [
   ...Array(15).fill('F6C6AD'),
   ...Array(3).fill('4E95D9'),
@@ -365,6 +374,11 @@ function CohortFormModal({ mode, initialCohort, onClose, onSubmit }) {
       setError('Cohort name is required')
       return
     }
+    const dateError = cohortDateValidationError(form)
+    if (dateError) {
+      setError(dateError)
+      return
+    }
 
     setSaving(true)
     setError('')
@@ -420,18 +434,20 @@ function CohortFormModal({ mode, initialCohort, onClose, onSubmit }) {
             </div>
             <div>
               <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">DC Event End</label>
-              <input type="date" value={form.eventEnd} onChange={(event) => update('eventEnd', event.target.value)} className="w-full rounded-lg border border-[#c2ccda] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#d6e4f7]" />
+              <input type="date" min={form.eventStart || undefined} value={form.eventEnd} onChange={(event) => update('eventEnd', event.target.value)} className="w-full rounded-lg border border-[#c2ccda] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#d6e4f7]" />
             </div>
           </div>
 
           <div className="border-t border-[#e2e8f0] pt-4">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Stage Deadlines</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Stage Deadlines</p>
+            <p className="mb-3 mt-1 text-xs text-slate-500">Every stage deadline must be on or before the DC Event End date.</p>
             <div className="grid grid-cols-2 gap-3">
               {deadlineFieldDefs.map((field) => (
                 <div key={field.key}>
                   <label className="mb-1 block text-xs text-slate-500">{field.label}</label>
                   <input
                     type="date"
+                    max={form.eventEnd || undefined}
                     value={form[field.key]}
                     onChange={(event) => update(field.key, event.target.value)}
                     className="w-full rounded-lg border border-[#c2ccda] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#d6e4f7]"

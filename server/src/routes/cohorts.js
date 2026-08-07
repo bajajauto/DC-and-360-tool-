@@ -43,6 +43,25 @@ const createCohortSchema = z.object({
 
 const updateCohortSchema = createCohortSchema.omit({ participants: true }).partial()
 
+const cohortDeadlineFields = [
+  ['roleInterviewDeadline', 'Role Interview Deadline'],
+  ['photoDeadline', 'Photograph Deadline'],
+  ['preWorkDeadline', 'Self Reflection Deadline'],
+  ['nominationDeadline', 'Nomination Deadline'],
+  ['threeSixtyCutoff', '360 Cutoff'],
+]
+
+function assertCohortDateOrder(cohort) {
+  if (cohort.eventStart && cohort.eventEnd && cohort.eventEnd <= cohort.eventStart) {
+    throw httpError(400, 'DC Event End must be later than DC Event Start')
+  }
+  if (!cohort.eventEnd) return
+  const deadlineAfterEvent = cohortDeadlineFields.find(([key]) => cohort[key] && cohort[key] > cohort.eventEnd)
+  if (deadlineAfterEvent) {
+    throw httpError(400, `${deadlineAfterEvent[1]} must be on or before DC Event End`)
+  }
+}
+
 const addParticipantSchema = participantImportSchema
 
 const employeeDirectoryImportSchema = z.object({
@@ -162,6 +181,7 @@ cohortsRouter.get('/', asyncHandler(async (req, res) => {
 
 cohortsRouter.post('/', asyncHandler(async (req, res) => {
   const payload = createCohortSchema.parse(req.body)
+  assertCohortDateOrder(payload)
   const participants = payload.participants || []
   const duplicateIds = participants.filter((row, index) => participants.findIndex((item) => item.employeeId.toLowerCase() === row.employeeId.toLowerCase()) !== index)
   const duplicateEmails = participants.filter((row, index) => participants.findIndex((item) => item.email.toLowerCase() === row.email.toLowerCase()) !== index)
@@ -235,6 +255,7 @@ cohortsRouter.patch('/:cohortId', asyncHandler(async (req, res) => {
   const payload = updateCohortSchema.parse(req.body)
   const existing = await prisma.cohort.findUnique({ where: { id: req.params.cohortId } })
   if (!existing) throw httpError(404, 'Cohort not found')
+  assertCohortDateOrder({ ...existing, ...payload })
 
   const cohort = await prisma.cohort.update({
     where: { id: req.params.cohortId },
