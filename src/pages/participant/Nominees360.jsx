@@ -456,8 +456,11 @@ export default function Nominees360() {
           <p className="text-xs font-medium text-[#1a1f2e] truncate">{n.name}</p>
           <p className="text-[10px] text-gray-400 truncate">{n.email}{n.employeeId ? ` · Ticket ID: ${n.employeeId}` : ''}{n.isExternal ? ' · External' : ''}</p>
         </div>
+        {isEditing && <span className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-emerald-700"><span aria-hidden="true">✓</span> Added</span>}
         {isEditing && !isLocked && (
-          <button onClick={() => setNominees((prev) => prev.filter((x) => (x.id ?? x.email) !== (n.id ?? n.email)))} className="text-gray-300 hover:text-red-400 ml-1">x</button>
+          <button type="button" aria-label={`Delete ${n.name}`} title="Delete nominee" onClick={() => setNominees((prev) => prev.filter((x) => (x.id ?? x.email) !== (n.id ?? n.email)))} className="ml-1 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M4 7h16m-10 4v6m4-6v6M9 7l1-2h4l1 2m3 0-1 13H7L6 7" /></svg>
+          </button>
         )}
       </div>
     )
@@ -523,23 +526,24 @@ export default function Nominees360() {
                 onChange={(e) => updateExternalDraft(relationship, index, 'email', e.target.value)}
                 className="px-3 py-2 rounded-lg border border-[#e2e8f0] bg-white text-sm placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-[#1e4d8c]"
               />
-              <input
-                type="text"
-                disabled={draft.isExternal}
-                placeholder={draft.isExternal ? 'Ticket ID not required' : 'Ticket ID'}
-                value={draft.employeeId}
-                onChange={(e) => updateExternalDraft(relationship, index, 'employeeId', e.target.value)}
-                className="rounded-lg border border-[#e2e8f0] bg-white px-3 py-2 text-sm placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-[#1e4d8c] disabled:bg-slate-100"
-              />
-              <div className="flex items-center justify-between gap-3">
-                {RESTRICTED_RELATIONSHIPS.has(relationship) ? <label className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={draft.isExternal} onChange={(event) => toggleExternalDraft(relationship, index, event.target.checked)} className="accent-[#1e4d8c]" />External stakeholder</label> : <span />}
-              <button
-                disabled={!canAdd}
-                onClick={() => addExternalNominee(relationship, index)}
-                className="px-4 py-2 rounded-lg border border-[#1e4d8c] text-[#1e4d8c] text-sm font-medium hover:bg-[#dbeafe] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                {isChecking ? 'Checking…' : 'Add'}
-              </button>
+              <div className="flex flex-wrap items-center gap-2 sm:col-span-2">
+                <input
+                  type="text"
+                  disabled={draft.isExternal}
+                  placeholder={draft.isExternal ? 'Ticket ID not required' : 'Ticket ID'}
+                  value={draft.employeeId}
+                  onChange={(e) => updateExternalDraft(relationship, index, 'employeeId', e.target.value)}
+                  className="min-w-[180px] flex-1 rounded-lg border border-[#e2e8f0] bg-white px-3 py-2 text-sm placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-[#1e4d8c] disabled:bg-slate-100"
+                />
+                <button
+                  type="button"
+                  disabled={!canAdd}
+                  onClick={() => addExternalNominee(relationship, index)}
+                  className="inline-flex min-w-24 items-center justify-center rounded-lg bg-[#1769c2] px-5 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#1256a0] disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500 disabled:shadow-none"
+                >
+                  {isChecking ? 'Checking…' : 'Add'}
+                </button>
+                {RESTRICTED_RELATIONSHIPS.has(relationship) && <label className="flex items-center gap-2 px-1 text-xs text-slate-600"><input type="checkbox" checked={draft.isExternal} onChange={(event) => toggleExternalDraft(relationship, index, event.target.checked)} className="accent-[#1e4d8c]" />External stakeholder</label>}
               </div>
             </div>
             {duplicateEmail && <p className="mt-2 text-xs font-medium text-red-600">This email address is already in the nominee list.</p>}
