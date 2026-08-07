@@ -127,7 +127,7 @@ function buildParticipantContext(participant, recipientName) {
   }
 }
 
-async function buildBuhrCredentialContext(recipient) {
+async function buildBuhrCredentialContext(recipient, buhrPassword) {
   const buhrEmail = recipient.email.toLowerCase()
   const participants = await prisma.participant.findMany({
     include: { user: true, cohort: true },
@@ -143,7 +143,6 @@ async function buildBuhrCredentialContext(recipient) {
 
   const latestCohort = mappedParticipants[0].cohort
   const cohortParticipants = mappedParticipants.filter((participant) => participant.cohortId === latestCohort.id)
-  const buhrPassword = process.env.MOCK_USER_PASSWORD || 'Welcome@123'
   return {
     ...recipient.context,
     'BUHR Name': recipient.name || recipient.email,
@@ -472,9 +471,11 @@ notificationsRouter.post('/send', asyncHandler(async (req, res) => {
   if (template.templateId === 'buhr-participant-credentials') {
     for (const recipient of resolvedRecipients) {
       if (recipient.sourceType !== 'user') continue
-      recipient.context = await buildBuhrCredentialContext(recipient)
       const buhrUser = await prisma.user.findUnique({ where: { email: recipient.email } })
       if (!buhrUser || !buhrUser.roles.includes('BUHR')) throw httpError(400, `BUHR account not found for ${recipient.email}`)
+      const buhrPassword = generatePassword()
+      await prisma.user.update({ where: { id: buhrUser.id }, data: { passwordHash: await hashPassword(buhrPassword) } })
+      recipient.context = await buildBuhrCredentialContext(recipient, buhrPassword)
       const buhrLink = await createBuhrMagicLink(prisma, { userId: buhrUser.id, email: buhrUser.email })
       recipient.context = { ...recipient.context, 'Login Link': buhrLink.inviteUrl }
       recipient.magicLinkId = buhrLink.magicLink.id

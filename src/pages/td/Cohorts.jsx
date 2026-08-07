@@ -762,13 +762,16 @@ function ManageParticipantsTab({ cohort, rows, onAdded, onDeleted }) {
     setMessage('')
     try {
       const added = []
+      const credentials = []
       for (const form of forms) {
         const { data } = await api.addCohortParticipant(cohort.id, form)
-        added.push(data)
-        onAdded(data)
+        const { initialPassword, ...participant } = data
+        added.push(participant)
+        credentials.push({ email: participant.email, password: initialPassword })
+        onAdded(participant)
       }
       const buhrEmails = [...new Set(forms.map((form) => form.buhr.email.toLowerCase()))]
-      await api.sendBuhrParticipantCredentials(cohort.id, buhrEmails)
+      await api.sendBuhrParticipantCredentials(cohort.id, buhrEmails, credentials)
       setForms([])
       setFileName('')
       setValidation(null)
