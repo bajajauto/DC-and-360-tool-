@@ -183,7 +183,7 @@ export default function RoleInterview() {
     ['Current BU', user?.bu],
     ['Level', participantData?.masterData?.jobLevel],
     ['Chart Level', participantData?.masterData?.positionLevel],
-    ['Date of Joining', participantData?.masterData?.['DOJ_4']],
+    ['Date of Joining', participantData?.masterData?.dateOfJoining || participantData?.masterData?.DOJ_3 || participantData?.masterData?.DOJ_4],
     ['Email', user?.email],
   ]
 
