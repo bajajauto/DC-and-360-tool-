@@ -4,7 +4,7 @@ import { prisma } from '../db.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
 import { httpError } from '../utils/httpError.js'
 import { deriveTaskStatus, taskCompletionPercent, toParticipantSummary } from '../utils/mappers.js'
-import { hashPassword } from '../utils/passwords.js'
+import { generatePassword, hashPassword } from '../utils/passwords.js'
 import { createQueuedEmail, sendEmail } from '../notifications/service.js'
 import { createBuhrMagicLink, createParticipantMagicLink } from '../utils/magicLinks.js'
 
@@ -75,9 +75,8 @@ function financialYear(value) {
 }
 
 function participantCredentialTable(participants) {
-  const password = process.env.MOCK_USER_PASSWORD || 'Welcome@123'
   return participants
-    .map((participant) => `${participant.name} | ${participant.employeeId} | ${participant.email} | ${password}`)
+    .map((participant) => `${participant.name} | ${participant.employeeId} | ${participant.email} | ${participant.password || 'Sent directly to participant'}`)
     .join('\n')
 }
 
@@ -169,7 +168,9 @@ cohortsRouter.post('/', asyncHandler(async (req, res) => {
   if (duplicateIds.length || duplicateEmails.length) throw httpError(400, 'Participant Ticket IDs and email addresses must be unique within the upload')
   const slug = await uniqueSlug(slugify(payload.name))
   const { participants: _rows, ...cohortData } = payload
-  const passwordHash = await hashPassword(process.env.MOCK_USER_PASSWORD || 'Welcome@123')
+  const participantPassword = generatePassword()
+  const participantPasswordHash = await hashPassword(participantPassword)
+  const buhrPasswordHash = await hashPassword(process.env.MOCK_USER_PASSWORD || 'Welcome@123')
 
   const pendingEmailIds = []
   const buhrGroups = new Map()
@@ -177,6 +178,8 @@ cohortsRouter.post('/', asyncHandler(async (req, res) => {
   const cohort = await prisma.$transaction(async (tx) => {
     const created = await tx.cohort.create({ data: { ...cohortData, slug } })
     for (const row of participants) {
+      const participantPassword = generatePassword()
+      const participantPasswordHash = await hashPassword(participantPassword)
       const participantEmail = row.email.toLowerCase()
       const existingParticipantUser = await tx.user.findUnique({ where: { email: participantEmail } })
       const participantUserData = { name: row.name, employeeId: row.employeeId, designation: row.designation, businessUnit: row.businessUnit }
@@ -185,12 +188,13 @@ cohortsRouter.post('/', asyncHandler(async (req, res) => {
             where: { id: existingParticipantUser.id },
             data: {
               ...participantUserData,
+              passwordHash: participantPasswordHash,
               roles: existingParticipantUser.roles.includes('PARTICIPANT')
                 ? existingParticipantUser.roles
                 : [...existingParticipantUser.roles, 'PARTICIPANT'],
             },
           })
-        : await tx.user.create({ data: { ...participantUserData, email: participantEmail, passwordHash, roles: ['PARTICIPANT'] } })
+        : await tx.user.create({ data: { ...participantUserData, email: participantEmail, passwordHash: participantPasswordHash, roles: ['PARTICIPANT'] } })
       const participant = await tx.participant.upsert({
         where: { userId: user.id },
         update: { cohortId: created.id, masterData: row.masterData, stage: 'APPLICATION_PROFILE', progress: 10, reportStatus: 'WAITING', lastActivityAt: new Date() },
@@ -210,13 +214,13 @@ cohortsRouter.post('/', asyncHandler(async (req, res) => {
         })
       } else {
         await tx.user.create({
-          data: { name: row.buhr.name, email: buhrEmail, employeeId: row.buhr.employeeId, businessUnit: row.businessUnit, passwordHash, roles: ['BUHR'] },
+          data: { name: row.buhr.name, email: buhrEmail, employeeId: row.buhr.employeeId, businessUnit: row.businessUnit, passwordHash: buhrPasswordHash, roles: ['BUHR'] },
         })
       }
       const participantLink = await createParticipantMagicLink(tx, { userId: user.id, email: user.email, participantId: participant.id })
-      const welcomeEmail = await createQueuedEmail({ templateId: 'welcome', toEmail: user.email, toName: user.name, context: { 'Participant Name': user.name, 'Participant Email': user.email, 'Participant Password': process.env.MOCK_USER_PASSWORD || 'Welcome@123', 'Login Link': participantLink.inviteUrl, 'App Link': process.env.APP_URL || process.env.CLIENT_ORIGIN || 'http://localhost:5173', Cohort: created.name, 'Financial Year': financialYear(created.eventStart), 'Prework Deadline': created.preWorkDeadline?.toLocaleDateString('en-GB') || 'TBD' }, magicLinkId: participantLink.magicLink.id, entity: 'Participant', entityId: participant.id }, tx)
+      const welcomeEmail = await createQueuedEmail({ templateId: 'welcome', toEmail: user.email, toName: user.name, context: { 'Participant Name': user.name, 'Participant Email': user.email, 'Participant Password': participantPassword, 'Login Link': participantLink.inviteUrl, 'App Link': process.env.APP_URL || process.env.CLIENT_ORIGIN || 'http://localhost:5173', Cohort: created.name, 'Financial Year': financialYear(created.eventStart), 'Prework Deadline': created.preWorkDeadline?.toLocaleDateString('en-GB') || 'TBD' }, magicLinkId: participantLink.magicLink.id, entity: 'Participant', entityId: participant.id }, tx)
       if (welcomeEmail) pendingEmailIds.push(welcomeEmail.id)
-      addToBuhrGroup(buhrGroups, row.buhr, { name: user.name, employeeId: user.employeeId, email: user.email })
+      addToBuhrGroup(buhrGroups, row.buhr, { name: user.name, employeeId: user.employeeId, email: user.email, password: participantPassword })
     }
     pendingEmailIds.push(...await queueBuhrCredentialEmails(tx, created, buhrGroups, req.auth?.userId || null))
     return tx.cohort.findUnique({ where: { id: created.id }, include: { _count: { select: { participants: true } } } })
@@ -425,7 +429,7 @@ cohortsRouter.post('/:cohortId/participants', asyncHandler(async (req, res) => {
   if (existingByEmail && existingByEmployeeId && existingByEmail.id !== existingByEmployeeId.id) throw httpError(409, 'Email and Ticket ID belong to different existing accounts')
   if (existing?.participant) throw httpError(409, 'This employee already belongs to a cohort')
 
-  const passwordHash = await hashPassword(process.env.MOCK_USER_PASSWORD || 'Welcome@123')
+  const buhrPasswordHash = await hashPassword(process.env.MOCK_USER_PASSWORD || 'Welcome@123')
   const participant = await prisma.$transaction(async (tx) => {
     const participantUserData = {
       name: payload.name,
@@ -437,9 +441,9 @@ cohortsRouter.post('/:cohortId/participants', asyncHandler(async (req, res) => {
     const user = existing
       ? await tx.user.update({
           where: { id: existing.id },
-          data: { ...participantUserData, roles: existing.roles.includes('PARTICIPANT') ? existing.roles : [...existing.roles, 'PARTICIPANT'] },
+          data: { ...participantUserData, passwordHash: participantPasswordHash, roles: existing.roles.includes('PARTICIPANT') ? existing.roles : [...existing.roles, 'PARTICIPANT'] },
         })
-      : await tx.user.create({ data: { ...participantUserData, passwordHash, roles: ['PARTICIPANT'] } })
+      : await tx.user.create({ data: { ...participantUserData, passwordHash: participantPasswordHash, roles: ['PARTICIPANT'] } })
     const created = await tx.participant.create({
       data: { userId: user.id, cohortId: cohort.id, masterData: payload.masterData, stage: 'APPLICATION_PROFILE', progress: 0, reportStatus: 'WAITING', lastActivityAt: new Date() },
       include: { user: true, nominees: true, feedbackTasks: true },
@@ -458,11 +462,11 @@ cohortsRouter.post('/:cohortId/participants', asyncHandler(async (req, res) => {
       })
     } else {
       await tx.user.create({
-        data: { name: payload.buhr.name, email: buhrEmail, employeeId: payload.buhr.employeeId, businessUnit: payload.businessUnit, passwordHash, roles: ['BUHR'] },
+        data: { name: payload.buhr.name, email: buhrEmail, employeeId: payload.buhr.employeeId, businessUnit: payload.businessUnit, passwordHash: buhrPasswordHash, roles: ['BUHR'] },
       })
     }
     const participantLink = await createParticipantMagicLink(tx, { userId: user.id, email: user.email, participantId: created.id })
-    const welcomeEmail = await createQueuedEmail({ templateId: 'welcome', toEmail: user.email, toName: user.name, context: { 'Participant Name': user.name, 'Participant Email': user.email, 'Participant Password': process.env.MOCK_USER_PASSWORD || 'Welcome@123', 'Login Link': participantLink.inviteUrl, 'App Link': process.env.APP_URL || process.env.CLIENT_ORIGIN || 'http://localhost:5173', Cohort: cohort.name, 'Financial Year': financialYear(cohort.eventStart), 'Prework Deadline': cohort.preWorkDeadline?.toLocaleDateString('en-GB') || 'TBD' }, magicLinkId: participantLink.magicLink.id, entity: 'Participant', entityId: created.id }, tx)
+    const welcomeEmail = await createQueuedEmail({ templateId: 'welcome', toEmail: user.email, toName: user.name, context: { 'Participant Name': user.name, 'Participant Email': user.email, 'Participant Password': participantPassword, 'Login Link': participantLink.inviteUrl, 'App Link': process.env.APP_URL || process.env.CLIENT_ORIGIN || 'http://localhost:5173', Cohort: cohort.name, 'Financial Year': financialYear(cohort.eventStart), 'Prework Deadline': cohort.preWorkDeadline?.toLocaleDateString('en-GB') || 'TBD' }, magicLinkId: participantLink.magicLink.id, entity: 'Participant', entityId: created.id }, tx)
     return { created, welcomeEmailId: welcomeEmail?.id || null }
   })
 

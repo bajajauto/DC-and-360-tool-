@@ -5,6 +5,7 @@ import { asyncHandler } from '../middleware/asyncHandler.js'
 import { httpError } from '../utils/httpError.js'
 import { createQueuedEmail, ensureNotificationTemplates, renderTemplate, resolveCcRecipients, sendEmail } from '../notifications/service.js'
 import { createBuhrMagicLink, createParticipantMagicLink } from '../utils/magicLinks.js'
+import { generatePassword, hashPassword } from '../utils/passwords.js'
 
 export const notificationsRouter = Router()
 
@@ -89,7 +90,7 @@ function buildParticipantContext(participant, recipientName) {
     'Recipient Name': recipientName || participantUser?.name || '',
     'Participant Name': participantUser?.name || '',
     'Participant Email': participantUser?.email || '',
-    'Participant Password': process.env.MOCK_USER_PASSWORD || 'Welcome@123',
+    'Participant Password': '',
     'Login Link': process.env.APP_URL || 'http://localhost:5173',
     'App Link': process.env.APP_URL || process.env.CLIENT_ORIGIN || 'http://localhost:5173',
     'BUHR Name': recipientName || '',
@@ -142,17 +143,17 @@ async function buildBuhrCredentialContext(recipient) {
 
   const latestCohort = mappedParticipants[0].cohort
   const cohortParticipants = mappedParticipants.filter((participant) => participant.cohortId === latestCohort.id)
-  const password = process.env.MOCK_USER_PASSWORD || 'Welcome@123'
+  const buhrPassword = process.env.MOCK_USER_PASSWORD || 'Welcome@123'
   return {
     ...recipient.context,
     'BUHR Name': recipient.name || recipient.email,
     'BUHR Email': recipient.email,
-    'BUHR Password': password,
+    'BUHR Password': buhrPassword,
     Cohort: latestCohort.name,
     'Login Link': process.env.APP_URL || process.env.CLIENT_ORIGIN || 'http://localhost:5173',
     'App Link': process.env.APP_URL || process.env.CLIENT_ORIGIN || 'http://localhost:5173',
     'Participant Credentials': cohortParticipants
-      .map((participant) => `${participant.user.name} | ${participant.user.employeeId || '-'} | ${participant.user.email} | ${password}`)
+      .map((participant) => `${participant.user.name} | ${participant.user.employeeId || '-'} | ${participant.user.email} | Sent directly to participant`)
       .join('\n'),
   }
 }
@@ -453,12 +454,17 @@ notificationsRouter.post('/send', asyncHandler(async (req, res) => {
       if (recipient.sourceType !== 'user' || recipient.entity !== 'Participant' || !recipient.entityId) continue
       const participant = await prisma.participant.findUnique({ where: { id: recipient.entityId }, include: { user: true } })
       if (!participant) throw httpError(404, `Participant account not found for ${recipient.email}`)
+      const participantPassword = generatePassword()
+      await prisma.user.update({
+        where: { id: participant.userId },
+        data: { passwordHash: await hashPassword(participantPassword) },
+      })
       const participantLink = await createParticipantMagicLink(prisma, {
         userId: participant.userId,
         email: participant.user.email,
         participantId: participant.id,
       })
-      recipient.context = { ...recipient.context, 'Login Link': participantLink.inviteUrl }
+      recipient.context = { ...recipient.context, 'Participant Password': participantPassword, 'Login Link': participantLink.inviteUrl }
       recipient.magicLinkId = participantLink.magicLink.id
     }
   }
