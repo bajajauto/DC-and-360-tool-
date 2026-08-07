@@ -21,6 +21,7 @@ const addableRelationships = ['reporting-manager', 'skip-manager', 'peer', 'dire
 const RESTRICTED_POSITION_LEVELS = new Set(['MX', 'CX', 'DX', 'L0', 'L1'])
 const RESTRICTED_RELATIONSHIPS = new Set(['peer', 'direct-report'])
 const RESTRICTED_NOMINATION_MESSAGE = 'You cannot choose the selected user as your 360 respondent for this category. You may add them under the Reporting Manager, Skip Manager, or BU Head category (wherever applicable) instead.'
+const MANAGER_IS_BU_HEAD_GUIDANCE = 'If your Reporting Manager is also the BU Head, please nominate another leader from the organization whose feedback you would like to receive under the Skip/BU Head category.'
 const BLOCKED_SELF_SELECTION_MESSAGE = 'Selection of this user as a 360° respondent is restricted.'
 const BLOCKED_SELF_SELECTION_EMPLOYEE_IDS = new Set(['26207', '36020', '10258', '54521'])
 const BLOCKED_SELF_SELECTION_EMAILS = new Set(['pshrivastava@bajajauto.co.in', 'ajoseph@bajajauto.co.in', 'kpdsa@bajajauto.co.in', 'rsharma@bajajauto.co.in'])
@@ -64,7 +65,7 @@ function validate(nominees, participantEmail, participantEmployeeId) {
   if (nominees.filter((n) => n.relationship === 'peer').length < 4) errors.push(`At least 4 Peers required (${nominees.filter((n) => n.relationship === 'peer').length} added).`)
   const emails = nominees.map((n) => n.email.trim().toLowerCase()).filter(Boolean)
   const employeeIds = nominees.map((n) => n.employeeId?.trim().toLowerCase()).filter(Boolean)
-  if (new Set(emails).size !== emails.length || new Set(employeeIds).size !== employeeIds.length) errors.push('Each person can only be nominated once, regardless of category.')
+  if (new Set(emails).size !== emails.length || new Set(employeeIds).size !== employeeIds.length) errors.push('Each person can only be nominated once.')
   if (nominees.some((n) => !n.isExternal && !n.employeeId?.trim())) errors.push('Ticket ID is required for every internal respondent.')
   if (nominees.some((n) => n.email.trim().toLowerCase() === String(participantEmail || '').trim().toLowerCase()
     || (n.employeeId?.trim() && n.employeeId.trim().toLowerCase() === String(participantEmployeeId || '').trim().toLowerCase()))) {
@@ -293,7 +294,7 @@ export default function Nominees360() {
     if (isSelfSelection || isDuplicateSelection) {
       const message = isSelfSelection
         ? 'You cannot nominate yourself as a 360 respondent. Your self survey is included automatically.'
-        : 'This person has already been nominated. Each person can only be nominated once, regardless of category.'
+        : 'Each person can only be nominated once.'
       setExternalDrafts((prev) => ({
         ...prev,
         [relationship]: prev[relationship].map((draft, draftIndex) => draftIndex === index ? {
@@ -730,6 +731,11 @@ export default function Nominees360() {
                       </div>
                     )
                   })()}
+                  {rel === 'skip-manager' && (
+                    <p className="mb-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5 text-xs italic leading-5 text-[#1e4d8c]">
+                      *{MANAGER_IS_BU_HEAD_GUIDANCE}
+                    </p>
+                  )}
                   {grouped[rel].length === 0
                     ? <p className="text-xs text-gray-300 italic pl-1">None added</p>
                     : grouped[rel].map(renderNominee)

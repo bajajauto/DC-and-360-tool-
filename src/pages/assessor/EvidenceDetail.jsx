@@ -1,7 +1,8 @@
-import { ArrowLeft, BriefcaseBusiness, Camera, FileText, MessageSquareText, User } from 'lucide-react'
+import { ArrowLeft, BriefcaseBusiness, Camera, Download, FileText, MessageSquareText, User } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link, Navigate, useParams } from 'react-router-dom'
 import { api } from '../../lib/api'
+import { download360Pptx } from '../../lib/reportDownload'
 
 const evidenceConfig = {
   photograph: { title: 'Participant Photograph', label: 'Identity evidence', icon: Camera },
@@ -62,10 +63,16 @@ function PreWork({ submission }) {
   return <div><SubmissionHeader submission={submission} /><div className="space-y-4">{preWorkQuestions.map((question, index) => <AnswerCard key={question.key} label={`${index + 1}. ${question.text}`} value={question.key === 'q6' ? combinedCriticismAnswer : answers[question.key]} />)}</div></div>
 }
 
+function ReleasedReport({ profile }) {
+  const [downloadError, setDownloadError] = useState('')
+  return <section className="rounded-2xl border border-emerald-200 bg-white p-6"><div className="flex flex-wrap items-center justify-between gap-4"><div><h2 className="font-semibold text-[#172033]">Published 360° Feedback Report</h2><p className="mt-1 text-sm text-slate-500">This aggregated report has been released by Talent Development.</p></div><button type="button" onClick={() => download360Pptx(profile.id, profile.name).catch((error) => setDownloadError(error.message))} className="inline-flex items-center gap-2 rounded-lg bg-[#1e4d8c] px-4 py-2.5 text-xs font-semibold text-white"><Download size={15} />Download report</button></div>{downloadError && <p className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">{downloadError}</p>}</section>
+}
+
 function DetailBody({ type, profile }) {
   if (type === 'photograph') return <div className="grid gap-6 lg:grid-cols-[360px_1fr]"><section className="rounded-2xl border border-[#e2e8f0] bg-white p-6">{profile.photograph.url ? <img src={profile.photograph.url} alt={profile.name} className="aspect-square w-full rounded-xl object-cover" /> : <PersonPlaceholder size="xl" />}</section><section className="rounded-2xl border border-[#e2e8f0] bg-white p-6"><h2 className="font-semibold text-[#172033]">Identity details</h2><div className="mt-4"><InfoRow label="Participant" value={profile.name} /><InfoRow label="Employee ID" value={profile.employeeId} /><InfoRow label="Designation" value={profile.designation} /><InfoRow label="Business unit" value={profile.bu} /><InfoRow label="Photo status" value={profile.photograph.status} /></div></section></div>
   if (type === 'role-interview') return <RoleInterview submission={profile.roleInterview} />
   if (type === 'pre-work') return <PreWork submission={profile.preWork} />
+  if (profile.report360.status === 'released') return <ReleasedReport profile={profile} />
   return <section className="rounded-2xl border border-[#e2e8f0] bg-white p-6"><div className="grid gap-4 md:grid-cols-3"><InfoRow label="Report status" value={profile.report360.status} /><InfoRow label="Responses submitted" value={`${profile.report360.submittedResponses}/${profile.report360.totalResponses}`} /><InfoRow label="Generated on" value={profile.report360.generatedAt ? new Date(profile.report360.generatedAt).toLocaleString('en-GB') : 'Not generated'} /></div><p className="mt-6 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">The aggregated 360° Feedback Report becomes available after all required responses are complete and TD generates the report.</p></section>
 }
 
@@ -83,5 +90,5 @@ export default function EvidenceDetail() {
 
   if (!config) return <Navigate to="/assessor/candidates" replace />
   const Icon = config.icon
-  return <div><header className="flex h-20 items-center justify-between border-b border-[#e4e9f1] bg-white px-8"><div className="flex items-center gap-4"><Link to="/assessor/candidates" className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#e2e8f0] text-gray-500 hover:text-[#1e4d8c]"><ArrowLeft size={17} /></Link><div><p className="text-xs text-gray-400">{profile?.name || 'Participant'} / {config.label}</p><h1 className="text-xl font-bold text-[#172033]">{config.title}</h1></div></div><span className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-[10px] font-semibold text-blue-700"><Icon size={13} />Read-only evidence</span></header><main className="mx-auto max-w-[1180px] p-8">{loading && <p className="text-sm text-gray-500">Loading participant response…</p>}{error && <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>}{profile && <><section className="mb-6 flex items-center gap-4 rounded-2xl border border-[#e2e8f0] bg-white p-5"><PersonPlaceholder /><div><h2 className="text-lg font-bold text-[#172033]">{profile.name}</h2><p className="mt-1 text-xs text-gray-500">{profile.employeeId} · {profile.designation} · {profile.bu} · {profile.cohort}</p></div></section><DetailBody type={evidenceType} profile={profile} /></>}</main></div>
+  return <div><header className="flex h-20 items-center justify-between border-b border-[#e4e9f1] bg-white px-8"><div className="flex items-center gap-4"><Link to={`/assessor/candidates?participantId=${encodeURIComponent(participantId)}`} className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#e2e8f0] text-gray-500 hover:text-[#1e4d8c]"><ArrowLeft size={17} /></Link><div><p className="text-xs text-gray-400">{profile?.name || 'Participant'} / {config.label}</p><h1 className="text-xl font-bold text-[#172033]">{config.title}</h1></div></div><span className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-[10px] font-semibold text-blue-700"><Icon size={13} />Read-only evidence</span></header><main className="mx-auto max-w-[1180px] p-8">{loading && <p className="text-sm text-gray-500">Loading participant response…</p>}{error && <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>}{profile && <><section className="mb-6 flex items-center gap-4 rounded-2xl border border-[#e2e8f0] bg-white p-5"><PersonPlaceholder /><div><h2 className="text-lg font-bold text-[#172033]">{profile.name}</h2><p className="mt-1 text-xs text-gray-500">{profile.employeeId} · {profile.designation} · {profile.bu} · {profile.cohort}</p></div></section><DetailBody type={evidenceType} profile={profile} /></>}</main></div>
 }

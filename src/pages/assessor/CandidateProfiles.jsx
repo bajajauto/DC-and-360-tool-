@@ -1,6 +1,6 @@
 import { ArrowRight, BriefcaseBusiness, Camera, Download, FileText, MessageSquareText, Search, User } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { api } from '../../lib/api'
 
 function StatusPill({ children, tone = 'gray' }) {
@@ -50,8 +50,9 @@ function PersonPlaceholder({ size = 'sm', src = null, name = 'Participant' }) {
 }
 
 export default function CandidateProfiles() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [profiles, setProfiles] = useState([])
-  const [selectedId, setSelectedId] = useState(null)
+  const [selectedId, setSelectedId] = useState(() => searchParams.get('participantId'))
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -61,7 +62,7 @@ export default function CandidateProfiles() {
       .then((candidateResult) => {
         const data = candidateResult.data || []
         setProfiles(data)
-        setSelectedId((current) => current || data[0]?.id || null)
+        setSelectedId((current) => data.some((profile) => profile.id === current) ? current : data[0]?.id || null)
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false))
@@ -110,7 +111,10 @@ export default function CandidateProfiles() {
                 <button
                   type="button"
                   key={profile.id}
-                  onClick={() => setSelectedId(profile.id)}
+                  onClick={() => {
+                    setSelectedId(profile.id)
+                    setSearchParams({ participantId: profile.id }, { replace: true })
+                  }}
                   className={`w-full text-left px-5 py-4 border-b border-[#eef2f6] transition-colors ${active ? 'bg-blue-50' : 'hover:bg-[#f8fafc]'}`}
                 >
                   <div className="flex items-center gap-3">

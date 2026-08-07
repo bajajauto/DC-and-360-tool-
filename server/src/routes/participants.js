@@ -114,13 +114,13 @@ function assertNomineeIsNotParticipant(nominee, participant) {
 function assertNomineesAreUnique(nominees) {
   const emails = nominees.map((nominee) => normalizeEmail(nominee.email)).filter(Boolean)
   if (new Set(emails).size !== emails.length) {
-    throw httpError(400, 'Each person can only be nominated once, regardless of respondent category.')
+    throw httpError(400, 'Each person can only be nominated once.')
   }
   const employeeIds = nominees
     .map((nominee) => String(nominee.employeeId || '').trim().toLowerCase())
     .filter(Boolean)
   if (new Set(employeeIds).size !== employeeIds.length) {
-    throw httpError(400, 'Each person can only be nominated once, regardless of respondent category.')
+    throw httpError(400, 'Each person can only be nominated once.')
   }
 }
 
@@ -325,7 +325,6 @@ participantsRouter.get('/:participantId', asyncHandler(async (req, res) => {
           ? `${participant.cohort.eventStart.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })} - ${participant.cohort.eventEnd.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}`
           : 'TBD',
       },
-      nominees: participant.nominees.map(toNomineeDto),
     },
   })
 }))

@@ -888,10 +888,35 @@ function AssessorTab({ rows }) {
   )
 }
 
-function ReportsTab({ rows, generated, onGenerate }) {
+function ReportsTab({ rows, generated, onGenerate, onVisibilityChanged }) {
+  const [visibilityAction, setVisibilityAction] = useState('')
+  const [visibilityError, setVisibilityError] = useState('')
+
+  async function toggleVisibility(participant, report) {
+    if (!report || !['generated', 'released'].includes(report.status)) return
+    const actionKey = `${participant.id}:${report.type}`
+    setVisibilityAction(actionKey)
+    setVisibilityError('')
+    try {
+      const result = await api.setReportVisibility(participant.id, report.type, report.status !== 'released')
+      onVisibilityChanged(participant.id, report.id, result.data)
+    } catch (err) {
+      setVisibilityError(err.message || 'Unable to update report visibility.')
+    } finally {
+      setVisibilityAction('')
+    }
+  }
+
+  function VisibilityToggle({ participant, report, available }) {
+    const released = report?.status === 'released'
+    const busy = visibilityAction === `${participant.id}:${report?.type}`
+    return <button type="button" role="switch" aria-checked={released} aria-label={`${released ? 'Hide' : 'Publish'} ${report?.type?.toUpperCase() || ''} report for ${participant.name}`} title={!available ? 'Generate this report before changing visibility' : released ? 'Hide report' : 'Publish report'} disabled={!available || busy} onClick={() => toggleVisibility(participant, report)} className={`inline-flex h-5 w-10 items-center rounded-full p-0.5 transition-colors ${released ? 'bg-[#15803d]' : 'bg-slate-300'} disabled:cursor-not-allowed disabled:opacity-60`}><span className={`h-4 w-4 rounded-full bg-white transition-transform ${released ? 'translate-x-5' : ''}`} /></button>
+  }
+
   return (
     <Card>
       <CardHeader title="Report Status" subtitle="Generate, review and release 360 and DC reports separately." action={<button onClick={onGenerate} className="inline-flex items-center gap-2 rounded-lg bg-[#1e5fba] px-3 py-2 text-xs font-semibold text-white hover:bg-[#0e3f87]"><FileText size={14} />Generate ready reports</button>} />
+      {visibilityError && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{visibilityError}</div>}
       <div className="overflow-hidden rounded-xl border border-[#d5dce5]">
         <table className="w-full border-collapse bg-white text-left text-[13px]">
           <thead className="bg-[#ebf2fa]">
@@ -908,9 +933,9 @@ function ReportsTab({ rows, generated, onGenerate }) {
                   <td className="border-b border-[#d5dce5] px-3 py-3 text-slate-500">{participant.employeeId}</td>
                   <td className="border-b border-[#d5dce5] px-3 py-3 font-semibold">{participant.name}</td>
                   <td className="border-b border-[#d5dce5] px-3 py-3">{report360Available ? <Badge tone="success">{report360.status === 'released' ? 'Released' : 'Generated'}</Badge> : <Badge>Not generated</Badge>}</td>
-                  <td className="border-b border-[#d5dce5] px-3 py-3"><span className={`inline-flex h-5 w-10 items-center rounded-full p-0.5 ${report360?.status === 'released' ? 'bg-[#15803d]' : 'bg-slate-300'}`}><span className={`h-4 w-4 rounded-full bg-white transition-transform ${report360?.status === 'released' ? 'translate-x-5' : ''}`} /></span></td>
+                  <td className="border-b border-[#d5dce5] px-3 py-3"><VisibilityToggle participant={participant} report={report360} available={report360Available} /></td>
                   <td className="border-b border-[#d5dce5] px-3 py-3">{dcReportAvailable ? <Badge tone="success">{dcReport.status === 'released' ? 'Released' : 'Generated'}</Badge> : <Badge>Not generated</Badge>}</td>
-                  <td className="border-b border-[#d5dce5] px-3 py-3"><span className={`inline-flex h-5 w-10 items-center rounded-full p-0.5 ${dcReport?.status === 'released' ? 'bg-[#15803d]' : 'bg-slate-300'}`}><span className={`h-4 w-4 rounded-full bg-white transition-transform ${dcReport?.status === 'released' ? 'translate-x-5' : ''}`} /></span></td>
+                  <td className="border-b border-[#d5dce5] px-3 py-3"><VisibilityToggle participant={participant} report={dcReport} available={dcReportAvailable} /></td>
                 </tr>
               )
             })}
@@ -1181,7 +1206,7 @@ export default function Cohorts({ view = 'dashboard' }) {
           {activeTab === 'manage' && <ManageParticipantsTab cohort={cohort} rows={allInCohort} onAdded={(participant) => { setAllParticipants((current) => [...current, participant].sort((a, b) => a.name.localeCompare(b.name))); setCohorts((current) => current.map((item) => item.id === cohort.id ? { ...item, participantCount: (item.participantCount || 0) + 1 } : item)) }} onDeleted={(participantId) => { setAllParticipants((current) => current.filter((participant) => participant.id !== participantId)); setCohorts((current) => current.map((item) => item.id === cohort.id ? { ...item, participantCount: Math.max(0, (item.participantCount || 0) - 1) } : item)) }} />}
           {activeTab === 'threesixty' && <ThreeSixtyTab rows={allInCohort} />}
           {activeTab === 'assessors' && <AssessorTab rows={allInCohort} />}
-          {activeTab === 'reports' && <ReportsTab rows={allInCohort} generated={generated} onGenerate={() => setGenerated(true)} />}
+          {activeTab === 'reports' && <ReportsTab rows={allInCohort} generated={generated} onGenerate={() => setGenerated(true)} onVisibilityChanged={(participantId, reportId, updatedReport) => setAllParticipants((current) => current.map((participant) => participant.id !== participantId ? participant : { ...participant, reportStatus: updatedReport.type === '360' ? updatedReport.status : participant.reportStatus, reports: (participant.reports || []).map((report) => report.id === reportId ? { ...report, status: updatedReport.status, releasedAt: updatedReport.releasedAt } : report) }))} />}
         </div>}
       </div>
     </div>

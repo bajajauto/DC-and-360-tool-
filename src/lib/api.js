@@ -152,6 +152,12 @@ export const api = {
   release360Report: (participantId) =>
     apiFetch(`/api/reports/${participantId}/360/release`, { method: 'POST' }),
 
+  setReportVisibility: (participantId, reportType, visible) =>
+    apiFetch(`/api/reports/${participantId}/${reportType}/visibility`, {
+      method: 'PUT',
+      body: JSON.stringify({ visible }),
+    }),
+
   generate360Report: (participantId) =>
     apiFetch(`/api/reports/${participantId}/360/generate`, { method: 'POST' }),
 
