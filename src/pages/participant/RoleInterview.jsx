@@ -182,8 +182,8 @@ export default function RoleInterview() {
       <fieldset ref={firstQuestionRef} disabled={!canEdit || (status === 'submitted' && !editing)} className="scroll-mt-6 space-y-5">
         <section className="rounded-xl border bg-white p-5">
           <h2 className="mb-1 font-semibold">Last 3 Career Transitions</h2>
-          <p className="mb-4 text-xs leading-5 text-slate-500">List the last 3 roles you have held over your career, with designation, BU and duration.</p>
-          {transitions.map(({ n, fields }) => { const required = n === 1; return <div key={n} className="mb-3"><p className="mb-2 text-xs font-bold uppercase tracking-wide text-[#1e5fba]">Transition {n}{required ? <span className="text-red-500"> *</span> : <span className="ml-1 font-normal normal-case text-slate-400">(Optional)</span>}</p><div className="grid gap-3 rounded-lg bg-slate-50 p-3 sm:grid-cols-4">{fields.map(([key, label]) => {
+          <p className="mb-4 text-xs leading-5 text-slate-500">Please fill in order of recency. Your most recent career transition should be filled first.</p>
+          {transitions.map(({ n, fields }) => { const required = n === 1; const displayNumber = 4 - n; return <div key={n} className="mb-3"><p className="mb-2 text-xs font-bold uppercase tracking-wide text-[#1e5fba]">Transition {displayNumber}{required ? <span className="text-red-500"> *</span> : <span className="ml-1 font-normal normal-case text-slate-400">(Optional)</span>}</p><div className="grid gap-3 rounded-lg bg-slate-50 p-3 sm:grid-cols-4">{fields.map(([key, label]) => {
             const answerKey = `transition${n}_${key}`
             return key === 'duration'
               ? <MonthYearSelect key={key} required={required} value={answers[answerKey]} onChange={(value) => set(answerKey, value)} />
