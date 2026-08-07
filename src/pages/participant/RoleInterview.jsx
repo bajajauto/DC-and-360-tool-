@@ -4,6 +4,7 @@ import { useUser } from '../../context/UserContext'
 import { api } from '../../lib/api'
 import ParticipantSubmissionSuccess from '../../components/ParticipantSubmissionSuccess'
 import ParticipantSubmissionModal from '../../components/ParticipantSubmissionModal'
+import { formatDateOfJoining } from '../../lib/dateFormatting'
 
 const transitionFields = [['role', 'Role'], ['roleDescription', 'Role Description'], ['bu', 'BU'], ['duration', 'Duration']]
 const transitions = [1, 2, 3].map((n) => ({ n, fields: transitionFields }))
@@ -186,7 +187,7 @@ export default function RoleInterview() {
     ['Current BU', user?.bu],
     ['Level', participantData?.masterData?.jobLevel],
     ['Chart Level', participantData?.masterData?.positionLevel],
-    ['Date of Joining', participantData?.masterData?.dateOfJoining || participantData?.masterData?.DOJ_3 || participantData?.masterData?.DOJ_4],
+    ['Date of Joining', formatDateOfJoining(participantData?.masterData?.dateOfJoining || participantData?.masterData?.DOJ_3 || participantData?.masterData?.DOJ_4)],
     ['Email', user?.email],
   ]
 
@@ -202,12 +203,13 @@ export default function RoleInterview() {
         <p className="mt-1 text-sm text-gray-500">Career history, current role, highlights and challenges · {completed}/{allRequiredKeys.length} required fields complete</p>
         {autoSaveStatus !== 'idle' && <p className={`mt-1 text-xs ${autoSaveStatus === 'saved' ? 'text-emerald-600' : 'text-slate-400'}`}>{autoSaveStatus === 'saved' ? 'Saved automatically' : 'Saving...'}</p>}
       </div>
+      {status === 'submitted' && !editing && <div className="mb-4"><ParticipantSubmissionSuccess heading="Already submitted" stepName="Role Interview" nextTo="/participant/360-nominees" nextLabel="360 Nominees" onEdit={canEdit ? startEditing : null} detail={canEdit ? `Editable until ${cutoff ? new Date(cutoff).toLocaleDateString('en-GB') : 'the cohort cutoff'}.` : 'The cutoff has passed and this submission is now locked.'} /></div>}
+      {(status !== 'submitted' || editing) && <>
       <div className={`mb-4 rounded-lg border px-4 py-3 text-sm ${canEdit ? 'border-blue-200 bg-blue-50 text-blue-900' : 'border-amber-200 bg-amber-50 text-amber-900'}`}>
         <strong>{canEdit ? 'You can edit your responses until the cutoff date' : 'The cutoff date has passed'}</strong>
         <span className="ml-1">{canEdit ? `— ${cutoff ? new Date(cutoff).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'the deadline configured for your cohort'}. You may submit now and return to edit before this deadline.` : '— this form is now read-only.'}</span>
       </div>
       {message && status !== 'submitted' && <div className="mb-4 rounded-lg border bg-white px-4 py-3 text-sm">{message}</div>}
-      {status === 'submitted' && <div className="mb-4"><ParticipantSubmissionSuccess heading="Already submitted" stepName="Role Interview" nextTo="/participant/360-nominees" nextLabel="360 Nominees" onEdit={canEdit && !editing ? startEditing : null} detail={canEdit ? `Editable until ${cutoff ? new Date(cutoff).toLocaleDateString('en-GB') : 'the cohort cutoff'}.` : 'The cutoff has passed and this submission is now locked.'} /></div>}
       <section className="mb-5 rounded-xl border bg-slate-50 p-5">
         <h2 className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500">Participant details</h2>
         <div className="grid gap-3 sm:grid-cols-2">{profile.map(([label, value]) => <div key={label}><span className="text-xs text-slate-400">{label}</span><p className="text-sm font-semibold">{value || '—'}</p></div>)}</div>
@@ -239,6 +241,7 @@ export default function RoleInterview() {
       <div className="mt-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-900"><strong>Please review your responses before submitting.</strong> You may edit your submission until the cohort cutoff. Timelines are sacrosanct and will not be extended.</div>
       <div className="sticky bottom-0 mt-5 flex justify-end gap-3 border-t bg-[#f4f7fb]/95 py-4">{status !== 'submitted' && <button disabled={saving || !canEdit} onClick={() => save(false)} className="rounded-lg border bg-white px-4 py-2 text-sm font-semibold disabled:opacity-40">Save Draft</button>}{status === 'submitted' && !editing && canEdit && <button type="button" onClick={startEditing} className="rounded-lg bg-[#1e4d8c] px-5 py-2 text-sm font-semibold text-white hover:bg-[#153d70]">Edit Submission</button>}{status === 'submitted' && !editing && !canEdit && <button disabled className="rounded-lg border border-emerald-200 bg-emerald-100 px-5 py-2 text-sm font-semibold text-emerald-700">Submitted</button>}{editing && <button disabled={saving} onClick={() => { setAnswers(submittedSnapshot.current); setEditing(false) }} className="rounded-lg border bg-white px-4 py-2 text-sm font-semibold">Cancel</button>}{(status !== 'submitted' || editing) && <button disabled={saving || !canEdit || !complete} onClick={() => save(true)} className="rounded-lg bg-[#1e4d8c] px-5 py-2 text-sm font-semibold text-white disabled:opacity-40">{editing ? 'Save Changes' : 'Submit'}</button>}</div>
       {validationError && <div role="alert" className="fixed bottom-20 left-4 right-4 z-50 flex items-start justify-between gap-4 rounded-xl border border-red-300 bg-red-600 px-5 py-4 text-sm font-semibold text-white shadow-2xl md:left-64"><span>{validationError}</span><button type="button" onClick={() => setValidationError('')} className="shrink-0 rounded p-0.5 text-red-100 hover:bg-red-700 hover:text-white" aria-label="Dismiss validation error">×</button></div>}
+      </>}
     </div>
   )
 }

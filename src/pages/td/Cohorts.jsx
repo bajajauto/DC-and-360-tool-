@@ -2,6 +2,7 @@ import { AlertCircle, Check, ChevronRight, Download, FileText, Pencil, Plus, Sea
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../../lib/api'
+import { formatDateOfJoining } from '../../lib/dateFormatting'
 import { exportCohortNomineeStatus, exportCohortProcessStatus } from '../../lib/trackingExport'
 
 const tabs = [
@@ -231,7 +232,7 @@ async function parseParticipantTemplate(file) {
 
     const masterData = Object.fromEntries(headers.map((header, column) => [`${header}_${column + 1}`, text(row[column])]))
     Object.assign(masterData, {
-      dateOfJoining: text(row[col(2)]),
+      dateOfJoining: formatDateOfJoining(row[col(2)]),
       reportingManagerName: text(row[col(15)]), reportingManagerEmployeeId: text(row[col(16)]), reportingManagerEmail: text(row[col(17)]),
       skipManagerName: text(row[col(18)]), skipManagerEmployeeId: text(row[col(19)]), skipManagerEmail: text(row[col(20)]),
       buHeadName: text(row[col(21)]), buHeadEmployeeId: text(row[col(22)]), buHeadEmail: text(row[col(23)]),
@@ -329,7 +330,7 @@ function CohortFormModal({ mode, initialCohort, onClose, onSubmit }) {
 
         const masterData = Object.fromEntries(headers.map((header, column) => [`${header}_${column + 1}`, text(row[column])]))
         Object.assign(masterData, {
-          dateOfJoining: text(row[col(2)]),
+          dateOfJoining: formatDateOfJoining(row[col(2)]),
           reportingManagerName: text(row[col(15)]), reportingManagerEmployeeId: text(row[col(16)]), reportingManagerEmail: text(row[col(17)]),
           skipManagerName: text(row[col(18)]), skipManagerEmployeeId: text(row[col(19)]), skipManagerEmail: text(row[col(20)]),
           buHeadName: text(row[col(21)]), buHeadEmployeeId: text(row[col(22)]), buHeadEmail: text(row[col(23)]),

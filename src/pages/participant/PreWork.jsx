@@ -142,12 +142,13 @@ export default function PreWork() {
         <p className="mt-1 text-sm text-gray-500">Self-Reflection Worksheet · All questions are mandatory · {answered}/{questions.length} answered</p>
         {autoSaveStatus !== 'idle' && <p className={`mt-1 text-xs ${autoSaveStatus === 'saved' ? 'text-emerald-600' : 'text-slate-400'}`}>{autoSaveStatus === 'saved' ? 'Saved automatically' : 'Saving...'}</p>}
       </div>
+      {status === 'submitted' && !editing && <div className="mb-4"><ParticipantSubmissionSuccess heading="Already submitted" stepName="Self Reflection" nextTo="/participant/role-interview" nextLabel="Role Interview" onEdit={canEdit ? startEditing : null} detail={canEdit ? `Editable until ${cutoff ? new Date(cutoff).toLocaleDateString('en-GB') : 'the cohort cutoff'}.` : 'The cutoff has passed and this submission is now locked.'} /></div>}
+      {(status !== 'submitted' || editing) && <>
       <div className={`mb-4 rounded-lg border px-4 py-3 text-sm ${canEdit ? 'border-blue-200 bg-blue-50 text-blue-900' : 'border-amber-200 bg-amber-50 text-amber-900'}`}>
         <strong>{canEdit ? 'You can edit your responses until the cutoff date' : 'The cutoff date has passed'}</strong>
         <span className="ml-1">{canEdit ? `— ${cutoff ? new Date(cutoff).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'the deadline configured for your cohort'}. You may submit now and return to edit before this deadline.` : '— this form is now read-only.'}</span>
       </div>
       {message && status !== 'submitted' && <div className="mb-4 rounded-lg border bg-white px-4 py-3 text-sm">{message}</div>}
-      {status === 'submitted' && <div className="mb-4"><ParticipantSubmissionSuccess heading="Already submitted" stepName="Self Reflection" nextTo="/participant/role-interview" nextLabel="Role Interview" onEdit={canEdit && !editing ? startEditing : null} detail={canEdit ? `Editable until ${cutoff ? new Date(cutoff).toLocaleDateString('en-GB') : 'the cohort cutoff'}.` : 'The cutoff has passed and this submission is now locked.'} /></div>}
       <PreWorkInstructions />
       <div ref={firstQuestionRef} className="scroll-mt-6 space-y-4">
         {questions.map((question, index) => {
@@ -185,6 +186,7 @@ export default function PreWork() {
         {editing && <button disabled={saving} onClick={() => { setAnswers(submittedSnapshot.current); setEditing(false) }} className="rounded-lg border bg-white px-4 py-2 text-sm font-semibold">Cancel</button>}
         {(status !== 'submitted' || editing) && <button disabled={saving || !canEdit || answered !== questions.length} onClick={() => save(true)} className="rounded-lg bg-[#1e4d8c] px-5 py-2 text-sm font-semibold text-white disabled:opacity-40">{editing ? 'Save Changes' : 'Submit'}</button>}
       </div>
+      </>}
     </div>
   )
 }
