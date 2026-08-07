@@ -173,6 +173,16 @@ export default function Nominees360() {
       .finally(() => setLoading(false))
   }, [participantId])
 
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' })
+      document.querySelectorAll('[data-route-scroll]').forEach((element) => {
+        element.scrollTo({ top: 0, left: 0, behavior: 'instant' })
+      })
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [loading])
+
   function acceptInstructions() {
     if (acceptanceKey) window.localStorage.setItem(acceptanceKey, 'true')
     setInstructionsAccepted(true)

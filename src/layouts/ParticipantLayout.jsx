@@ -206,7 +206,7 @@ export default function ParticipantLayout() {
       </aside>
 
       {/* Page content */}
-      <main className="flex-1 overflow-auto" onClick={() => setDropdownOpen(false)}>
+      <main data-route-scroll className="flex-1 overflow-auto" onClick={() => setDropdownOpen(false)}>
         {isBuhrToo && (
           <RoleSwitchBanner
             target="buhr"
