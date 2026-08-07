@@ -54,6 +54,11 @@ jobs:
 
       # /api/health runs `SELECT 1`, so this fails if the app booted but cannot
       # reach Postgres. Retries cover the cold start after a deploy.
+      #
+      # Deliberately the azurewebsites.net default hostname, not the custom domain
+      # dc-and-360-tool.bajajauto.com: the custom domain resolves on Bajaj's internal
+      # DNS, which a GitHub-hosted runner cannot see. Pointing this at the custom
+      # domain would fail every deploy regardless of app health.
       - name: Smoke test
         run: |
           url="https://${{ env.AZURE_WEBAPP_NAME }}-afgbgufyd8fgfsh9.centralindia-01.azurewebsites.net/api/health"

@@ -6,9 +6,14 @@ built Vite SPA from `dist/`, so there is one origin and no CORS to configure in 
 | Resource | Value |
 | --- | --- |
 | Web App | `app-dc-and-360-tool-prod-ci-001` (Linux, Central India) |
-| URL | https://app-dc-and-360-tool-prod-ci-001-afgbgufyd8fgfsh9.centralindia-01.azurewebsites.net |
+| URL | https://dc-and-360-tool.bajajauto.com |
+| Default hostname | `app-dc-and-360-tool-prod-ci-001-afgbgufyd8fgfsh9.centralindia-01.azurewebsites.net` |
 | Postgres | `psql-dc-and-360-tool-prod-ci-001.postgres.database.azure.com` |
 | Deploy trigger | push to `develop`, or **Run workflow** on `.github/workflows/azure-deploy.yml` |
+
+`dc-and-360-tool.bajajauto.com` is the address users get. The azurewebsites.net default
+hostname stays bound and working — the deploy smoke test uses it, and it is the way in if
+the custom domain's DNS ever breaks. See [Custom domain](#custom-domain) below.
 
 ## One-time setup
 
@@ -69,8 +74,8 @@ portal with *Overview → Download publish profile → Reset publish profile cre
 | --- | --- |
 | `DATABASE_URL` | `postgresql://dctooladmin:<url-encoded-password>@psql-dc-and-360-tool-prod-ci-001.postgres.database.azure.com:5432/dc_tool?sslmode=require` |
 | `JWT_SECRET` | a fresh 96-char random hex string — **do not reuse the dev value** |
-| `APP_URL` | the public https URL above (used to build invite links in emails) |
-| `CLIENT_ORIGIN` | the same public https URL |
+| `APP_URL` | `https://dc-and-360-tool.bajajauto.com` (used to build invite and magic links in emails) |
+| `CLIENT_ORIGIN` | `https://dc-and-360-tool.bajajauto.com,https://app-dc-and-360-tool-prod-ci-001-afgbgufyd8fgfsh9.centralindia-01.azurewebsites.net` |
 | `REPORTS_DIR` | `/home/data/reports` |
 | `EMAIL_MODE` | `smtp` |
 | `EMAIL_FROM` | the Brevo-verified sender address |
@@ -91,6 +96,11 @@ Notes:
 - The password must be **percent-encoded** inside `DATABASE_URL` — `#` → `%23`,
   `@` → `%40`, `&` → `%26`. An unencoded `@` or `#` truncates the URL and Prisma will
   fail with an authentication or "invalid port" error.
+- `CLIENT_ORIGIN` is a **comma-separated list** (`server/src/index.js` splits on commas).
+  Both hostnames are listed so the app keeps working on the default hostname while the
+  custom domain's DNS is propagating, and so smoke tests are not blocked by CORS.
+  `APP_URL` is a single value — it is what gets baked into emails, so it is the custom
+  domain only.
 - `REPORTS_DIR` points outside `/home/site/wwwroot` on purpose: each deploy replaces
   wwwroot, which would delete generated 360 reports. `/home` is persistent storage.
 - `SCM_DO_BUILD_DURING_DEPLOYMENT=false` matters — the workflow already installs and
@@ -150,6 +160,43 @@ DATABASE_URL="<prod url>" HR_DATA_FILE="<path to master data template.xlsx>" npm
 `npm run db:seed` is **development only** — it inserts demo participants and mock
 feedback. Do not point it at production.
 
+## Custom domain
+
+The app is served at `https://dc-and-360-tool.bajajauto.com`. On the Azure side this is
+done — the hostname is bound to the web app and TLS is bound to it (SNI SSL, thumbprint
+`4C26A7A1…6564`). What remains is DNS, which `bajajauto.com` owns.
+
+**DNS records the Bajaj network team needs to create:**
+
+| Type | Name | Value |
+| --- | --- | --- |
+| `CNAME` | `dc-and-360-tool` | `app-dc-and-360-tool-prod-ci-001-afgbgufyd8fgfsh9.centralindia-01.azurewebsites.net` |
+| `TXT` | `asuid.dc-and-360-tool` | `DDEB94FDAD5DDD59E21809F98928A69E043D4571ECB0716438441F48EC0C8086` |
+
+Notes for that conversation:
+
+- Prefer `CNAME` over an `A` record. App Service's inbound IP is not contractually
+  stable; an `A` record silently breaks the day Azure moves the site.
+- The `asuid` TXT record is Azure's domain-ownership proof. The binding already exists,
+  so it is not needed to *create* it, but Azure re-checks ownership and an absent record
+  can cause the binding to be dropped later. Cheap to add, so add it.
+- If the record is published only on Bajaj's **internal** DNS, the site is reachable from
+  the Bajaj network and nowhere else. That is the intent here, but it has two
+  consequences worth knowing up front:
+  - The GitHub Actions smoke test cannot resolve the name and therefore checks the
+    azurewebsites.net hostname instead. That is intentional; see the workflow comment.
+  - **An App Service Managed Certificate cannot renew against private-only DNS** — its
+    validation comes from the public internet. If the bound certificate is a managed one
+    it will fail to auto-renew and HTTPS will break, silently, at expiry. Confirm with
+    whoever created the binding that it is a Bajaj-issued/uploaded certificate, and if
+    so put its expiry date in a calendar. This could not be verified from here: the
+    deploy account is Website Contributor scoped to the web app and cannot read
+    certificate resources.
+
+Nothing in the application needs a rebuild or redeploy for the domain change — the
+hostname lives entirely in App Service settings (`APP_URL`, `CLIENT_ORIGIN`), which are
+already set.
+
 ## What the pipeline does
 
 `.github/workflows/azure-deploy.yml`, on every push to `develop`:
@@ -181,6 +228,15 @@ feedback. Do not point it at production.
   `skipping access account seed` means the database already had users, so the built-in
   logins were never created; sign in with an existing account or load data with
   `db:import-hr`.
+- **Custom domain does not resolve** — check from inside the Bajaj network; the record is
+  expected to be internal-only. `nslookup dc-and-360-tool.bajajauto.com`. The
+  azurewebsites.net hostname stays bound and always works, so use it to tell "DNS is
+  missing" apart from "the app is down".
+- **Certificate warning on the custom domain** — the bound certificate expired or was
+  replaced. `az webapp config hostname list -g rg-hrtraining-ci-01 --webapp-name
+  app-dc-and-360-tool-prod-ci-001` shows the thumbprint currently bound.
+- **CORS errors after a hostname change** — `CLIENT_ORIGIN` must contain the exact
+  scheme+host the browser is using, comma-separated. A trailing slash does not match.
 - **`P1001 Can't reach database server`** — firewall, or `sslmode=require` missing.
 - **Blank page, 404s on `/assets/*`** — `dist/` did not ship; check the build step ran.
 - **Deep links 404** — the SPA fallback only activates when `dist/index.html` exists;
