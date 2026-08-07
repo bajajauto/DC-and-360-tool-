@@ -8,6 +8,7 @@ import {
   Save,
   Send,
   Users,
+  X,
 } from 'lucide-react'
 import { exportCohortNomineeStatus, exportCohortProcessStatus } from '../../lib/trackingExport'
 import { api } from '../../lib/api'
@@ -161,6 +162,14 @@ function outboxStatusTone(status) {
   return 'neutral'
 }
 
+function renderStoredEmail(value, metadata) {
+  const context = metadata?.context && typeof metadata.context === 'object' ? metadata.context : {}
+  return String(value || '').replace(/\{\{\s*([^}]+?)\s*\}\}/g, (placeholder, key) => {
+    const replacement = context[key.trim()]
+    return replacement === undefined || replacement === null || replacement === '' ? placeholder : String(replacement)
+  })
+}
+
 export function EmailOutbox() {
   const [outbox, setOutbox] = useState([])
   const [selected, setSelected] = useState(null)
@@ -174,13 +183,21 @@ export function EmailOutbox() {
       .then((result) => {
         const rows = result.data || []
         setOutbox(rows)
-        setSelected((current) => current || rows[0] || null)
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false))
   }
 
   useEffect(load, [])
+
+  useEffect(() => {
+    if (!selected) return undefined
+    function closeOnEscape(event) {
+      if (event.key === 'Escape') setSelected(null)
+    }
+    document.addEventListener('keydown', closeOnEscape)
+    return () => document.removeEventListener('keydown', closeOnEscape)
+  }, [selected])
 
   return (
     <Page
@@ -189,7 +206,7 @@ export function EmailOutbox() {
       subtitle="Every notification is sent immediately. Review successful and failed delivery attempts here."
     >
       {error && <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
-      <div className="grid gap-5 xl:grid-cols-[1fr_420px]">
+      <div>
         <Card>
           <CardHeader title="Delivery history" subtitle="Welcome emails, 360 invitations, reminders, and report-release notifications." />
           <div className="overflow-hidden rounded-xl border border-[#d5dce5]">
@@ -219,16 +236,29 @@ export function EmailOutbox() {
             </table>
           </div>
         </Card>
-        {selected && (
-          <Card>
-            <CardHeader title={selected.subject} subtitle={`To: ${selected.toName || selected.toEmail} <${selected.toEmail}>`} action={<Badge tone="info">{selected.recipientRole}</Badge>} />
-            <div className="whitespace-pre-wrap rounded-xl border border-[#d5dce5] bg-[#f8fbff] p-4 text-sm leading-6 text-slate-700">{selected.body}</div>
+      </div>
+      {selected && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4" role="presentation" onMouseDown={() => setSelected(null)}>
+          <section role="dialog" aria-modal="true" aria-labelledby="email-preview-title" className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-[#d5dce5] bg-white p-6 shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
+            <div className="flex items-start justify-between gap-4 border-b border-[#d5dce5] pb-4">
+              <div className="min-w-0">
+                <p className="text-xs font-bold uppercase tracking-wide text-[#1e5fba]">Email preview</p>
+                <h2 id="email-preview-title" className="mt-1 text-xl font-bold text-slate-900">{renderStoredEmail(selected.subject, selected.metadata)}</h2>
+                <p className="mt-2 text-xs text-slate-500">To: {selected.toName || selected.toEmail} &lt;{selected.toEmail}&gt;</p>
+                {selected.cc?.length > 0 && <p className="mt-1 text-xs text-slate-500">CC: {selected.cc.join(', ')}</p>}
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <Badge tone={outboxStatusTone(selected.status)}>{selected.status === 'not_sent' ? 'Not sent' : selected.status}</Badge>
+                <button type="button" onClick={() => setSelected(null)} aria-label="Close email preview" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800"><X size={18} /></button>
+              </div>
+            </div>
+            <div className="mt-5 whitespace-pre-wrap rounded-xl border border-[#d5dce5] bg-[#f8fbff] p-5 text-sm leading-6 text-slate-700">{renderStoredEmail(selected.body, selected.metadata)}</div>
             {selected.error && (
               <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">{selected.error}</div>
             )}
-          </Card>
-        )}
-      </div>
+          </section>
+        </div>
+      )}
     </Page>
   )
 }
