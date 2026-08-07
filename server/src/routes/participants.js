@@ -152,7 +152,10 @@ function validateParticipantWork(type, answers) {
     return values.some((value) => String(value || '').trim())
       && (values.slice(0, 3).some((value) => !validResponse(value)) || !validDuration(values[3]))
   })
-  if (shortFields.some((key) => !validResponse(answers[key])) || invalidRequiredDuration || invalidOptionalTransition || reflectionFields.some((key) => !validResponse(answers[key], 15)) || invalidOptionalResponse) {
+  if (invalidOptionalTransition) {
+    throw httpError(400, 'Once an optional Career Transition is started, Role, Role Description, BU, and Duration must all be completed, or the entire transition must be cleared.')
+  }
+  if (shortFields.some((key) => !validResponse(answers[key])) || invalidRequiredDuration || reflectionFields.some((key) => !validResponse(answers[key], 15)) || invalidOptionalResponse) {
     throw httpError(400, 'Please complete every required Role Interview field. Detailed responses require at least 15 characters, and placeholder responses are not accepted.')
   }
 }

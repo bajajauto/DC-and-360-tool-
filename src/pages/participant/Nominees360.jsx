@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useUser } from '../../context/UserContext'
 import { api } from '../../lib/api'
+import ParticipantSubmissionSuccess from '../../components/ParticipantSubmissionSuccess'
 
 const REL_LABELS = {
   'reporting-manager': 'Reporting Manager',
@@ -680,20 +681,9 @@ export default function Nominees360() {
       )}
 
       {submitted ? (
-        <div className="bg-white border border-[#e2e8f0] rounded-xl overflow-hidden max-w-2xl">
-          <div className="bg-green-50 border-b border-green-200 px-5 py-5">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center shrink-0">
-                <svg className="w-5 h-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                </svg>
-              </div>
-              <div>
-                <h3 className="text-sm font-semibold text-green-800">Nominees submitted ({nominees.length + 1} respondents including you)</h3>
-                <p className="text-xs text-green-600 mt-0.5">Emails have been sent. Your BUHR can view this list.</p>
-              </div>
-            </div>
-          </div>
+        <div className="max-w-2xl space-y-4">
+          <ParticipantSubmissionSuccess stepName="360 nominee list" nextTo="/participant/self-360" nextLabel="Self 360 Survey" detail="Invitation emails have been sent and your BUHR can view this list." />
+          <div className="overflow-hidden rounded-xl border border-[#e2e8f0] bg-white">
           <div className="px-5 py-4 border-b border-[#f1f4f9] flex items-center justify-between">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Submitted Nominees</p>
             <p className="text-xs text-gray-400">{nominees.length + 1} total</p>
@@ -725,8 +715,6 @@ export default function Nominees360() {
                 </div>
               ))}
           </div>
-          <div className="px-5 py-4 bg-[#f8f9fc]">
-            <Link to="/participant/dashboard" className="text-xs text-[#1e4d8c] font-medium hover:underline">Back to Dashboard</Link>
           </div>
         </div>
       ) : (

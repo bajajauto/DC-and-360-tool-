@@ -280,7 +280,7 @@ function SurveyInstructions({ surveyVariant, totalRatings, onShowWelcome }) {
   )
 }
 
-export default function FeedbackForm({ returnTo = '/respondent/dashboard', taskIdOverride = null }) {
+export default function FeedbackForm({ returnTo = '/respondent/dashboard', taskIdOverride = null, participantNextTo = null }) {
   const { taskId: routeTaskId } = useParams()
   const taskId = taskIdOverride || routeTaskId
   const navigate = useNavigate()
@@ -309,6 +309,7 @@ export default function FeedbackForm({ returnTo = '/respondent/dashboard', taskI
   const [currentStep, setCurrentStep] = useState(0)
   const [instructionsVisited, setInstructionsVisited] = useState(false)
   const [showWelcome, setShowWelcome] = useState(!useWideParticipantLayout)
+  const [sectionValidationMessage, setSectionValidationMessage] = useState('')
 
   const scrollFeedbackToTop = useCallback((behavior = 'instant') => {
     window.scrollTo({ top: 0, left: 0, behavior })
@@ -373,10 +374,35 @@ export default function FeedbackForm({ returnTo = '/respondent/dashboard', taskI
   ], [instructionsVisited, ratings, sectionSsc, surveySections])
 
   const goToStep = useCallback((step) => {
+    if (step === currentStep) return
+    if (currentStep > 0) {
+      const section = surveySections[currentStep - 1]
+      const behaviours = section.competencies.flatMap((competency) => competency.behaviours)
+      const missingRatings = behaviours.filter((behaviour) => ratings[behaviour.id] === undefined).length
+      const missingComments = ['start', 'stop', 'continue'].filter((key) => !hasMinimumComment(sectionSsc[section.id]?.[key])).length
+      if (missingRatings || missingComments) {
+        const missing = [
+          missingRatings && `${missingRatings} mandatory rating${missingRatings === 1 ? '' : 's'}`,
+          missingComments && `${missingComments} mandatory comment${missingComments === 1 ? '' : 's'}`,
+        ].filter(Boolean).join(' and ')
+        setSectionValidationMessage(`Complete ${missing} in this section before changing sections.`)
+        scrollFeedbackToTop('smooth')
+        return
+      }
+    }
+    if (step > currentStep + 1) {
+      const firstIncompleteStep = sidebarItems.slice(1, step).find((item) => !item.complete)
+      if (firstIncompleteStep) {
+        setSectionValidationMessage(`Complete ${firstIncompleteStep.label} before moving to a later section.`)
+        scrollFeedbackToTop('smooth')
+        return
+      }
+    }
+    setSectionValidationMessage('')
     if (step > 0) setInstructionsVisited(true)
     setCurrentStep(step)
     scrollFeedbackToTop('smooth')
-  }, [scrollFeedbackToTop])
+  }, [currentStep, ratings, scrollFeedbackToTop, sectionSsc, sidebarItems, surveySections])
 
   useEffect(() => {
     if (!setSurveyNavigation || useWideParticipantLayout) return
@@ -406,10 +432,12 @@ export default function FeedbackForm({ returnTo = '/respondent/dashboard', taskI
   }, [draftPayload, submitted, taskId, draftLoaded, updateRespondentTaskStatus])
 
   const handleRate = useCallback((behaviourId, value) => {
+    setSectionValidationMessage('')
     setRatings((prev) => ({ ...prev, [behaviourId]: value }))
   }, [])
 
   const handleSectionSsc = useCallback((sectionId, key, value) => {
+    setSectionValidationMessage('')
     setSectionSsc((prev) => ({
       ...prev,
       [sectionId]: { ...prev[sectionId], [key]: value },
@@ -456,7 +484,9 @@ export default function FeedbackForm({ returnTo = '/respondent/dashboard', taskI
   if (submitted) {
     return <SubmissionConfirmation
       task={task}
+      participantMode={useWideParticipantLayout}
       buttonLabel={useWideParticipantLayout ? 'Back to Dashboard' : 'Finish'}
+      onNext={participantNextTo ? () => navigate(participantNextTo) : null}
       onBack={() => {
         if (useWideParticipantLayout) navigate(returnTo)
         else { logout(); navigate('/') }
@@ -520,6 +550,12 @@ export default function FeedbackForm({ returnTo = '/respondent/dashboard', taskI
           </div>
         )}
 
+        {sectionValidationMessage && (
+          <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+            {sectionValidationMessage}
+          </div>
+        )}
+
         {currentStep === 0 ? (
           <SurveyInstructions surveyVariant={surveyVariant} totalRatings={totalRatings} onShowWelcome={() => setShowWelcome(true)} />
         ) : (
@@ -566,7 +602,7 @@ export default function FeedbackForm({ returnTo = '/respondent/dashboard', taskI
   )
 }
 
-function SubmissionConfirmation({ task, onBack, buttonLabel }) {
+function SubmissionConfirmation({ task, onBack, onNext, buttonLabel, participantMode = false }) {
   return (
     <div className="p-8 max-w-lg mx-auto text-center">
       <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-5">
@@ -574,21 +610,21 @@ function SubmissionConfirmation({ task, onBack, buttonLabel }) {
           <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
         </svg>
       </div>
-      <h2 className="text-xl font-bold text-[#1a1f2e] mb-2">Feedback Submitted</h2>
+      <h2 className="text-xl font-bold text-[#1a1f2e] mb-2">{participantMode ? 'Successfully recorded' : 'Feedback Submitted'}</h2>
       <p className="text-sm text-gray-500 mb-1">
-        {task.relationship === 'Self'
+        {participantMode
+          ? 'Your Self 360 Survey has been successfully recorded.'
+          : task.relationship === 'Self'
           ? 'Submitted for yourself.'
           : <>Your feedback for <span className="font-medium text-[#1a1f2e]">{task.participantName}</span> has been recorded.</>}
       </p>
       <p className="text-xs text-gray-400 mb-8">
         Responses are confidential and will be aggregated before appearing in the 360° Feedback Report.
       </p>
-      <button
-        onClick={onBack}
-        className="px-5 py-2.5 bg-[#1e4d8c] text-white text-sm font-medium rounded-lg hover:bg-[#183f73] transition-colors"
-      >
-        {buttonLabel}
-      </button>
+      <div className="flex flex-wrap justify-center gap-3">
+        <button onClick={onBack} className={`${participantMode ? 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-50' : 'bg-[#1e4d8c] text-white hover:bg-[#183f73]'} rounded-lg px-5 py-2.5 text-sm font-medium transition-colors`}>{buttonLabel}</button>
+        {onNext && <button onClick={onNext} className="rounded-lg bg-[#1e4d8c] px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#183f73]">Go to Next Step: 360 Status</button>}
+      </div>
     </div>
   )
 }

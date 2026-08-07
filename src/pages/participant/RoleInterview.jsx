@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useUser } from '../../context/UserContext'
 import { api } from '../../lib/api'
+import ParticipantSubmissionSuccess from '../../components/ParticipantSubmissionSuccess'
 
 const transitionFields = [['role', 'Role'], ['roleDescription', 'Role Description'], ['bu', 'BU'], ['duration', 'Duration']]
 const transitions = [1, 2, 3].map((n) => ({ n, fields: transitionFields }))
@@ -22,21 +23,21 @@ const validReflection = (value) => {
   return text.length >= 15 && !placeholderPattern.test(text)
 }
 
-function MonthYearSelect({ value, onChange, required = false }) {
+function MonthYearSelect({ value, onChange, required = false, invalid = false }) {
   const [month = '', year = ''] = String(value || '').split('/')
   return (
     <div>
       <div className="grid grid-cols-2 gap-2">
-        <select required={required} aria-label="Duration month" value={monthOptions.includes(month) ? month : ''} onChange={(event) => onChange(`${event.target.value}/${year}`)} className="rounded-lg border bg-white px-2 py-2 text-sm">
+        <select required={required} aria-invalid={invalid} aria-label="Duration month" value={monthOptions.includes(month) ? month : ''} onChange={(event) => onChange(`${event.target.value}/${year}`)} className={`rounded-lg border bg-white px-2 py-2 text-sm ${invalid ? 'border-red-500 ring-2 ring-red-100' : ''}`}>
           <option value="">Month</option>
           {monthOptions.map((option) => <option key={option} value={option}>{option}</option>)}
         </select>
-        <select required={required} aria-label="Duration year" value={yearOptions.includes(year) ? year : ''} onChange={(event) => onChange(`${month}/${event.target.value}`)} className="rounded-lg border bg-white px-2 py-2 text-sm">
+        <select required={required} aria-invalid={invalid} aria-label="Duration year" value={yearOptions.includes(year) ? year : ''} onChange={(event) => onChange(`${month}/${event.target.value}`)} className={`rounded-lg border bg-white px-2 py-2 text-sm ${invalid ? 'border-red-500 ring-2 ring-red-100' : ''}`}>
           <option value="">Year</option>
           {yearOptions.map((option) => <option key={option} value={option}>{option}</option>)}
         </select>
       </div>
-      <p className={`mt-1 text-[10px] ${value && !validMonthYear(value) ? 'text-red-500' : 'text-slate-400'}`}>{value && !validMonthYear(value) ? 'Select both month and year.' : `MM/YYYY${required ? ' *' : ''}`}</p>
+      <p className={`mt-1 text-[10px] ${invalid || (value && !validMonthYear(value)) ? 'font-medium text-red-600' : 'text-slate-400'}`}>{invalid ? 'Duration month and year are required.' : value && !validMonthYear(value) ? 'Select both month and year.' : `MM/YYYY${required ? ' *' : ''}`}</p>
     </div>
   )
 }
@@ -88,8 +89,11 @@ export default function RoleInterview() {
   const [cutoff, setCutoff] = useState(null)
   const [draftLoaded, setDraftLoaded] = useState(false)
   const [autoSaveStatus, setAutoSaveStatus] = useState('idle')
+  const [validationError, setValidationError] = useState('')
+  const [invalidTransitionFields, setInvalidTransitionFields] = useState([])
   const submittedSnapshot = useRef({})
   const firstQuestionRef = useRef(null)
+  const transitionsRef = useRef(null)
 
   useEffect(() => {
     if (!user?.participantId) return
@@ -106,7 +110,14 @@ export default function RoleInterview() {
       .finally(() => setDraftLoaded(true))
   }, [user?.participantId])
 
-  const set = (key, value) => setAnswers((current) => ({ ...current, [key]: value }))
+  const set = (key, value) => {
+    setInvalidTransitionFields((current) => {
+      const remaining = current.filter((field) => field !== key)
+      if (current.length && !remaining.length) setValidationError('')
+      return remaining
+    })
+    setAnswers((current) => ({ ...current, [key]: value }))
+  }
   const completed = shortRequiredKeys.filter((key) => key.endsWith('_duration') ? validMonthYear(answers[key]) : validShort(answers[key])).length + reflectionKeys.filter((key) => validReflection(answers[key])).length
   const complete = completed === allRequiredKeys.length
 
@@ -127,7 +138,27 @@ export default function RoleInterview() {
   }, [answers, canEdit, draftLoaded, editing, status, user?.participantId])
 
   async function save(submit) {
+    if (submit) {
+      const incompleteOptionalTransition = [2, 3].find((number) => {
+        const values = transitionFields.map(([key]) => answers[`transition${number}_${key}`])
+        const started = values.some((value) => String(value || '').trim())
+        return started && (values.slice(0, 3).some((value) => !validShort(value)) || !validMonthYear(values[3]))
+      })
+      if (incompleteOptionalTransition) {
+        const displayNumber = 4 - incompleteOptionalTransition
+        const missingKeys = transitionFields
+          .filter(([key]) => key === 'duration' ? !validMonthYear(answers[`transition${incompleteOptionalTransition}_${key}`]) : !validShort(answers[`transition${incompleteOptionalTransition}_${key}`]))
+          .map(([key]) => `transition${incompleteOptionalTransition}_${key}`)
+        const missingLabels = transitionFields.filter(([key]) => missingKeys.includes(`transition${incompleteOptionalTransition}_${key}`)).map(([, label]) => label)
+        setInvalidTransitionFields(missingKeys)
+        setValidationError(`Transition ${displayNumber} is incomplete. Missing: ${missingLabels.join(', ')}. Complete the marked fields, or clear the entire transition before submitting.`)
+        window.requestAnimationFrame(() => transitionsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }))
+        return
+      }
+    }
     setSaving(true)
+    setValidationError('')
+    setInvalidTransitionFields([])
     setMessage('')
     try {
       const { data } = await api.saveParticipantWork(user.participantId, 'role-interview', answers, submit)
@@ -173,21 +204,21 @@ export default function RoleInterview() {
         <span className="ml-1">{canEdit ? `— ${cutoff ? new Date(cutoff).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'the deadline configured for your cohort'}. You may submit now and return to edit before this deadline.` : '— this form is now read-only.'}</span>
       </div>
       {message && status !== 'submitted' && <div className="mb-4 rounded-lg border bg-white px-4 py-3 text-sm">{message}</div>}
-      {status === 'submitted' && <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3"><p className="text-sm font-semibold text-emerald-800">Role Interview submitted</p><p className="mt-0.5 text-xs text-emerald-700">{canEdit ? `Editable until ${cutoff ? new Date(cutoff).toLocaleDateString('en-GB') : 'the cohort cutoff'}.` : 'The cutoff has passed and this submission is now locked.'}</p></div>}
+      {status === 'submitted' && <div className="mb-4"><ParticipantSubmissionSuccess stepName="Role Interview" nextTo="/participant/360-nominees" nextLabel="360 Nominees" detail={canEdit ? `Editable until ${cutoff ? new Date(cutoff).toLocaleDateString('en-GB') : 'the cohort cutoff'}.` : 'The cutoff has passed and this submission is now locked.'} /></div>}
       <section className="mb-5 rounded-xl border bg-slate-50 p-5">
         <h2 className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500">Participant details</h2>
         <div className="grid gap-3 sm:grid-cols-2">{profile.map(([label, value]) => <div key={label}><span className="text-xs text-slate-400">{label}</span><p className="text-sm font-semibold">{value || '—'}</p></div>)}</div>
       </section>
       <RoleInterviewInstructions />
       <fieldset ref={firstQuestionRef} disabled={!canEdit || (status === 'submitted' && !editing)} className="scroll-mt-6 space-y-5">
-        <section className="rounded-xl border bg-white p-5">
+        <section ref={transitionsRef} className="scroll-mt-24 rounded-xl border bg-white p-5">
           <h2 className="mb-1 font-semibold">Last 3 Career Transitions</h2>
           <p className="mb-4 text-xs leading-5 text-slate-500">Please fill in order of recency. Your most recent career transition should be filled first.</p>
           {transitions.map(({ n, fields }) => { const required = n === 1; const displayNumber = 4 - n; return <div key={n} className="mb-3"><p className="mb-2 text-xs font-bold uppercase tracking-wide text-[#1e5fba]">Transition {displayNumber}{required ? <span className="text-red-500"> *</span> : <span className="ml-1 font-normal normal-case text-slate-400">(Optional)</span>}</p><div className="grid gap-3 rounded-lg bg-slate-50 p-3 sm:grid-cols-4">{fields.map(([key, label]) => {
             const answerKey = `transition${n}_${key}`
             return key === 'duration'
-              ? <MonthYearSelect key={key} required={required} value={answers[answerKey]} onChange={(value) => set(answerKey, value)} />
-              : <input required={required} key={key} value={answers[answerKey] || ''} onChange={(event) => set(answerKey, event.target.value)} placeholder={`${label}${required ? ' *' : ''}`} className="rounded-lg border px-3 py-2 text-sm" />
+              ? <MonthYearSelect key={key} required={required} invalid={invalidTransitionFields.includes(answerKey)} value={answers[answerKey]} onChange={(value) => set(answerKey, value)} />
+              : <div key={key}><input required={required} aria-invalid={invalidTransitionFields.includes(answerKey)} value={answers[answerKey] || ''} onChange={(event) => set(answerKey, event.target.value)} placeholder={`${label}${required ? ' *' : ''}`} className={`w-full rounded-lg border px-3 py-2 text-sm ${invalidTransitionFields.includes(answerKey) ? 'border-red-500 ring-2 ring-red-100' : ''}`} />{invalidTransitionFields.includes(answerKey) && <p className="mt-1 text-[10px] font-medium text-red-600">{label} is required.</p>}</div>
           })}</div></div>})}
         </section>
         <section className="rounded-xl border bg-white p-5">
@@ -204,6 +235,7 @@ export default function RoleInterview() {
       </fieldset>
       <div className="mt-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-900"><strong>Please review your responses before submitting.</strong> You may edit your submission until the cohort cutoff. Timelines are sacrosanct and will not be extended.</div>
       <div className="sticky bottom-0 mt-5 flex justify-end gap-3 border-t bg-[#f4f7fb]/95 py-4">{status !== 'submitted' && <button disabled={saving || !canEdit} onClick={() => save(false)} className="rounded-lg border bg-white px-4 py-2 text-sm font-semibold disabled:opacity-40">Save Draft</button>}{status === 'submitted' && !editing && canEdit && <button type="button" onClick={startEditing} className="rounded-lg bg-[#1e4d8c] px-5 py-2 text-sm font-semibold text-white hover:bg-[#153d70]">Edit Submission</button>}{status === 'submitted' && !editing && !canEdit && <button disabled className="rounded-lg border border-emerald-200 bg-emerald-100 px-5 py-2 text-sm font-semibold text-emerald-700">Submitted</button>}{editing && <button disabled={saving} onClick={() => { setAnswers(submittedSnapshot.current); setEditing(false) }} className="rounded-lg border bg-white px-4 py-2 text-sm font-semibold">Cancel</button>}{(status !== 'submitted' || editing) && <button disabled={saving || !canEdit || !complete} onClick={() => save(true)} className="rounded-lg bg-[#1e4d8c] px-5 py-2 text-sm font-semibold text-white disabled:opacity-40">{editing ? 'Save Changes' : 'Submit'}</button>}</div>
+      {validationError && <div role="alert" className="fixed bottom-20 left-4 right-4 z-50 flex items-start justify-between gap-4 rounded-xl border border-red-300 bg-red-600 px-5 py-4 text-sm font-semibold text-white shadow-2xl md:left-64"><span>{validationError}</span><button type="button" onClick={() => setValidationError('')} className="shrink-0 rounded p-0.5 text-red-100 hover:bg-red-700 hover:text-white" aria-label="Dismiss validation error">×</button></div>}
     </div>
   )
 }

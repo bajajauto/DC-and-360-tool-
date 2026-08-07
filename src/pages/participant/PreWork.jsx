@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../../lib/api'
+import ParticipantSubmissionSuccess from '../../components/ParticipantSubmissionSuccess'
 import { useUser } from '../../context/UserContext'
 
 const questions = [
@@ -143,7 +144,7 @@ export default function PreWork() {
         <span className="ml-1">{canEdit ? `— ${cutoff ? new Date(cutoff).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'the deadline configured for your cohort'}. You may submit now and return to edit before this deadline.` : '— this form is now read-only.'}</span>
       </div>
       {message && status !== 'submitted' && <div className="mb-4 rounded-lg border bg-white px-4 py-3 text-sm">{message}</div>}
-      {status === 'submitted' && <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3"><p className="text-sm font-semibold text-emerald-800">Self Reflection submitted</p><p className="mt-0.5 text-xs text-emerald-700">{canEdit ? `Editable until ${cutoff ? new Date(cutoff).toLocaleDateString('en-GB') : 'the cohort cutoff'}.` : 'The cutoff has passed and this submission is now locked.'}</p></div>}
+      {status === 'submitted' && <div className="mb-4"><ParticipantSubmissionSuccess stepName="Self Reflection" nextTo="/participant/role-interview" nextLabel="Role Interview" detail={canEdit ? `Editable until ${cutoff ? new Date(cutoff).toLocaleDateString('en-GB') : 'the cohort cutoff'}.` : 'The cutoff has passed and this submission is now locked.'} /></div>}
       <PreWorkInstructions />
       <div ref={firstQuestionRef} className="scroll-mt-6 space-y-4">
         {questions.map((question, index) => {

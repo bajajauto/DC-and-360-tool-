@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../../lib/api'
 import { useUser } from '../../context/UserContext'
+import ParticipantSubmissionSuccess from '../../components/ParticipantSubmissionSuccess'
 
 const guidelines = [
   'Recent professional photograph',
@@ -88,17 +89,7 @@ export default function Photograph() {
       </div>
 
       {loading ? null : submitted ? (
-        <div className="bg-green-50 border border-green-200 rounded-xl p-8 text-center max-w-xl">
-          <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
-            <svg className="w-6 h-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-            </svg>
-          </div>
-          <h3 className="text-sm font-semibold text-green-800 mb-1">Photograph submitted</h3>
-          <p className="text-xs text-green-600">Your photo is locked and available to assessors.</p>
-          {preview && <img src={preview} alt="Submitted" className="w-28 h-28 rounded-full object-cover border-4 border-green-200 mx-auto mt-4" />}
-          <Link to="/participant/dashboard" className="mt-4 inline-block text-xs text-[#1e4d8c] font-medium hover:underline">← Back to Dashboard</Link>
-        </div>
+        <div className="max-w-xl"><ParticipantSubmissionSuccess stepName="photograph" nextTo="/participant/pre-work" nextLabel="Self Reflection" detail="Your photo is locked and available to assessors.">{preview && <img src={preview} alt="Submitted" className="mx-auto mt-4 h-28 w-28 rounded-full border-4 border-emerald-200 object-cover" />}</ParticipantSubmissionSuccess></div>
       ) : !canEdit ? (
         <div className="max-w-xl rounded-xl border border-amber-200 bg-amber-50 p-8 text-center">
           <h3 className="mb-1 text-sm font-semibold text-amber-800">Upload window closed</h3>

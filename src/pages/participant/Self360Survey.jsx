@@ -17,5 +17,5 @@ export default function Self360Survey() {
 
   if (error) return <div className="p-6"><div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">{error}</div></div>
   if (!taskId) return <div className="p-6 text-sm text-slate-500">Preparing your self 360 survey...</div>
-  return <FeedbackForm taskIdOverride={taskId} returnTo="/participant/dashboard" />
+  return <FeedbackForm taskIdOverride={taskId} returnTo="/participant/dashboard" participantNextTo="/participant/360-status" />
 }
