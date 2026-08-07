@@ -543,7 +543,7 @@ export default function Nominees360() {
                 >
                   {isChecking ? 'Checking…' : 'Add'}
                 </button>
-                {RESTRICTED_RELATIONSHIPS.has(relationship) && <label className="flex items-center gap-2 px-1 text-xs text-slate-600"><input type="checkbox" checked={draft.isExternal} onChange={(event) => toggleExternalDraft(relationship, index, event.target.checked)} className="accent-[#1e4d8c]" />External stakeholder</label>}
+                {RESTRICTED_RELATIONSHIPS.has(relationship) && <label title={draft.directorySelected ? 'Employees selected from the directory are internal respondents.' : undefined} className={`flex items-center gap-2 px-1 text-xs ${draft.directorySelected ? 'cursor-not-allowed text-slate-400' : 'text-slate-600'}`}><input type="checkbox" checked={draft.isExternal} disabled={draft.directorySelected} onChange={(event) => toggleExternalDraft(relationship, index, event.target.checked)} className="accent-[#1e4d8c] disabled:cursor-not-allowed" />External stakeholder</label>}
               </div>
             </div>
             {duplicateEmail && <p className="mt-2 text-xs font-medium text-red-600">This email address is already in the nominee list.</p>}

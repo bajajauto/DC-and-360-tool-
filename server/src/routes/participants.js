@@ -77,6 +77,13 @@ async function assertNomineePositionEligibility(nominee, db = prisma) {
   if (BLOCKED_SELF_SELECTION_EMPLOYEE_IDS.has(employeeId) || BLOCKED_SELF_SELECTION_EMAILS.has(normalizeEmail(nominee.email))) {
     throw httpError(400, BLOCKED_SELF_SELECTION_MESSAGE)
   }
+  if (nominee.isExternal) {
+    const internalEntry = await db.employeeDirectoryEntry.findFirst({
+      where: { email: normalizeEmail(nominee.email) },
+    })
+    if (internalEntry) throw httpError(400, 'Employees listed in the employee directory cannot be marked as external stakeholders')
+    return null
+  }
   const directoryEntry = await findDirectoryEntry(nominee, db)
   if (directoryEntry && (BLOCKED_SELF_SELECTION_EMPLOYEE_IDS.has(String(directoryEntry.employeeId || '').trim())
     || BLOCKED_SELF_SELECTION_EMAILS.has(normalizeEmail(directoryEntry.email)))) {
