@@ -18,12 +18,11 @@ import Self360Survey from './pages/participant/Self360Survey'
 
 // Respondent
 import RespondentLayout from './layouts/RespondentLayout'
-import RespondentDashboard from './pages/respondent/Dashboard'
 import FeedbackForm from './pages/respondent/FeedbackForm'
 
 // Talent Development admin
 import TDLayout from './layouts/TDLayout'
-import Cohorts from './pages/td/Cohorts'
+import Cohorts, { EmployeeDirectoryPage } from './pages/td/Cohorts'
 import ParticipantDetail from './pages/td/ParticipantDetail'
 import ReportPreview from './pages/td/ReportPreview'
 import TDReports from './pages/td/TDReports'
@@ -80,7 +79,7 @@ export default function App() {
 
         <Route path="/respondent" element={<RespondentLayout />}>
           <Route index element={<Navigate to="/respondent/dashboard" replace />} />
-          <Route path="dashboard" element={<RespondentDashboard />} />
+          <Route path="dashboard" element={<Navigate to="/" replace />} />
           <Route path="feedback/:taskId" element={<FeedbackForm />} />
         </Route>
 
@@ -96,6 +95,7 @@ export default function App() {
           <Route path="assessor-analysis" element={<AssessorAnalysis />} />
           <Route path="outbox" element={<EmailOutbox />} />
           <Route path="templates" element={<NotificationTemplates />} />
+          <Route path="employee-directory" element={<EmployeeDirectoryPage />} />
           <Route path="settings" element={<Placeholder title="Programme setup" />} />
         </Route>
 

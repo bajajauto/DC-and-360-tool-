@@ -3,7 +3,9 @@ import { z } from 'zod'
 import { prisma } from '../db.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
 import { httpError } from '../utils/httpError.js'
-import { ensureNotificationTemplates, renderTemplate, sendEmail } from '../notifications/service.js'
+import { createQueuedEmail, ensureNotificationTemplates, renderTemplate, resolveCcRecipients, sendEmail } from '../notifications/service.js'
+import { createBuhrMagicLink, createParticipantMagicLink } from '../utils/magicLinks.js'
+import { generatePassword, hashPassword } from '../utils/passwords.js'
 
 export const notificationsRouter = Router()
 
@@ -17,6 +19,18 @@ const bulkSendSchema = z.object({
     sourceType: z.enum(['user', 'magicLink', 'masterContact', 'manual']).default('manual'),
     sourceId: z.string().trim().optional().nullable(),
   })).min(1).max(500),
+})
+
+const automationSettingsSchema = z.object({
+  templates: z.array(z.object({
+    templateId: z.string().trim().min(1),
+    automatic: z.boolean(),
+  })).min(1).max(100),
+})
+
+const ccPreviewSchema = z.object({
+  templateId: z.string().trim().min(1),
+  recipients: bulkSendSchema.shape.recipients,
 })
 
 const MAGIC_LINK_TEMPLATES = new Set(['resp-invite', 'resp-reminder', 'resp-recurring-reminder'])
@@ -66,20 +80,28 @@ function buildParticipantContext(participant, recipientName) {
     .filter((nominee) => nominee.status !== 'RESPONDED')
     .map((nominee) => nominee.name)
     .join(', ')
+  const pendingItems = [
+    participant?.roleInterview?.status !== 'submitted' && ['Role Interview Form', cohort?.roleInterviewDeadline],
+    !participant?.photoUrl && ['Photograph', cohort?.photoDeadline],
+    participant?.preWork?.status !== 'submitted' && ['Self Reflection Form', cohort?.preWorkDeadline],
+  ].filter(Boolean)
 
   return {
     'Recipient Name': recipientName || participantUser?.name || '',
     'Participant Name': participantUser?.name || '',
     'Participant Email': participantUser?.email || '',
-    'Participant Password': process.env.MOCK_USER_PASSWORD || 'Welcome@123',
+    'Participant Password': '',
     'Login Link': process.env.APP_URL || 'http://localhost:5173',
+    'App Link': process.env.APP_URL || process.env.CLIENT_ORIGIN || 'http://localhost:5173',
     'BUHR Name': recipientName || '',
     Cohort: cohort?.name || '',
     'Financial Year': financialYear(cohort?.eventStart),
     'DC Dates': cohort?.eventStart && cohort?.eventEnd ? `${dateLabel(cohort.eventStart)} - ${dateLabel(cohort.eventEnd)}` : dateLabel(cohort?.eventStart),
     'Nomination Deadline': dateLabel(cohort?.nominationDeadline),
     'Prework Deadline': dateLabel(cohort?.preWorkDeadline),
-    'Pending Items': 'Role Interview Form, Photograph, Pre-work Form',
+    'Pending Items': pendingItems.length
+      ? pendingItems.map(([label, deadline]) => `- ${label}${deadline ? ` (due ${dateLabel(deadline)} EOD)` : ''}`).join('\n')
+      : 'No pending items',
     '360 Cutoff': dateLabel(cohort?.threeSixtyCutoff),
     'Days Remaining': daysRemaining(cohort?.threeSixtyCutoff),
     'Respondent Count': String(tasks.length),
@@ -105,6 +127,37 @@ function buildParticipantContext(participant, recipientName) {
   }
 }
 
+async function buildBuhrCredentialContext(recipient) {
+  const buhrEmail = recipient.email.toLowerCase()
+  const participants = await prisma.participant.findMany({
+    include: { user: true, cohort: true },
+    orderBy: [{ cohort: { createdAt: 'desc' } }, { user: { name: 'asc' } }],
+  })
+  const mappedParticipants = participants.filter((participant) => {
+    const masterData = participant.masterData && typeof participant.masterData === 'object' ? participant.masterData : {}
+    return String(masterData.buhrEmail || '').trim().toLowerCase() === buhrEmail
+  })
+  if (!mappedParticipants.length) {
+    throw httpError(400, `No participants are mapped to BUHR ${recipient.email}`)
+  }
+
+  const latestCohort = mappedParticipants[0].cohort
+  const cohortParticipants = mappedParticipants.filter((participant) => participant.cohortId === latestCohort.id)
+  const buhrPassword = process.env.MOCK_USER_PASSWORD || 'Welcome@123'
+  return {
+    ...recipient.context,
+    'BUHR Name': recipient.name || recipient.email,
+    'BUHR Email': recipient.email,
+    'BUHR Password': buhrPassword,
+    Cohort: latestCohort.name,
+    'Login Link': process.env.APP_URL || process.env.CLIENT_ORIGIN || 'http://localhost:5173',
+    'App Link': process.env.APP_URL || process.env.CLIENT_ORIGIN || 'http://localhost:5173',
+    'Participant Credentials': cohortParticipants
+      .map((participant) => `${participant.user.name} | ${participant.user.employeeId || '-'} | ${participant.user.email} | Sent directly to participant`)
+      .join('\n'),
+  }
+}
+
 async function resolveRecipient(recipient) {
   if (recipient.sourceType === 'magicLink') {
     if (!recipient.sourceId) throw httpError(400, `Missing magic-link source for ${recipient.email}`)
@@ -124,6 +177,9 @@ async function resolveRecipient(recipient) {
         'Days Remaining': metadataContext(sourceEmail)['Days Remaining'] || '',
       },
       magicLinkId: magicLink.id,
+      entity: sourceEmail.entity,
+      entityId: sourceEmail.entityId,
+      metadata: sourceEmail.metadata,
     }
   }
 
@@ -148,6 +204,9 @@ async function resolveRecipient(recipient) {
       name: user.name,
       context: buildParticipantContext(user.participant, user.name),
       magicLinkId: null,
+      entity: user.participant ? 'Participant' : null,
+      entityId: user.participant?.id || null,
+      metadata: user.participant ? { participantId: user.participant.id } : {},
     }
   }
 
@@ -175,10 +234,13 @@ async function resolveRecipient(recipient) {
       name,
       context: buildParticipantContext(participant, name),
       magicLinkId: null,
+      entity: 'Participant',
+      entityId: participant.id,
+      metadata: { participantId: participant.id },
     }
   }
 
-  return { email: recipient.email.toLowerCase(), name: recipient.name || null, context: {}, magicLinkId: null }
+  return { email: recipient.email.toLowerCase(), name: recipient.name || null, context: {}, magicLinkId: null, entity: null, entityId: null, metadata: {} }
 }
 
 function toTemplateDto(template) {
@@ -212,6 +274,7 @@ function toEmailDto(email) {
     entity: email.entity,
     entityId: email.entityId,
     metadata: email.metadata,
+    cc: Array.isArray(email.metadata?.cc) ? email.metadata.cc : [],
     queuedAt: email.queuedAt.toISOString(),
     sentAt: email.sentAt?.toISOString() || null,
   }
@@ -227,6 +290,26 @@ notificationsRouter.get('/templates', asyncHandler(async (req, res) => {
     ],
   })
 
+  res.json({ data: templates.map(toTemplateDto) })
+}))
+
+notificationsRouter.put('/templates/automation', asyncHandler(async (req, res) => {
+  const payload = automationSettingsSchema.parse(req.body)
+  const templateIds = [...new Set(payload.templates.map((template) => template.templateId))]
+  const existing = await prisma.notificationTemplate.findMany({
+    where: { templateId: { in: templateIds } },
+    select: { templateId: true },
+  })
+  if (existing.length !== templateIds.length) throw httpError(400, 'One or more notification templates do not exist')
+
+  await prisma.$transaction(payload.templates.map((template) => prisma.notificationTemplate.update({
+    where: { templateId: template.templateId },
+    data: { active: template.automatic },
+  })))
+
+  const templates = await prisma.notificationTemplate.findMany({
+    orderBy: [{ phase: 'asc' }, { trigger: 'asc' }],
+  })
   res.json({ data: templates.map(toTemplateDto) })
 }))
 
@@ -333,6 +416,28 @@ notificationsRouter.get('/recipients', asyncHandler(async (req, res) => {
   })
 }))
 
+notificationsRouter.post('/cc-preview', asyncHandler(async (req, res) => {
+  const payload = ccPreviewSchema.parse(req.body)
+  const template = await prisma.notificationTemplate.findUnique({ where: { templateId: payload.templateId } })
+  if (!template) throw httpError(404, 'Notification template not found')
+
+  const uniqueRecipients = [...new Map(payload.recipients.map((recipient) => [`${recipient.sourceType}:${recipient.sourceId || recipient.email.toLowerCase()}`, recipient])).values()]
+  const rows = []
+  for (const recipient of uniqueRecipients) {
+    const resolved = await resolveRecipient(recipient)
+    const cc = await resolveCcRecipients({
+      templateId: template.templateId,
+      toEmail: resolved.email,
+      entity: resolved.entity,
+      entityId: resolved.entityId,
+      metadata: resolved.metadata,
+    })
+    rows.push({ toEmail: resolved.email, toName: resolved.name, cc })
+  }
+
+  res.json({ data: rows })
+}))
+
 notificationsRouter.post('/send', asyncHandler(async (req, res) => {
   const payload = bulkSendSchema.parse(req.body)
   const template = await prisma.notificationTemplate.findUnique({ where: { templateId: payload.templateId } })
@@ -340,7 +445,41 @@ notificationsRouter.post('/send', asyncHandler(async (req, res) => {
 
   const uniqueRecipients = [...new Map(payload.recipients.map((recipient) => [`${recipient.sourceType}:${recipient.sourceId || recipient.email.toLowerCase()}`, recipient])).values()]
   const resolvedRecipients = []
-  for (const recipient of uniqueRecipients) resolvedRecipients.push(await resolveRecipient(recipient))
+  for (const recipient of uniqueRecipients) {
+    resolvedRecipients.push({ ...(await resolveRecipient(recipient)), sourceType: recipient.sourceType })
+  }
+
+  if (template.templateId === 'welcome') {
+    for (const recipient of resolvedRecipients) {
+      if (recipient.sourceType !== 'user' || recipient.entity !== 'Participant' || !recipient.entityId) continue
+      const participant = await prisma.participant.findUnique({ where: { id: recipient.entityId }, include: { user: true } })
+      if (!participant) throw httpError(404, `Participant account not found for ${recipient.email}`)
+      const participantPassword = generatePassword()
+      await prisma.user.update({
+        where: { id: participant.userId },
+        data: { passwordHash: await hashPassword(participantPassword) },
+      })
+      const participantLink = await createParticipantMagicLink(prisma, {
+        userId: participant.userId,
+        email: participant.user.email,
+        participantId: participant.id,
+      })
+      recipient.context = { ...recipient.context, 'Participant Password': participantPassword, 'Login Link': participantLink.inviteUrl }
+      recipient.magicLinkId = participantLink.magicLink.id
+    }
+  }
+
+  if (template.templateId === 'buhr-participant-credentials') {
+    for (const recipient of resolvedRecipients) {
+      if (recipient.sourceType !== 'user') continue
+      recipient.context = await buildBuhrCredentialContext(recipient)
+      const buhrUser = await prisma.user.findUnique({ where: { email: recipient.email } })
+      if (!buhrUser || !buhrUser.roles.includes('BUHR')) throw httpError(400, `BUHR account not found for ${recipient.email}`)
+      const buhrLink = await createBuhrMagicLink(prisma, { userId: buhrUser.id, email: buhrUser.email })
+      recipient.context = { ...recipient.context, 'Login Link': buhrLink.inviteUrl }
+      recipient.magicLinkId = buhrLink.magicLink.id
+    }
+  }
 
   const personalized = resolvedRecipients.map((recipient) => {
     const personalizedSubject = renderTemplate(payload.subject, recipient.context)
@@ -352,20 +491,20 @@ notificationsRouter.post('/send', asyncHandler(async (req, res) => {
 
   const results = []
   for (const recipient of personalized) {
-    const deliveryRecord = await prisma.emailOutbox.create({
-      data: {
-        templateId: template.templateId,
-        toEmail: recipient.email,
-        toName: recipient.name,
-        recipientRole: template.recipient,
-        subject: recipient.subject,
-        body: recipient.body,
-        magicLinkId: recipient.magicLinkId,
-        actorId: req.auth.userId,
-        metadata: { source: 'template-compose', templateTrigger: template.trigger, context: recipient.context },
-      },
+    const deliveryRecord = await createQueuedEmail({
+      templateId: template.templateId,
+      toEmail: recipient.email,
+      toName: recipient.name,
+      subject: recipient.subject,
+      body: recipient.body,
+      context: recipient.context,
+      magicLinkId: recipient.magicLinkId,
+      entity: recipient.entity,
+      entityId: recipient.entityId,
+      actorId: req.auth.userId,
+      metadata: { ...recipient.metadata, source: 'template-compose', templateTrigger: template.trigger },
     })
-    const sent = await sendEmail(deliveryRecord.id)
+    const sent = await sendEmail(deliveryRecord.id, { force: true })
     results.push(toEmailDto(sent))
   }
 

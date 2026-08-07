@@ -15,42 +15,66 @@ export const notificationTemplates = [
 
 Congratulations on being nominated for the {{Cohort}} Development Centre (DC) for {{Financial Year}}.
 
-This is a carefully chosen step, and your nomination reflects the confidence your leaders have in your potential. Only a select group of individuals across the organization are nominated for this process, and you are among them.
-
-We truly believe in your potential, and this is a step forward in enabling you to grow.
-
-What is a Development Centre?
-
-The Development Centre is a structured and rigorous process designed to help you gain deeper awareness of your strengths, development areas, and leadership potential.
-
-As part of the process, you will participate in a series of simulations and exercises that mirror workplace situations and leadership challenges. To ensure objectivity and quality, trained external assessors will observe participants across these exercises and provide inputs based on demonstrated behaviours.
-
-In addition to the Development Centre exercises, the process will also include a 360 Degree Feedback assessment to build a holistic understanding of your strengths and development opportunities.
-
-The intent of the DC is developmental, not evaluative. The focus is on helping you build self-awareness and providing you with meaningful insights that can support your growth journey.
-
-We see this as an investment in your future with us. While the process will require commitment and effort from your side, the insights and support you'll receive through it will benefit you immediately in your current role and in the long term as you prepare for larger responsibilities.
+This is a carefully chosen step, and your nomination reflects the confidence your leaders have in you. Only a select group of employees across the organization are nominated for this process, and we are delighted to have you as part of this journey.
 
 Getting Started
 
-Your account on the Bajaj Auto 360/DC Tool is now active. Please save this email for future reference.
+Your account on the Bajaj Auto 360/DC Tool is now active. We recommend flagging and saving this email, as it contains your login credentials, which you will need throughout your DC journey.
 
-Login Details
-Login Link: {{Login Link}}
-Email ID: {{Participant Email}}
+Your Login Credentials
+You can access the platform using either of the following options:
+
+Option 1: Direct Login
+Click here: {{Login Link}}
+
+Option 2: Login with Your Credentials
+Website: {{App Link}}
+Login ID: {{Participant Email}}
 Password: {{Participant Password}}
 
 Immediate Next Steps
 1. Upload Photograph
 2. Complete the Role Interview Form
 3. Submit your 360 Degree Feedback nominations
-4. Complete the Pre-work Form
+4. Complete the Self Reflection Form
 
 Deadline: {{Prework Deadline}} EOD
 
 ${support}
 
 We wish you the very best for this development journey.
+
+${signature}`,
+  },
+  {
+    templateId: 'buhr-participant-credentials',
+    phase: 'Setup',
+    trigger: 'Participant accounts created for a cohort; sent once per BUHR after their mapped participants are set up',
+    recipient: 'BUHR',
+    subject: '{{Cohort}} | Login credentials of your mapped participants | Confidential',
+    body: `Dear {{BUHR Name}},
+
+As part of the {{Cohort}} Development Centre, accounts have been created on the Bajaj Auto 360/DC Tool for the participants mapped to you. Their login credentials are listed below for your reference.
+
+Participants mapped to you:
+
+Participant Name | Ticket ID | Login Email | Password
+{{Participant Credentials}}
+
+Please note: These credentials are shared for your reference and oversight only. Each participant is responsible for completing their own pre-work, Role Interview and self-assessment. Please do not use these credentials to log in on any participant's behalf. Doing so would compromise the confidentiality and integrity of their assessment.
+
+Your Login Credentials
+You can access the platform using either of the following options:
+
+Option 1: Direct Login
+Click here: {{Login Link}}
+
+Option 2: Login with Your Credentials
+Website: {{App Link}}
+Login ID: {{BUHR Email}}
+Password: {{BUHR Password}}
+
+This email contains confidential information. Please store it securely and do not forward it.
 
 ${signature}`,
   },
@@ -176,16 +200,16 @@ ${signature}`,
     phase: 'Documents',
     trigger: 'Automatic at T-3 and T-1 before each document deadline, if pending',
     recipient: 'Participant',
-    subject: 'Reminder | Complete your DC pre-work by {{Prework Deadline}}',
+    subject: 'Reminder | Complete your pending DC tasks',
     body: `Dear {{Participant Name}},
 
 As you prepare for the {{Cohort}} Development Centre scheduled for {{DC Dates}}, the following items are still pending on the Bajaj Auto 360/DC Tool:
 
 {{Pending Items}}
 
-Please complete these by {{Prework Deadline}} EOD.
+Please complete the pending items by their respective deadlines.
 
-The Role Interview Form, Photograph, and Pre-work Form are read by your assessors before the DC and help them understand your context. Please complete them with sincerity. The timelines are sacrosanct and will not be extended.
+The Role Interview Form, Photograph, and Self Reflection Form are read by your assessors before the DC and help them understand your context. Please complete them with sincerity. The timelines are sacrosanct and will not be extended.
 
 ${support}
 

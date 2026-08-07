@@ -17,7 +17,7 @@ function formatDeadline(cutoff) {
 }
 
 export default function Photograph() {
-  const { user } = useUser()
+  const { user, refreshParticipantData } = useUser()
   const [preview, setPreview] = useState(null)
   const [error, setError] = useState(null)
   const [submitted, setSubmitted] = useState(false)
@@ -62,6 +62,7 @@ export default function Photograph() {
     setError(null)
     try {
       await api.saveParticipantPhoto(user.participantId, preview)
+      await refreshParticipantData(user.participantId)
       setSubmitted(true)
     } catch (err) {
       setError(err.message)

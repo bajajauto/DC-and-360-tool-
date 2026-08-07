@@ -5,6 +5,7 @@ import Docxtemplater from 'docxtemplater'
 import PizZip from 'pizzip'
 import { SURVEY_SECTIONS, getBehaviourIds, getSurveySections } from '../../../src/data/surveyConfig.js'
 import { httpError } from '../utils/httpError.js'
+import { hasDeadlinePassed } from '../utils/deadlines.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -26,10 +27,7 @@ async function loadHtmlTemplate() {
 }
 
 function hasCutoffPassed(cutoff, now = new Date()) {
-  if (!cutoff) return false
-  const endOfCutoffDay = new Date(cutoff)
-  endOfCutoffDay.setUTCHours(23, 59, 59, 999)
-  return now > endOfCutoffDay
+  return hasDeadlinePassed(cutoff, now)
 }
 
 // self/rm/skip always show with >=1 respondent; others/dr/peer need >=2 (confidentiality, Rule 2)

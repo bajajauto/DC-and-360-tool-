@@ -5,8 +5,10 @@ import {
   Eye,
   FileText,
   Search,
+  Save,
   Send,
   Users,
+  X,
 } from 'lucide-react'
 import { exportCohortNomineeStatus, exportCohortProcessStatus } from '../../lib/trackingExport'
 import { api } from '../../lib/api'
@@ -77,7 +79,7 @@ const exportCards = [
     icon: FileText,
     title: 'Cohort Master Tracker',
     desc: 'One row per participant with status across every stage.',
-    cols: 'Ticket ID, Name, BU, Details, Nominations, Pre-Work, Photo, 360 %, OB Sheet, Reports',
+    cols: 'Ticket ID, Name, BU, Details, Nominations, Self Reflection, Photo, 360 Responses, OB Sheet, Reports',
     best: 'Weekly cohort health checks',
   },
   {
@@ -160,6 +162,14 @@ function outboxStatusTone(status) {
   return 'neutral'
 }
 
+function renderStoredEmail(value, metadata) {
+  const context = metadata?.context && typeof metadata.context === 'object' ? metadata.context : {}
+  return String(value || '').replace(/\{\{\s*([^}]+?)\s*\}\}/g, (placeholder, key) => {
+    const replacement = context[key.trim()]
+    return replacement === undefined || replacement === null || replacement === '' ? placeholder : String(replacement)
+  })
+}
+
 export function EmailOutbox() {
   const [outbox, setOutbox] = useState([])
   const [selected, setSelected] = useState(null)
@@ -173,13 +183,21 @@ export function EmailOutbox() {
       .then((result) => {
         const rows = result.data || []
         setOutbox(rows)
-        setSelected((current) => current || rows[0] || null)
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false))
   }
 
   useEffect(load, [])
+
+  useEffect(() => {
+    if (!selected) return undefined
+    function closeOnEscape(event) {
+      if (event.key === 'Escape') setSelected(null)
+    }
+    document.addEventListener('keydown', closeOnEscape)
+    return () => document.removeEventListener('keydown', closeOnEscape)
+  }, [selected])
 
   return (
     <Page
@@ -188,7 +206,7 @@ export function EmailOutbox() {
       subtitle="Every notification is sent immediately. Review successful and failed delivery attempts here."
     >
       {error && <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
-      <div className="grid gap-5 xl:grid-cols-[1fr_420px]">
+      <div>
         <Card>
           <CardHeader title="Delivery history" subtitle="Welcome emails, 360 invitations, reminders, and report-release notifications." />
           <div className="overflow-hidden rounded-xl border border-[#d5dce5]">
@@ -218,16 +236,29 @@ export function EmailOutbox() {
             </table>
           </div>
         </Card>
-        {selected && (
-          <Card>
-            <CardHeader title={selected.subject} subtitle={`To: ${selected.toName || selected.toEmail} <${selected.toEmail}>`} action={<Badge tone="info">{selected.recipientRole}</Badge>} />
-            <div className="whitespace-pre-wrap rounded-xl border border-[#d5dce5] bg-[#f8fbff] p-4 text-sm leading-6 text-slate-700">{selected.body}</div>
+      </div>
+      {selected && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4" role="presentation" onMouseDown={() => setSelected(null)}>
+          <section role="dialog" aria-modal="true" aria-labelledby="email-preview-title" className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-[#d5dce5] bg-white p-6 shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
+            <div className="flex items-start justify-between gap-4 border-b border-[#d5dce5] pb-4">
+              <div className="min-w-0">
+                <p className="text-xs font-bold uppercase tracking-wide text-[#1e5fba]">Email preview</p>
+                <h2 id="email-preview-title" className="mt-1 text-xl font-bold text-slate-900">{renderStoredEmail(selected.subject, selected.metadata)}</h2>
+                <p className="mt-2 text-xs text-slate-500">To: {selected.toName || selected.toEmail} &lt;{selected.toEmail}&gt;</p>
+                {selected.cc?.length > 0 && <p className="mt-1 text-xs text-slate-500">CC: {selected.cc.join(', ')}</p>}
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <Badge tone={outboxStatusTone(selected.status)}>{selected.status === 'not_sent' ? 'Not sent' : selected.status}</Badge>
+                <button type="button" onClick={() => setSelected(null)} aria-label="Close email preview" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800"><X size={18} /></button>
+              </div>
+            </div>
+            <div className="mt-5 whitespace-pre-wrap rounded-xl border border-[#d5dce5] bg-[#f8fbff] p-5 text-sm leading-6 text-slate-700">{renderStoredEmail(selected.body, selected.metadata)}</div>
             {selected.error && (
               <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">{selected.error}</div>
             )}
-          </Card>
-        )}
-      </div>
+          </section>
+        </div>
+      )}
     </Page>
   )
 }
@@ -250,6 +281,9 @@ function TemplateText({ text }) {
 
 export function NotificationTemplates() {
   const [templates, setTemplates] = useState([])
+  const [automationDraft, setAutomationDraft] = useState({})
+  const [savingSettings, setSavingSettings] = useState(false)
+  const [settingsNotice, setSettingsNotice] = useState('')
   const [selected, setSelected] = useState(null)
   const [recipients, setRecipients] = useState([])
   const [selectedRecipientIds, setSelectedRecipientIds] = useState([])
@@ -261,6 +295,8 @@ export function NotificationTemplates() {
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
   const [recipientsLoading, setRecipientsLoading] = useState(false)
+  const [ccPreview, setCcPreview] = useState([])
+  const [ccPreviewLoading, setCcPreviewLoading] = useState(false)
   const [notice, setNotice] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -270,6 +306,7 @@ export function NotificationTemplates() {
       .then((templateResult) => {
         const rows = templateResult.data || []
         setTemplates(rows)
+        setAutomationDraft(Object.fromEntries(rows.map((template) => [template.templateId, template.active])))
         setSelected(rows.find((template) => template.templateId === 'resp-invite') || rows[0] || null)
       })
       .catch((err) => setError(err.message))
@@ -306,6 +343,17 @@ export function NotificationTemplates() {
   }, [selected])
 
   const phases = [...new Set(templates.map((template) => template.phase))]
+  const settingsChanged = templates.some((template) => automationDraft[template.templateId] !== template.active)
+
+  useEffect(() => {
+    if (!settingsChanged) return undefined
+    const warnBeforeLeaving = (event) => {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', warnBeforeLeaving)
+    return () => window.removeEventListener('beforeunload', warnBeforeLeaving)
+  }, [settingsChanged])
   const visibleRecipients = recipients.filter((recipient) => {
     const haystack = `${recipient.name} ${recipient.email} ${recipient.employeeId || ''} ${recipient.roles.join(' ')} ${recipient.businessUnit || ''}`.toLowerCase()
     return haystack.includes(recipientSearch.trim().toLowerCase())
@@ -327,6 +375,31 @@ export function NotificationTemplates() {
     .filter((email) => !selectedEmails.has(email) && !pastedEmails.has(email))
     .map((email) => ({ email, name: null, sourceType: 'manual', sourceId: null }))
   const composedRecipients = [...selectedDirectoryRecipients, ...manualRecipients, ...pastedRecipients]
+  const composedRecipientKey = composedRecipients
+    .map((recipient) => `${recipient.sourceType}:${recipient.sourceId || recipient.email}`)
+    .sort()
+    .join('|')
+  const ccAddresses = [...new Set(ccPreview.flatMap((row) => row.cc || []))]
+
+  useEffect(() => {
+    if (!selected || !composedRecipients.length) {
+      setCcPreview([])
+      setCcPreviewLoading(false)
+      return undefined
+    }
+    let cancelled = false
+    setCcPreviewLoading(true)
+    const timeout = window.setTimeout(() => {
+      api.previewNotificationCc(selected.templateId, composedRecipients)
+        .then((result) => { if (!cancelled) setCcPreview(result.data || []) })
+        .catch(() => { if (!cancelled) setCcPreview([]) })
+        .finally(() => { if (!cancelled) setCcPreviewLoading(false) })
+    }, 250)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timeout)
+    }
+  }, [selected, composedRecipientKey])
 
   const trimmedSearch = recipientSearch.trim().toLowerCase()
   const searchIsNewEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedSearch)
@@ -347,6 +420,32 @@ export function NotificationTemplates() {
   function removeManualEmail(email) {
     setSent(false)
     setManualEmails((current) => current.filter((item) => item !== email))
+  }
+
+  function toggleAutomation(templateId) {
+    setSettingsNotice('')
+    setAutomationDraft((current) => ({ ...current, [templateId]: !current[templateId] }))
+  }
+
+  async function saveAutomationSettings() {
+    setError('')
+    setSettingsNotice('')
+    setSavingSettings(true)
+    try {
+      const result = await api.saveNotificationAutomation(templates.map((template) => ({
+        templateId: template.templateId,
+        automatic: Boolean(automationDraft[template.templateId]),
+      })))
+      const rows = result.data || []
+      setTemplates(rows)
+      setAutomationDraft(Object.fromEntries(rows.map((template) => [template.templateId, template.active])))
+      setSelected((current) => rows.find((template) => template.templateId === current?.templateId) || current)
+      setSettingsNotice('Email automation settings saved.')
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSavingSettings(false)
+    }
   }
 
   async function handleSend() {
@@ -374,9 +473,10 @@ export function NotificationTemplates() {
     <Page
       eyebrow="Talent Development / Communications"
       title="Email Centre"
-      subtitle="Choose an approved system email, select recipients, review the message, and send it immediately."
+      subtitle="Choose which emails run automatically, or keep them available for manual sending."
     >
       {error && <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+      {settingsNotice && <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{settingsNotice}</div>}
       {!loading && !templates.length && !error && <Card><p className="text-sm text-slate-500">No system emails configured yet.</p></Card>}
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_500px]">
         <div className="space-y-4">
@@ -385,13 +485,19 @@ export function NotificationTemplates() {
               <CardHeader title={phase} />
               <div className="overflow-hidden rounded-xl border border-[#d5dce5]">
                 <table className="w-full border-collapse bg-white text-left text-[13px]">
-                  <thead className="bg-[#ebf2fa]"><tr>{['Trigger', 'Recipient', 'Subject', ''].map((label) => <th key={label} className="border-b border-[#d5dce5] px-3 py-2.5 text-[11px] font-bold uppercase tracking-wide text-slate-600">{label}</th>)}</tr></thead>
+                  <thead className="bg-[#ebf2fa]"><tr>{['Trigger', 'Recipient', 'Subject', 'Delivery', ''].map((label) => <th key={label} className="border-b border-[#d5dce5] px-3 py-2.5 text-[11px] font-bold uppercase tracking-wide text-slate-600">{label}</th>)}</tr></thead>
                   <tbody>
                     {templates.filter((template) => template.phase === phase).map((template) => (
                       <tr key={template.id} className="hover:bg-[#f4f7fb]">
                         <td className="border-b border-[#d5dce5] px-3 py-3 font-semibold">{template.trigger}</td>
                         <td className="border-b border-[#d5dce5] px-3 py-3"><span className="rounded-full border border-[#d5dce5] bg-[#f1f5fa] px-3 py-1 text-xs text-slate-600">{template.recipient}</span></td>
                         <td className="border-b border-[#d5dce5] px-3 py-3 text-slate-600">{template.subject}</td>
+                        <td className="border-b border-[#d5dce5] px-3 py-3">
+                          <button type="button" role="switch" aria-checked={Boolean(automationDraft[template.templateId])} aria-label={`Set ${template.trigger} delivery to ${automationDraft[template.templateId] ? 'manual' : 'automatic'}`} onClick={() => toggleAutomation(template.templateId)} className="inline-flex min-w-[126px] items-center gap-3 whitespace-nowrap rounded-lg px-1 py-1 focus:outline-none focus:ring-2 focus:ring-[#9dbce5] focus:ring-offset-2">
+                            <span className={`relative inline-block h-6 w-11 shrink-0 rounded-full transition-colors ${automationDraft[template.templateId] ? 'bg-[#1e5fba]' : 'bg-slate-300'}`}><span className={`absolute left-1 top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${automationDraft[template.templateId] ? 'translate-x-5' : 'translate-x-0'}`} /></span>
+                            <span className={`min-w-[62px] text-left text-xs font-semibold ${automationDraft[template.templateId] ? 'text-[#1e5fba]' : 'text-slate-600'}`}>{automationDraft[template.templateId] ? 'Automatic' : 'Manual'}</span>
+                          </button>
+                        </td>
                         <td className="border-b border-[#d5dce5] px-3 py-3 text-right"><button onClick={() => setSelected(template)} className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-[#1e5fba] hover:bg-[#ebf2fa]"><Eye size={13} />Compose</button></td>
                       </tr>
                     ))}
@@ -443,7 +549,11 @@ export function NotificationTemplates() {
 
             <label className="mb-1 block text-xs font-semibold text-slate-700">Or paste email addresses in bulk</label>
             <textarea value={bulkEmails} onChange={(event) => { setBulkEmails(event.target.value); setSent(false) }} rows={3} placeholder="name@company.com, another@company.com" className="mb-3 w-full rounded-lg border border-[#c2ccda] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#d6e4f7]" />
-            <p className="mb-4 text-[11px] text-slate-500">Separate addresses with commas, semicolons, spaces, or new lines. {composedRecipients.length} unique recipient{composedRecipients.length === 1 ? '' : 's'} selected.</p>
+            <p className="mb-2 text-[11px] text-slate-500">Separate addresses with commas, semicolons, spaces, or new lines. {composedRecipients.length} unique recipient{composedRecipients.length === 1 ? '' : 's'} selected.</p>
+            <div className="mb-4 rounded-lg border border-[#d5dce5] bg-[#f8fbff] px-3 py-2 text-[11px]">
+              <p className="text-slate-600"><span className="font-bold text-slate-700">To:</span> {composedRecipients.length ? composedRecipients.map((recipient) => recipient.email).join(', ') : 'No recipients selected'}</p>
+              <p className="mt-1 text-slate-600"><span className="font-bold text-slate-700">CC:</span> {ccPreviewLoading ? 'Checking…' : ccAddresses.length ? ccAddresses.join(', ') : 'None'}</p>
+            </div>
 
             <label className="mb-1 block text-xs font-semibold text-slate-700">Subject</label>
             <input value={subject} onChange={(event) => { setSubject(event.target.value); setSent(false) }} className="mb-3 w-full rounded-lg border border-[#c2ccda] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#d6e4f7]" />
@@ -454,6 +564,15 @@ export function NotificationTemplates() {
           </Card>
         )}
       </div>
+      {settingsChanged && (
+        <div className="fixed bottom-5 left-1/2 z-50 flex w-[min(92vw,620px)] -translate-x-1/2 items-center justify-between gap-4 rounded-2xl border border-amber-300 bg-white px-5 py-4 shadow-[0_12px_40px_rgba(15,23,42,.22)]">
+          <div>
+            <p className="text-sm font-bold text-slate-800">You have unsaved email settings</p>
+            <p className="mt-0.5 text-xs text-slate-500">Save before leaving this page so the automation changes take effect.</p>
+          </div>
+          <button type="button" onClick={saveAutomationSettings} disabled={savingSettings} className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-[#1e5fba] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#0e3f87] disabled:opacity-50"><Save size={15} />{savingSettings ? 'Saving…' : 'Save Settings'}</button>
+        </div>
+      )}
     </Page>
   )
 }

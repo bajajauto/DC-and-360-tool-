@@ -25,7 +25,7 @@ export default function RespondentLayout() {
     return <Navigate to="/" replace />
   }
 
-  const isParticipantToo = user.roles.includes('participant')
+  const isParticipantToo = false
   const isFeedbackForm = pathname.startsWith('/respondent/feedback/')
 
   function handleSwitchToParticipant() {
@@ -151,14 +151,6 @@ export default function RespondentLayout() {
                   </button>
                 )
               })}
-              <div className="mx-3 my-4 border-t border-[#e2e8f0]" />
-              <p className="px-3 text-[9px] font-bold uppercase tracking-[0.12em] text-slate-400">Need to pause?</p>
-              <Link to="/respondent/dashboard" className="mt-1 flex items-center gap-2 rounded-lg px-3 py-2 text-xs leading-4 text-slate-600 hover:bg-slate-50 hover:text-[#1e5fba]">
-                <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                </svg>
-                Back to your feedback list
-              </Link>
             </>
           ) : navItems.map((item) => {
             const Icon = item.icon

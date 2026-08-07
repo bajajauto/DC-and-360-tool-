@@ -1,6 +1,104 @@
 import { prisma } from '../db.js'
 import { notificationTemplates } from './templates.js'
 
+const TEMPLATE_CC_ROLES = {
+  welcome: ['BUHR', 'LEARN'],
+  'buhr-participant-credentials': ['PALAK'],
+  'stage-deadline-reminder': ['BUHR', 'LEARN'],
+  'report-360-released': ['BUHR', 'LEARN', 'MANAGER'],
+  'report-dc-released': ['BUHR', 'LEARN', 'MANAGER'],
+  'respondent-thank-you': ['PARTICIPANT'],
+}
+
+function normalizeEmail(value) {
+  const email = String(value || '').trim().toLowerCase()
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : null
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;')
+}
+
+export function buildEmailHtml(body, context = {}) {
+  let html = escapeHtml(body)
+  const credentials = context['Participant Credentials']
+  if (typeof credentials === 'string' && credentials.trim()) {
+    const plainTable = `Participant Name | Ticket ID | Login Email | Password\n${credentials}`
+    const rows = credentials.split('\n').map((row) => row.split('|').map((cell) => cell.trim()))
+    const tableHtml = `<table style="width:100%;border-collapse:collapse;margin:12px 0;"><thead><tr>${['Participant Name', 'Ticket ID', 'Login Email', 'Password'].map((heading) => `<th style="border:1px solid #cbd5e1;background:#ebf2fa;padding:8px;text-align:left;">${heading}</th>`).join('')}</tr></thead><tbody>${rows.map((row) => `<tr>${row.map((cell) => `<td style="border:1px solid #cbd5e1;padding:8px;">${escapeHtml(cell)}</td>`).join('')}</tr>`).join('')}</tbody></table>`
+    html = html.replace(escapeHtml(plainTable), tableHtml)
+  }
+  const secureLinks = [
+    [context['Login Link'], 'Direct login'],
+    [context['App Link'], 'dc and 360 tool website link'],
+    [context['Magic Link'], 'Open feedback form'],
+  ].filter(([link]) => typeof link === 'string' && /^https?:\/\//i.test(link))
+
+  const protectedLinks = [...secureLinks]
+    .sort(([left], [right]) => right.length - left.length)
+    .map(([link, label], index) => ({ link, label, token: `__EMAIL_LINK_${index}__` }))
+
+  for (const { link, token } of protectedLinks) {
+    html = html.replaceAll(escapeHtml(link), token)
+  }
+  for (const { link, label, token } of protectedLinks) {
+    html = html.replaceAll(
+      token,
+      `<a href="${escapeHtml(link)}" style="color:#1e4d8c;font-weight:600;text-decoration:underline;">${escapeHtml(label)}</a>`,
+    )
+  }
+
+  return `<div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.6;color:#1a1f2e;">${html.replaceAll('\n', '<br>')}</div>`
+}
+
+async function resolveParticipantId({ entity, entityId, metadata = {} }, db) {
+  if (metadata?.participantId) return metadata.participantId
+  if (entity === 'Participant') return entityId
+  if (entity === 'ParticipantTask') return String(entityId || '').split(':')[0] || null
+  if (entity === 'FeedbackTask') {
+    const task = await db.feedbackTask.findUnique({ where: { id: entityId }, select: { participantId: true } })
+    return task?.participantId || null
+  }
+  if (entity === 'Report') {
+    const report = await db.report.findUnique({ where: { id: entityId }, select: { participantId: true } })
+    return report?.participantId || null
+  }
+  return null
+}
+
+export async function resolveCcRecipients({ templateId, toEmail, entity, entityId, metadata }, db = prisma) {
+  const roles = TEMPLATE_CC_ROLES[templateId] || []
+  if (!roles.length) return []
+  const participantId = await resolveParticipantId({ entity, entityId, metadata }, db)
+  if (!participantId) {
+    return roles.map((role) => ({
+      LEARN: process.env.NOTIFICATION_LEARN_EMAIL || 'learn@bajajauto.co.in',
+      PALAK: process.env.NOTIFICATION_PALAK_EMAIL || 'pshukla1@bajajauto.co.in',
+    })[role]).map(normalizeEmail).filter(Boolean)
+  }
+
+  const participant = await db.participant.findUnique({
+    where: { id: participantId },
+    include: { user: true },
+  })
+  if (!participant) return []
+  const masterData = participant.masterData && typeof participant.masterData === 'object' ? participant.masterData : {}
+  const addresses = roles.map((role) => ({
+    PARTICIPANT: participant.user?.email,
+    BUHR: masterData.buhrEmail,
+    MANAGER: masterData.reportingManagerEmail,
+    LEARN: process.env.NOTIFICATION_LEARN_EMAIL || 'learn@bajajauto.co.in',
+    PALAK: process.env.NOTIFICATION_PALAK_EMAIL || 'pshukla1@bajajauto.co.in',
+  })[role])
+  const normalizedTo = normalizeEmail(toEmail)
+  return [...new Set(addresses.map(normalizeEmail).filter((email) => email && email !== normalizedTo))]
+}
+
 export function renderTemplate(text, context = {}) {
   return text.replace(/\{\{([^}]+)\}\}/g, (match, key) => {
     const value = context[key.trim()]
@@ -18,7 +116,6 @@ export async function ensureNotificationTemplates(db = prisma) {
         recipient: template.recipient,
         subject: template.subject,
         body: template.body,
-        active: true,
       },
       create: template,
     })
@@ -118,8 +215,10 @@ async function deliverEmail(email, db = prisma) {
     const result = await transporter.sendMail({
       from: process.env.EMAIL_FROM || process.env.SMTP_USER,
       to: email.toName ? `${email.toName} <${email.toEmail}>` : email.toEmail,
+      cc: Array.isArray(email.metadata?.cc) && email.metadata.cc.length ? email.metadata.cc : undefined,
       subject: email.subject,
       text: email.body,
+      html: buildEmailHtml(email.body, email.metadata?.context),
     })
 
     return db.emailOutbox.update({
@@ -147,6 +246,7 @@ async function deliverEmail(email, db = prisma) {
 // transaction timeout once there are more than a couple of recipients); call
 // sendEmail() for each returned row's id after the transaction commits.
 export async function createQueuedEmail({
+  dedupeKey = null,
   templateId,
   toEmail,
   toName,
@@ -156,6 +256,8 @@ export async function createQueuedEmail({
   entityId = null,
   actorId = null,
   metadata = {},
+  subject = null,
+  body = null,
 }, db = prisma) {
   let template = await db.notificationTemplate.findUnique({ where: { templateId } })
 
@@ -165,33 +267,47 @@ export async function createQueuedEmail({
     template = await db.notificationTemplate.create({ data: defaultTemplate })
   }
 
-  return db.emailOutbox.create({
-    data: {
-      templateId,
-      toEmail,
-      toName,
-      recipientRole: template.recipient,
-      subject: renderTemplate(template.subject, context),
-      body: renderTemplate(template.body, context),
-      magicLinkId,
-      entity,
-      entityId,
-      actorId,
-      metadata: {
-        ...metadata,
-        context,
+  const cc = await resolveCcRecipients({ templateId, toEmail, entity, entityId, metadata }, db)
+  try {
+    return await db.emailOutbox.create({
+      data: {
+        dedupeKey,
+        templateId,
+        toEmail,
+        toName,
+        recipientRole: template.recipient,
+        subject: renderTemplate(subject || template.subject, context),
+        body: renderTemplate(body || template.body, context),
+        magicLinkId,
+        entity,
+        entityId,
+        actorId,
+        metadata: {
+          ...metadata,
+          context,
+          cc,
+        },
       },
-    },
-  })
+    })
+  } catch (error) {
+    // Scheduled jobs can run concurrently on more than one app instance.
+    // The unique key turns queueing into one atomic, database-enforced claim.
+    if (dedupeKey && error?.code === 'P2002') return null
+    throw error
+  }
 }
 
 export async function queueEmail(params, db = prisma) {
+  const template = await db.notificationTemplate.findUnique({ where: { templateId: params.templateId } })
+  if (template && !template.active) return null
   const email = await createQueuedEmail(params, db)
+  if (!email) return null
   return deliverEmail(email, db)
 }
 
-export async function sendEmail(outboxId) {
-  const email = await prisma.emailOutbox.findUnique({ where: { id: outboxId } })
+export async function sendEmail(outboxId, { force = false } = {}) {
+  const email = await prisma.emailOutbox.findUnique({ where: { id: outboxId }, include: { template: true } })
   if (!email) throw new Error('Email not found')
+  if (!force && email.template && !email.template.active) return email
   return deliverEmail(email)
 }

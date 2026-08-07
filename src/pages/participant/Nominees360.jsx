@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useUser } from '../../context/UserContext'
 import { api } from '../../lib/api'
@@ -18,6 +18,13 @@ const REL_REQUIREMENTS = {
 }
 
 const addableRelationships = ['reporting-manager', 'skip-manager', 'peer', 'direct-report']
+const RESTRICTED_POSITION_LEVELS = new Set(['MX', 'CX', 'DX', 'L0', 'L1'])
+const RESTRICTED_RELATIONSHIPS = new Set(['peer', 'direct-report'])
+const RESTRICTED_NOMINATION_MESSAGE = 'You cannot choose the selected user as your 360 respondent for this category. You may add them under the Reporting Manager, Skip Manager, or BU Head category (wherever applicable) instead.'
+const MANAGER_IS_BU_HEAD_GUIDANCE = 'If your Reporting Manager is also the BU Head, please nominate another leader from the organization whose feedback you would like to receive under the Skip/BU Head category.'
+const BLOCKED_SELF_SELECTION_MESSAGE = 'Selection of this user as a 360° respondent is restricted.'
+const BLOCKED_SELF_SELECTION_EMPLOYEE_IDS = new Set(['26207', '36020', '10258', '54521'])
+const BLOCKED_SELF_SELECTION_EMAILS = new Set(['pshrivastava@bajajauto.co.in', 'ajoseph@bajajauto.co.in', 'kpdsa@bajajauto.co.in', 'rsharma@bajajauto.co.in'])
 
 const NOMINATION_CATEGORIES = [
   ['Self', 'Self-assessment completed by you.', '1', '1'],
@@ -43,7 +50,7 @@ function RequirementsTable({ compact = false }) {
   )
 }
 
-const emptyDraft = () => ({ name: '', email: '', employeeId: '', isExternal: false })
+const emptyDraft = () => ({ name: '', email: '', employeeId: '', isExternal: false, eligibilityError: '', directoryResults: [], directoryLoading: false, directorySelected: false, directoryOpen: false })
 const createInitialDrafts = () => ({
   'reporting-manager': [emptyDraft()],
   'skip-manager': [emptyDraft()],
@@ -51,14 +58,19 @@ const createInitialDrafts = () => ({
   'direct-report': [emptyDraft()],
 })
 
-function validate(nominees) {
+function validate(nominees, participantEmail, participantEmployeeId) {
   const errors = []
   if (nominees.filter((n) => n.relationship === 'reporting-manager').length < 1) errors.push('At least 1 Reporting Manager required.')
   if (nominees.filter((n) => n.relationship === 'skip-manager').length < 1) errors.push('At least 1 Skip / BU Head required.')
   if (nominees.filter((n) => n.relationship === 'peer').length < 4) errors.push(`At least 4 Peers required (${nominees.filter((n) => n.relationship === 'peer').length} added).`)
   const emails = nominees.map((n) => n.email.trim().toLowerCase()).filter(Boolean)
-  if (new Set(emails).size !== emails.length) errors.push('Duplicate email addresses are not allowed.')
+  const employeeIds = nominees.map((n) => n.employeeId?.trim().toLowerCase()).filter(Boolean)
+  if (new Set(emails).size !== emails.length || new Set(employeeIds).size !== employeeIds.length) errors.push('Each person can only be nominated once.')
   if (nominees.some((n) => !n.isExternal && !n.employeeId?.trim())) errors.push('Ticket ID is required for every internal respondent.')
+  if (nominees.some((n) => n.email.trim().toLowerCase() === String(participantEmail || '').trim().toLowerCase()
+    || (n.employeeId?.trim() && n.employeeId.trim().toLowerCase() === String(participantEmployeeId || '').trim().toLowerCase()))) {
+    errors.push('You cannot nominate yourself. Your self survey is included automatically.')
+  }
   return errors
 }
 
@@ -84,6 +96,7 @@ function NominationInstructions({ nominationDeadline, feedbackCutoff, onAccept }
             <li><strong>Range of perspectives.</strong> Cover different parts of your working world so your report reflects how you operate across the organisation.</li>
             <li><strong>Sufficient exposure.</strong> Nominate people who have worked with you closely enough, and recently enough, to comment meaningfully.</li>
             <li><strong>External stakeholders count.</strong> Vendors, dealers, partners and customers outside Bajaj Auto can be nominated.</li>
+            <li><strong>Position-level restriction.</strong> Employees at MX, CX, DX, L0 or L1 cannot be nominated as Peers / Internal Customers / External Stakeholders or Direct Reports. They may be included only when they are your applicable Reporting Manager, Skip Manager or BU Head.</li>
           </ul></div>
           <div className="border-t pt-6"><h2 className="text-base font-bold text-[#1e4d8c]">Respondent categories and minimums</h2><p className="mt-2">The minimum response threshold protects individual respondent confidentiality.</p><div className="mt-4"><RequirementsTable /></div>
             <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-900"><strong>Please read the last column carefully.</strong> It shows the minimum responses required from each category to generate the 360° Feedback Report. A value of 0 means responses from that category are not required for report generation.</div>
@@ -107,8 +120,6 @@ export default function Nominees360() {
   const participantId = user?.participantId
 
   const [nominees, setNominees] = useState([])
-  const [inviteLinks, setInviteLinks] = useState([])
-  const [selectedInvite, setSelectedInvite] = useState(null)
   const [externalDrafts, setExternalDrafts] = useState(createInitialDrafts)
   const [mode, setMode] = useState('edit')
   const [loading, setLoading] = useState(true)
@@ -116,9 +127,28 @@ export default function Nominees360() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [validationAttempted, setValidationAttempted] = useState(false)
+  const [checkingDraft, setCheckingDraft] = useState('')
+  const directorySearchTimers = useRef({})
   const [cohort, setCohort] = useState({})
   const acceptanceKey = participantId ? `nomination-instructions-accepted:${participantId}` : ''
   const [instructionsAccepted, setInstructionsAccepted] = useState(() => participantId ? window.localStorage.getItem(`nomination-instructions-accepted:${participantId}`) === 'true' : false)
+
+  useEffect(() => {
+    function closeDirectoryDropdownsOnOutsideClick(event) {
+      if (event.target.closest('[data-directory-dropdown]')) return
+      setExternalDrafts((prev) => Object.fromEntries(
+        Object.entries(prev).map(([relationship, drafts]) => [
+          relationship,
+          drafts.map((draft) => draft.directoryOpen || draft.directoryLoading || draft.directoryResults.length
+            ? { ...draft, directoryOpen: false, directoryLoading: false, directoryResults: [] }
+            : draft),
+        ]),
+      ))
+    }
+
+    document.addEventListener('mousedown', closeDirectoryDropdownsOnOutsideClick)
+    return () => document.removeEventListener('mousedown', closeDirectoryDropdownsOnOutsideClick)
+  }, [])
 
   const isEditing = mode === 'edit'
   const isReviewing = mode === 'review'
@@ -144,12 +174,22 @@ export default function Nominees360() {
       .finally(() => setLoading(false))
   }, [participantId])
 
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' })
+      document.querySelectorAll('[data-route-scroll]').forEach((element) => {
+        element.scrollTo({ top: 0, left: 0, behavior: 'instant' })
+      })
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [loading])
+
   function acceptInstructions() {
     if (acceptanceKey) window.localStorage.setItem(acceptanceKey, 'true')
     setInstructionsAccepted(true)
   }
 
-  const errors = validate(nominees)
+  const errors = validate(nominees, user?.email, user?.employeeId)
   const grouped = {
     'reporting-manager': nominees.filter((n) => n.relationship === 'reporting-manager'),
     'skip-manager': nominees.filter((n) => n.relationship === 'skip-manager'),
@@ -160,7 +200,177 @@ export default function Nominees360() {
   function updateExternalDraft(relationship, index, field, value) {
     setExternalDrafts((prev) => ({
       ...prev,
-      [relationship]: prev[relationship].map((draft, draftIndex) => draftIndex === index ? { ...draft, [field]: value } : draft),
+      [relationship]: prev[relationship].map((draft, draftIndex) => draftIndex === index ? { ...draft, [field]: value, eligibilityError: '' } : draft),
+    }))
+  }
+
+  function updateDraftName(relationship, index, value) {
+    const draftKey = `${relationship}:${index}`
+    window.clearTimeout(directorySearchTimers.current[draftKey])
+    const isExternal = externalDrafts[relationship][index]?.isExternal
+    setExternalDrafts((prev) => ({
+      ...prev,
+      [relationship]: prev[relationship].map((draft, draftIndex) => draftIndex === index ? {
+        ...draft,
+        name: value,
+        eligibilityError: '',
+        directorySelected: false,
+        directoryResults: [],
+        directoryLoading: value.trim().length >= 2 && !draft.isExternal,
+        directoryOpen: value.trim().length >= 2 && !draft.isExternal,
+      } : draft),
+    }))
+    if (isExternal || value.trim().length < 2) return
+    directorySearchTimers.current[draftKey] = window.setTimeout(async () => {
+      try {
+        const result = await api.searchEmployeeDirectory(participantId, value.trim())
+        const directoryResults = result.data || []
+        setExternalDrafts((prev) => ({
+          ...prev,
+          [relationship]: prev[relationship].map((draft, draftIndex) => draftIndex === index && draft.name === value ? {
+            ...draft,
+            directoryResults,
+            directoryLoading: false,
+            directoryOpen: directoryResults.length > 0,
+          } : draft),
+        }))
+      } catch (err) {
+        setExternalDrafts((prev) => ({
+          ...prev,
+          [relationship]: prev[relationship].map((draft, draftIndex) => draftIndex === index && draft.name === value ? { ...draft, directoryResults: [], directoryLoading: false, directoryOpen: false, eligibilityError: err.message } : draft),
+        }))
+      }
+    }, 250)
+  }
+
+  function closeDirectoryDropdown(relationship, index) {
+    const draftKey = `${relationship}:${index}`
+    window.clearTimeout(directorySearchTimers.current[draftKey])
+    setExternalDrafts((prev) => ({
+      ...prev,
+      [relationship]: prev[relationship].map((draft, draftIndex) => draftIndex === index ? {
+        ...draft,
+        directoryOpen: false,
+        directoryResults: [],
+        directoryLoading: false,
+      } : draft),
+    }))
+  }
+
+  function toggleExternalDraft(relationship, index, isExternal) {
+    const draftKey = `${relationship}:${index}`
+    window.clearTimeout(directorySearchTimers.current[draftKey])
+    setExternalDrafts((prev) => ({
+      ...prev,
+      [relationship]: prev[relationship].map((draft, draftIndex) => draftIndex === index ? {
+        ...draft,
+        isExternal,
+        employeeId: isExternal ? '' : draft.employeeId,
+        positionLevel: isExternal ? undefined : draft.positionLevel,
+        directoryResults: [],
+        directoryLoading: false,
+        directorySelected: false,
+        directoryOpen: false,
+        eligibilityError: '',
+      } : draft),
+    }))
+  }
+
+  function selectDirectoryEmployee(relationship, index, employee) {
+    const employeeEmail = String(employee.email || '').trim().toLowerCase()
+    const employeeId = String(employee.employeeId || '').trim().toLowerCase()
+    const participantEmail = String(user?.email || '').trim().toLowerCase()
+    const participantEmployeeId = String(user?.employeeId || '').trim().toLowerCase()
+    const isSelfSelection = (employeeEmail && employeeEmail === participantEmail)
+      || (employeeId && employeeId === participantEmployeeId)
+    const otherDrafts = Object.entries(externalDrafts).flatMap(([draftRelationship, drafts]) => drafts.filter((_, draftIndex) => (
+      draftRelationship !== relationship || draftIndex !== index
+    )))
+    const isDuplicateSelection = [...nominees, ...otherDrafts].some((nominee) => (
+      (employeeEmail && String(nominee.email || '').trim().toLowerCase() === employeeEmail)
+      || (employeeId && String(nominee.employeeId || '').trim().toLowerCase() === employeeId)
+    ))
+
+    if (isSelfSelection || isDuplicateSelection) {
+      const message = isSelfSelection
+        ? 'You cannot nominate yourself as a 360 respondent. Your self survey is included automatically.'
+        : 'Each person can only be nominated once.'
+      setExternalDrafts((prev) => ({
+        ...prev,
+        [relationship]: prev[relationship].map((draft, draftIndex) => draftIndex === index ? {
+          ...draft,
+          email: '',
+          employeeId: '',
+          positionLevel: undefined,
+          directorySelected: false,
+          directoryResults: [],
+          directoryLoading: false,
+          directoryOpen: false,
+          eligibilityError: message,
+        } : draft),
+      }))
+      window.alert(message)
+      return
+    }
+
+    const isBlockedSelection = BLOCKED_SELF_SELECTION_EMPLOYEE_IDS.has(String(employee.employeeId || '').trim())
+      || BLOCKED_SELF_SELECTION_EMAILS.has(String(employee.email || '').trim().toLowerCase())
+
+    if (isBlockedSelection) {
+      setExternalDrafts((prev) => ({
+        ...prev,
+        [relationship]: prev[relationship].map((draft, draftIndex) => draftIndex === index ? {
+          ...draft,
+          email: '',
+          employeeId: '',
+          positionLevel: undefined,
+          directorySelected: false,
+          directoryResults: [],
+          directoryLoading: false,
+          directoryOpen: false,
+          eligibilityError: BLOCKED_SELF_SELECTION_MESSAGE,
+        } : draft),
+      }))
+      window.alert(BLOCKED_SELF_SELECTION_MESSAGE)
+      return
+    }
+
+    const isRestrictedSelection = RESTRICTED_RELATIONSHIPS.has(relationship)
+      && RESTRICTED_POSITION_LEVELS.has(String(employee.positionLevel || '').trim().toUpperCase())
+
+    if (isRestrictedSelection) {
+      setExternalDrafts((prev) => ({
+        ...prev,
+        [relationship]: prev[relationship].map((draft, draftIndex) => draftIndex === index ? {
+          ...draft,
+          name: employee.name,
+          email: '',
+          employeeId: '',
+          positionLevel: employee.positionLevel,
+          directorySelected: false,
+          directoryResults: [],
+          directoryLoading: false,
+          directoryOpen: false,
+          eligibilityError: RESTRICTED_NOMINATION_MESSAGE,
+        } : draft),
+      }))
+      return
+    }
+
+    setExternalDrafts((prev) => ({
+      ...prev,
+      [relationship]: prev[relationship].map((draft, draftIndex) => draftIndex === index ? {
+        ...draft,
+        name: employee.name,
+        email: employee.email || '',
+        employeeId: employee.employeeId,
+        positionLevel: employee.positionLevel,
+        directorySelected: true,
+        directoryResults: [],
+        directoryLoading: false,
+        directoryOpen: false,
+        eligibilityError: '',
+      } : draft),
     }))
   }
 
@@ -182,8 +392,28 @@ export default function Nominees360() {
     }
   }
 
-  function addExternalNominee(relationship, index) {
+  async function addExternalNominee(relationship, index) {
     const draft = externalDrafts[relationship][index]
+    const draftKey = `${relationship}:${index}`
+    if (!draft.isExternal) {
+      setCheckingDraft(draftKey)
+      try {
+        await api.checkNomineeEligibility(participantId, {
+          email: draft.email.trim(),
+          employeeId: draft.employeeId.trim(),
+          isExternal: false,
+          relationship,
+        })
+      } catch (err) {
+        setExternalDrafts((prev) => ({
+          ...prev,
+          [relationship]: prev[relationship].map((item, draftIndex) => draftIndex === index ? { ...item, eligibilityError: err.message } : item),
+        }))
+        return
+      } finally {
+        setCheckingDraft('')
+      }
+    }
     setNominees((prev) => [
       ...prev,
       { id: `nominee-${relationship}-${Date.now()}`, name: draft.name.trim(), email: draft.email.trim(), employeeId: draft.isExternal ? '' : draft.employeeId.trim(), isExternal: draft.isExternal, relationship, source: draft.isExternal ? 'external' : 'manual' },
@@ -222,18 +452,47 @@ export default function Nominees360() {
             <div className="space-y-3">
             {drafts.map((draft, index) => {
               const duplicateEmail = nominees.some((nominee) => nominee.email.toLowerCase() === draft.email.trim().toLowerCase())
-                || drafts.some((other, otherIndex) => otherIndex !== index && other.email.trim() && other.email.trim().toLowerCase() === draft.email.trim().toLowerCase())
-              const canAdd = draft.name.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.email.trim()) && (draft.isExternal || draft.employeeId.trim()) && !duplicateEmail
+                || Object.entries(externalDrafts).some(([otherRelationship, otherDrafts]) => otherDrafts.some((other, otherIndex) => (
+                  (otherRelationship !== relationship || otherIndex !== index)
+                  && other.email.trim()
+                  && other.email.trim().toLowerCase() === draft.email.trim().toLowerCase()
+                )))
+              const duplicateEmployeeId = Boolean(draft.employeeId.trim()) && (
+                nominees.some((nominee) => nominee.employeeId?.trim().toLowerCase() === draft.employeeId.trim().toLowerCase())
+                || Object.entries(externalDrafts).some(([otherRelationship, otherDrafts]) => otherDrafts.some((other, otherIndex) => (
+                  (otherRelationship !== relationship || otherIndex !== index)
+                  && other.employeeId?.trim()
+                  && other.employeeId.trim().toLowerCase() === draft.employeeId.trim().toLowerCase()
+                )))
+              )
+              const draftKey = `${relationship}:${index}`
+              const isChecking = checkingDraft === draftKey
+              const canAdd = draft.name.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.email.trim()) && (draft.isExternal || draft.employeeId.trim()) && !duplicateEmail && !duplicateEmployeeId && !isChecking
               return <div key={index} className="rounded-lg border border-slate-200 bg-white p-3">
               <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-400">Nominee {grouped[relationship].length + index + 1}</p>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <input
-                type="text"
-                placeholder="Full name"
-                value={draft.name}
-                onChange={(e) => updateExternalDraft(relationship, index, 'name', e.target.value)}
-                className="px-3 py-2 rounded-lg border border-[#e2e8f0] bg-white text-sm placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-[#1e4d8c]"
-              />
+              <div className="relative" data-directory-dropdown>
+                <input
+                  type="text"
+                  autoComplete="off"
+                  placeholder="Start typing employee name"
+                  value={draft.name}
+                  onChange={(e) => updateDraftName(relationship, index, e.target.value)}
+                  onBlur={() => closeDirectoryDropdown(relationship, index)}
+                  className="w-full rounded-lg border border-[#e2e8f0] bg-white px-3 py-2 text-sm placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-[#1e4d8c]"
+                />
+                {!draft.isExternal && draft.directoryOpen && draft.directoryLoading && <div className="absolute left-0 right-0 top-full z-30 mt-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500 shadow-lg">Searching employees…</div>}
+                {!draft.isExternal && draft.directoryOpen && !draft.directoryLoading && draft.directoryResults?.length > 0 && (
+                  <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-64 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-xl">
+                    {draft.directoryResults.map((employee) => (
+                      <button key={employee.id} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => selectDirectoryEmployee(relationship, index, employee)} className="block w-full border-b border-slate-100 px-3 py-2.5 text-left last:border-0 hover:bg-blue-50">
+                        <span className="block text-xs font-semibold text-slate-900">{employee.name}</span>
+                        <span className="mt-0.5 block text-[11px] text-slate-500">{employee.email || 'Email not available — enter manually'} · Ticket ID: {employee.employeeId} · Level: {employee.positionLevel}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               <input
                 type="email"
                 placeholder="Email address"
@@ -250,17 +509,20 @@ export default function Nominees360() {
                 className="rounded-lg border border-[#e2e8f0] bg-white px-3 py-2 text-sm placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-[#1e4d8c] disabled:bg-slate-100"
               />
               <div className="flex items-center justify-between gap-3">
-                {relationship === 'peer' ? <label className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={draft.isExternal} onChange={(event) => { updateExternalDraft(relationship, index, 'isExternal', event.target.checked); if (event.target.checked) updateExternalDraft(relationship, index, 'employeeId', '') }} className="accent-[#1e4d8c]" />External stakeholder</label> : <span />}
+                {relationship === 'peer' ? <label className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={draft.isExternal} onChange={(event) => toggleExternalDraft(relationship, index, event.target.checked)} className="accent-[#1e4d8c]" />External stakeholder</label> : <span />}
               <button
                 disabled={!canAdd}
                 onClick={() => addExternalNominee(relationship, index)}
                 className="px-4 py-2 rounded-lg border border-[#1e4d8c] text-[#1e4d8c] text-sm font-medium hover:bg-[#dbeafe] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                Add
+                {isChecking ? 'Checking…' : 'Add'}
               </button>
               </div>
             </div>
             {duplicateEmail && <p className="mt-2 text-xs font-medium text-red-600">This email address is already in the nominee list.</p>}
+            {duplicateEmployeeId && <p className="mt-2 text-xs font-medium text-red-600">This person is already in the nominee list under another category.</p>}
+            {draft.directorySelected && <p className="mt-2 text-xs font-medium text-emerald-700">Employee selected from directory{draft.positionLevel ? ` · Position level ${draft.positionLevel}` : ''}.</p>}
+            {draft.eligibilityError && <p className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium leading-5 text-red-700">{draft.eligibilityError}</p>}
             </div>
             })}
             </div>
@@ -272,6 +534,17 @@ export default function Nominees360() {
 
   function getVisibleRequirement(rel) {
     return REL_REQUIREMENTS[rel]
+  }
+
+  function minimumRequirementMet(rel) {
+    if (rel === 'reporting-manager' || rel === 'skip-manager') return grouped[rel].length >= 1
+    if (rel === 'peer') return grouped[rel].length >= 4
+    return true
+  }
+
+  function requirementTone(rel) {
+    if (minimumRequirementMet(rel)) return 'text-emerald-700'
+    return validationAttempted ? 'text-red-600' : 'text-[#1e4d8c]'
   }
 
   async function handleSaveList() {
@@ -294,7 +567,7 @@ export default function Nominees360() {
         locked: n.locked || false,
       })))
       setNominees(result.data)
-      refreshParticipantData(participantId)
+      await refreshParticipantData(participantId)
       setMode('review')
     } catch (err) {
       setError(err.message)
@@ -314,26 +587,13 @@ export default function Nominees360() {
     try {
       const result = await api.submitNominees(participantId)
       setNominees(result.data)
-      setInviteLinks(result.invites || [])
-      setSelectedInvite(null)
-      refreshParticipantData(participantId)
+      await refreshParticipantData(participantId)
       setMode('submitted')
     } catch (err) {
       setError(err.message)
     } finally {
       setSubmitting(false)
     }
-  }
-
-  function showInviteLink(nominee) {
-    const invite = inviteLinks.find(link => link.nomineeId === nominee.id)
-    if (!invite) return
-    setSelectedInvite({ ...invite, name: nominee.name, email: nominee.email })
-  }
-
-  async function copySelectedInvite() {
-    if (!selectedInvite?.inviteUrl) return
-    await navigator.clipboard?.writeText(selectedInvite.inviteUrl)
   }
 
   if (loading) {
@@ -419,11 +679,7 @@ export default function Nominees360() {
                 <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700">Self</span>
               </div>
             </div>
-            {nominees.map((n) => {
-              const invite = inviteLinks.find(l => l.nomineeId === n.id)
-              const isSelected = selectedInvite?.nomineeId === n.id
-
-              return (
+            {nominees.map((n) => (
                 <div key={n.id} className="px-5 py-3.5">
                   <div className="flex items-center gap-4">
                     <div className="w-8 h-8 rounded-full bg-[#dbeafe] flex items-center justify-center text-[#1e4d8c] text-xs font-semibold shrink-0">
@@ -438,41 +694,9 @@ export default function Nominees360() {
                         {REL_LABELS[n.relationship] || n.relationship}
                       </span>
                     </div>
-                    {invite && (
-                      <div className="shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => showInviteLink(n)}
-                          className="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-100 px-2 py-0.5 rounded-full hover:bg-green-200 transition-colors"
-                        >
-                          View link
-                        </button>
-                      </div>
-                    )}
                   </div>
-                  {isSelected && (
-                    <div className="mt-3 ml-12 rounded-lg border border-[#e2e8f0] bg-[#f8f9fc] p-3">
-                      <div className="flex items-start justify-between gap-3 mb-2">
-                        <div>
-                          <p className="text-xs font-semibold text-[#1a1f2e]">Magic link</p>
-                          <p className="text-[10px] text-gray-400">{selectedInvite.email}</p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={copySelectedInvite}
-                          className="shrink-0 rounded-lg border border-[#bfdbfe] bg-white px-3 py-1.5 text-xs font-medium text-[#1e4d8c] hover:bg-blue-50"
-                        >
-                          Copy
-                        </button>
-                      </div>
-                      <div className="rounded-lg border border-[#e2e8f0] bg-white px-3 py-2">
-                        <p className="break-all text-xs leading-5 text-gray-600">{selectedInvite.inviteUrl}</p>
-                      </div>
-                    </div>
-                  )}
                 </div>
-              )
-            })}
+              ))}
           </div>
           <div className="px-5 py-4 bg-[#f8f9fc]">
             <Link to="/participant/dashboard" className="text-xs text-[#1e4d8c] font-medium hover:underline">Back to Dashboard</Link>
@@ -501,12 +725,17 @@ export default function Nominees360() {
                         <div className="text-right shrink-0">
                           <p className="text-xs text-gray-400">{grouped[rel].length} added</p>
                           {visibleRequirement && (
-                            <p className={`text-xs font-semibold ${rel === 'peer' || rel === 'reporting-manager' ? 'text-red-500' : 'text-[#1e4d8c]'}`}>{visibleRequirement}</p>
+                            <p className={`text-xs font-semibold ${requirementTone(rel)}`}>{visibleRequirement}</p>
                           )}
                         </div>
                       </div>
                     )
                   })()}
+                  {rel === 'skip-manager' && (
+                    <p className="mb-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5 text-xs italic leading-5 text-[#1e4d8c]">
+                      *{MANAGER_IS_BU_HEAD_GUIDANCE}
+                    </p>
+                  )}
                   {grouped[rel].length === 0
                     ? <p className="text-xs text-gray-300 italic pl-1">None added</p>
                     : grouped[rel].map(renderNominee)

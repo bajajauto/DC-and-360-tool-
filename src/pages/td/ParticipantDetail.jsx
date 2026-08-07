@@ -44,6 +44,18 @@ export default function ParticipantDetail() {
     setReportAction({ loading: false, error: '' })
   }
 
+  async function handlePublishReport() {
+    setReportAction({ loading: true, error: '' })
+    try {
+      await api.release360Report(participant.id)
+      setParticipant((current) => ({ ...current, reportStatus: 'released', progress: 100, lastActivity: new Date().toISOString() }))
+    } catch (err) {
+      setReportAction({ loading: false, error: err.message || 'Unable to publish the report.' })
+      return
+    }
+    setReportAction({ loading: false, error: '' })
+  }
+
   useEffect(() => {
     if (!participantId) return
     setLoading(true)
@@ -71,14 +83,14 @@ export default function ParticipantDetail() {
   const reportReady = participant.reportReady === true
   const cutoffPassed = participant.threeSixtyCutoffPassed === true
   const reportGenerated = ['generated', 'released'].includes(participant.reportStatus)
+  const reportReleased = participant.reportStatus === 'released'
   const cohort = participant.cohort
   const nominees = participant.nominees || []
-  const pendingNominees = nominees.filter((nominee) => nominee.status !== 'submitted')
   const relationshipSummary = ['reporting-manager', 'skip-manager', 'peer', 'direct-report'].map((relationship) => {
     const items = nominees.filter((nominee) => nominee.relationship === relationship)
     return {
       relationship,
-      responded: items.filter((nominee) => nominee.status === 'submitted').length,
+      responded: items.filter((nominee) => nominee.feedbackStatus === 'submitted').length,
       total: items.length,
     }
   }).filter((item) => item.total > 0)
@@ -122,7 +134,6 @@ export default function ParticipantDetail() {
             <span className="font-semibold text-emerald-700">{cohort?.name || 'Unassigned cohort'}</span>
           </p>
         </div>
-        <div className="min-w-56"><div className="flex justify-between text-xs mb-2"><span className="text-gray-500">Overall completion</span><strong>{participant.taskCompletionPercent}%</strong></div><div className="h-2 bg-gray-100 rounded-full"><div className="h-2 rounded-full bg-[#2867a7]" style={{ width: `${participant.taskCompletionPercent}%` }} /></div></div>
       </section>
 
       <div className="grid xl:grid-cols-[1fr_320px] gap-6">
@@ -174,7 +185,7 @@ export default function ParticipantDetail() {
           <section className="bg-white border border-[#e2e8f0] rounded-2xl overflow-hidden">
             <div className="px-6 py-5 border-b border-[#e8edf3] flex justify-between"><div><h3 className="font-semibold text-[#172033]">360 feedback collection</h3><p className="text-xs text-gray-400 mt-1">Individual responses remain confidential</p></div><div className="text-right"><p className="text-lg font-bold text-violet-700">{participant.responses}/{participant.totalResponses}</p><p className="text-[10px] text-gray-400">responses received</p></div></div>
             <div className="p-5 grid sm:grid-cols-4 gap-3">
-              {relationshipSummary.map(({ relationship, responded, total }) => <div key={relationship} className="rounded-xl bg-[#f8fafc] border border-[#edf1f5] p-4"><p className="text-[11px] text-gray-500">{relationshipLabels[relationship] || relationship}</p><p className="text-lg font-bold text-[#172033] mt-2">{responded}<span className="text-xs font-normal text-gray-400">/{total}</span></p><div className="h-1 bg-gray-200 rounded mt-2"><div className="h-1 bg-violet-500 rounded" style={{ width: `${Math.min(100, total ? responded / total * 100 : 0)}%` }} /></div></div>)}
+              {relationshipSummary.map(({ relationship, responded, total }) => <div key={relationship} className="rounded-xl bg-[#f8fafc] border border-[#edf1f5] p-4"><p className="text-[11px] text-gray-500">{relationshipLabels[relationship] || relationship}</p><p className="text-lg font-bold text-[#172033] mt-2">{responded}<span className="text-xs font-normal text-gray-400">/{total}</span></p></div>)}
             </div>
             {participant.responses < participant.totalResponses && <div className="px-5 pb-5"><button className="flex items-center gap-2 text-xs font-semibold text-[#1e4d8c] border border-blue-200 rounded-lg px-3 py-2 hover:bg-blue-50"><Mail size={14} />Send reminder to pending nominees</button></div>}
           </section>
@@ -193,7 +204,7 @@ export default function ParticipantDetail() {
                     <td className="px-5 py-4 text-xs text-gray-600">{nominee.relationshipLabel || relationshipLabels[nominee.relationship] || nominee.relationship}</td>
                     <td className="px-5 py-4"><span className={`inline-flex rounded-full border px-2 py-1 text-[10px] font-semibold ${nominee.status === 'submitted' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-700'}`}>{nominee.status === 'submitted' ? 'Submitted' : 'Pending'}</span></td>
                     <td className="px-5 py-4 text-xs text-gray-500">{nominee.submittedAt ? new Date(nominee.submittedAt).toLocaleDateString('en-GB') : '-'}</td>
-                    <td className="px-5 py-4 text-xs text-gray-500">{nominee.status === 'submitted' ? 'Awaiting response' : '-'}</td>
+                    <td className={`px-5 py-4 text-xs font-medium ${nominee.feedbackStatus === 'submitted' ? 'text-emerald-700' : 'text-gray-500'}`}>{nominee.feedbackStatus === 'submitted' ? 'Responded' : 'Awaiting response'}</td>
                   </tr>)}
                 </tbody>
               </table>
@@ -211,6 +222,7 @@ export default function ParticipantDetail() {
             <h3 className="mt-5 font-semibold">Aggregated 360° Feedback Report</h3>
             <p className="mt-2 text-xs leading-relaxed text-blue-200">{reportGenerated ? 'This report was generated by Talent Development and is ready to preview.' : reportReady ? cutoffPassed && !allNomineesSubmitted ? 'The 360 cutoff has passed. TD can generate the report from the responses received so far.' : 'Every required respondent has submitted a complete rating set. TD can now generate the report.' : allNomineesSubmitted ? 'Responses are marked submitted, but one or more required rating sets are incomplete. Generation remains locked until the cutoff passes.' : 'The report unlocks when all responses are complete or after the 360 cutoff.'}</p>
             {reportAction.error && <p className="mt-3 text-xs text-red-200">{reportAction.error}</p>}
+            {reportGenerated && !reportReleased && <button onClick={handlePublishReport} disabled={reportAction.loading} className="mt-5 w-full rounded-lg bg-emerald-400 py-2.5 text-sm font-semibold text-[#12345a] disabled:opacity-60">{reportAction.loading ? 'Publishing…' : 'Publish report'}</button>}
             {reportGenerated ? <Link to={`/td/reports/${participant.id}`} className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg bg-white py-2.5 text-sm font-semibold text-[#173f72]">Preview report <ChevronRight size={16} /></Link> : reportReady ? <button onClick={handleGenerateReport} disabled={reportAction.loading} className="mt-5 w-full rounded-lg bg-emerald-400 py-2.5 text-sm font-semibold text-[#12345a] disabled:opacity-60">{reportAction.loading ? 'Generating…' : 'Generate report'}</button> : <button disabled className="mt-5 w-full rounded-lg bg-white/10 py-2.5 text-sm font-semibold text-blue-200">Report generation locked</button>}
           </section>
           <section className="bg-white border border-[#e2e8f0] rounded-2xl p-5"><h3 className="text-sm font-semibold text-[#172033] mb-4">Participant details</h3>{[['Email', participant.email || '-'], ['DC type', cohort?.programme || 'Development Centre'], ['Job level', participant.masterData?.jobLevel || '-'], ['Department', participant.masterData?.department || '-'], ['Location', participant.masterData?.location || '-'], ['Skip manager', participant.masterData?.skipManagerName || '-'], ['BU Head', participant.masterData?.buHeadName || '-'], ['BUHR', participant.masterData?.buhrName || '-']].map(([label, value]) => <div key={label} className="flex justify-between py-2.5 border-b last:border-0 border-[#edf1f5] gap-3"><span className="text-xs text-gray-400">{label}</span><span className="text-xs font-medium text-[#374151] text-right">{value}</span></div>)}</section>

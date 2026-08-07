@@ -103,7 +103,7 @@ export const participants = [
   { id: 'neha-sharma', name: 'Neha Sharma', initials: 'NS', employeeId: 'EX-77214', designation: 'Senior Manager', bu: 'EV & New Businesses', cohortId: 'ex-lx-25', progress: 100, stage: 'Completed', responses: 7, totalResponses: 7, reportStatus: 'generated', lastActivity: '19 Jun 2025', nominees: nominees('neha', '11 Jun 2025') },
   { id: 'arjun-patel', name: 'Arjun Patel', initials: 'AP', employeeId: 'EX-76103', designation: 'Deputy General Manager', bu: 'International Business', cohortId: 'ex-lx-25', progress: 75, stage: '360 feedback', responses: 6, totalResponses: 8, reportStatus: 'waiting', lastActivity: '17 Jun 2025', nominees: nominees('arjun', '12 Jun 2025') },
   { id: 'sunita-rao', name: 'Sunita Rao', initials: 'SR', employeeId: 'EX-75991', designation: 'Senior Manager', bu: 'Finance', cohortId: 'ex-lx-25', progress: 100, stage: 'Completed', responses: 9, totalResponses: 9, reportStatus: 'generated', lastActivity: '20 Jun 2025', nominees: nominees('sunita', '12 Jun 2025') },
-  { id: 'vikram-singh', name: 'Vikram Singh', initials: 'VS', employeeId: 'EX-75117', designation: 'Senior Manager', bu: 'Manufacturing', cohortId: 'ex-lx-25', progress: 63, stage: 'Pre-work', responses: 3, totalResponses: 8, reportStatus: 'waiting', lastActivity: '15 Jun 2025', nominees: nominees('vikram', '13 Jun 2025') },
+  { id: 'vikram-singh', name: 'Vikram Singh', initials: 'VS', employeeId: 'EX-75117', designation: 'Senior Manager', bu: 'Manufacturing', cohortId: 'ex-lx-25', progress: 63, stage: 'Self Reflection', responses: 3, totalResponses: 8, reportStatus: 'waiting', lastActivity: '15 Jun 2025', nominees: nominees('vikram', '13 Jun 2025') },
   { id: 'meera-iyer', name: 'Meera Iyer', initials: 'MI', employeeId: 'EX-74882', designation: 'Senior Manager', bu: 'Human Resources', cohortId: 'ex-lx-25', progress: 92, stage: 'DC assessments', responses: 8, totalResponses: 8, reportStatus: 'ready', lastActivity: '20 Jun 2025', nominees: nominees('meera', '12 Jun 2025') },
   { id: 'rohan-desai', name: 'Rohan Desai', initials: 'RD', employeeId: 'EX-74290', designation: 'Regional Manager', bu: 'Sales', cohortId: 'ex-lx-25', progress: 50, stage: '360 nominees', responses: 0, totalResponses: 7, reportStatus: 'waiting', lastActivity: '12 Jun 2025', nominees: nominees('rohan', '12 Jun 2025') },
   { id: 'kavita-nair', name: 'Kavita Nair', initials: 'KN', employeeId: 'EX-73904', designation: 'Senior Manager', bu: 'Digital & Technology', cohortId: 'ex-lx-25', progress: 38, stage: 'Role interview', responses: 0, totalResponses: 8, reportStatus: 'waiting', lastActivity: '10 Jun 2025', nominees: [] },
@@ -113,7 +113,7 @@ export const processSteps = [
   { id: 'application', label: 'Application profile', owner: 'Participant' },
   { id: 'role', label: 'Role interview', owner: 'Participant' },
   { id: 'photo', label: 'Photograph', owner: 'Participant' },
-  { id: 'prework', label: 'Pre-work', owner: 'Participant' },
+  { id: 'prework', label: 'Self Reflection', owner: 'Participant' },
   { id: 'nominees', label: '360 nominees', owner: 'Participant' },
   { id: 'feedback', label: '360 feedback', owner: 'Nominees' },
   { id: 'assessment', label: 'DC assessments', owner: 'Assessors' },
@@ -161,7 +161,7 @@ export const assessorProfiles = participants.map((participant, index) => {
       status: participant.progress >= 63 ? 'Submitted' : 'Pending',
       reflection: participant.progress >= 63
         ? 'Participant has shared a concise development reflection, recent business context and priority leadership moments.'
-        : 'Pre-work material will appear here once the participant submits it.',
+        : 'Self Reflection material will appear here once the participant submits it.',
     },
   }
 })

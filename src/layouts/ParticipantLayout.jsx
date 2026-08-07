@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { Link, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useUser } from '../context/UserContext'
+import RoleSwitchBanner from '../components/RoleSwitchBanner'
 
 const navItems = [
   { to: '/participant/dashboard', label: 'Dashboard', icon: HomeIcon },
   { to: '/participant/photograph', label: 'Photograph', icon: CameraIcon },
-  { to: '/participant/pre-work', label: 'Pre-Work', icon: ClipboardIcon },
+  { to: '/participant/pre-work', label: 'Self Reflection', icon: ClipboardIcon },
   { to: '/participant/role-interview', label: 'Role Interview', icon: FileTextIcon },
   { to: '/participant/360-nominees', label: '360 Nominees', icon: UsersIcon },
   { to: '/participant/self-360', label: 'Self 360 Survey', icon: ClipboardIcon },
@@ -74,7 +75,8 @@ export default function ParticipantLayout() {
     return <Navigate to="/" replace />
   }
 
-  const isRespondentToo = user.roles.includes('respondent')
+  const isRespondentToo = false
+  const isBuhrToo = user.roles.includes('buhr')
 
   function handleSwitchToRespondent() {
     setDropdownOpen(false)
@@ -204,7 +206,13 @@ export default function ParticipantLayout() {
       </aside>
 
       {/* Page content */}
-      <main className="flex-1 overflow-auto" onClick={() => setDropdownOpen(false)}>
+      <main data-route-scroll className="flex-1 overflow-auto" onClick={() => setDropdownOpen(false)}>
+        {isBuhrToo && (
+          <RoleSwitchBanner
+            target="buhr"
+            onSwitch={() => { switchRole('buhr'); navigate('/buhr/dashboard') }}
+          />
+        )}
         {/* Nomination CTA button */}
         {isRespondentToo && pendingRespondentCount > 0 && (
           <div className="px-8 pt-6 pb-0">

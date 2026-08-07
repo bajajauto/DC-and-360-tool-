@@ -50,11 +50,11 @@ function buildUserFromMagicLink(payload) {
     email,
     employeeId,
     initials: getInitials(name),
-    designation: '',
-    bu: '',
-    roles: [role],
-    participantId: null,
-    cohort: null,
+    designation: payload.designation || '',
+    bu: payload.bu || '',
+    roles: payload.roles?.length ? payload.roles : [role],
+    participantId: payload.participantId || null,
+    cohort: payload.cohort || null,
     respondentTasks,
     magicLink: { role, taskId: payload.taskId || null },
   }
@@ -104,8 +104,11 @@ export function UserProvider({ children }) {
     setUser(nextUser)
     setActiveRole(nextUser.magicLink.role)
     writeJson(SESSION_KEY, nextUser)
+    if (nextUser.participantId) {
+      refreshParticipantData(nextUser.participantId)
+    }
     return nextUser
-  }, [])
+  }, [refreshParticipantData])
 
   const logout = useCallback(() => {
     window.localStorage.removeItem(SESSION_KEY)
@@ -118,6 +121,20 @@ export function UserProvider({ children }) {
   const switchRole = useCallback((role) => {
     if (user?.roles.includes(role)) setActiveRole(role)
   }, [user])
+
+  const updateRespondentTaskStatus = useCallback((taskId, status) => {
+    setUser((current) => {
+      if (!current) return current
+      const nextUser = {
+        ...current,
+        respondentTasks: (current.respondentTasks || []).map((task) => (
+          task.id === taskId ? { ...task, status, progress: status === 'submitted' ? 100 : task.progress } : task
+        )),
+      }
+      writeJson(SESSION_KEY, nextUser)
+      return nextUser
+    })
+  }, [])
 
   const pendingRespondentCount = useMemo(() =>
     (user?.respondentTasks || []).filter(t => t.status === 'pending' || t.status === 'saved').length,
@@ -139,6 +156,7 @@ export function UserProvider({ children }) {
       loginFromMagicLink,
       logout,
       switchRole,
+      updateRespondentTaskStatus,
       refreshParticipantData,
       pendingRespondentCount,
       pendingParticipantCount,

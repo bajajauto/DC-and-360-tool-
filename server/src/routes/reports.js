@@ -8,6 +8,7 @@ import { generate360ReportForParticipant, get360ReportPreviewHtml, getOrGenerate
 import { build360ResponseDataWorkbook } from '../reports/build360ResponseData.js'
 import { queueEmail } from '../notifications/service.js'
 import { createZip } from '../utils/zip.js'
+import { hasDeadlinePassed } from '../utils/deadlines.js'
 
 export const reportsRouter = Router()
 
@@ -19,7 +20,7 @@ function isVisibleInRepository(report) {
   if (report.status === 'RELEASED') return true
   const allSubmitted = report.participant.feedbackTasks.length > 0 && report.participant.feedbackTasks.every((task) => task.status === 'SUBMITTED')
   const cutoff = report.participant.cohort.threeSixtyCutoff
-  const cutoffPassed = cutoff ? new Date() > new Date(new Date(cutoff).setUTCHours(23, 59, 59, 999)) : false
+  const cutoffPassed = hasDeadlinePassed(cutoff)
   return allSubmitted || cutoffPassed
 }
 
@@ -35,7 +36,8 @@ async function assertReportDownloadAccess(req) {
     select: { userId: true, reports: { where: { type: '360', status: 'RELEASED' }, take: 1, select: { id: true } } },
   })
   if (!participant) throw httpError(404, 'Participant not found')
-  if (participant.userId !== req.auth.userId) {
+  const isAssessor = req.auth.roles.includes('assessor')
+  if (participant.userId !== req.auth.userId && !isAssessor) {
     throw httpError(403, 'You do not have access to this report')
   }
   if (!participant.reports.length) throw httpError(403, 'This report has not been released by Talent Development')
@@ -194,6 +196,50 @@ reportsRouter.get('/:participantId/360/response-data', asyncHandler(async (req, 
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
   res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`)
   res.send(buffer)
+}))
+
+reportsRouter.put('/:participantId/:reportType/visibility', asyncHandler(async (req, res) => {
+  requireTd(req)
+  const reportType = String(req.params.reportType || '').toLowerCase()
+  if (!['360', 'dc'].includes(reportType)) throw httpError(400, 'Report type must be 360 or dc')
+  if (typeof req.body?.visible !== 'boolean') throw httpError(400, 'Visible must be true or false')
+
+  const report = await prisma.report.findFirst({
+    where: {
+      participantId: req.params.participantId,
+      type: reportType,
+      status: { in: ['GENERATED', 'RELEASED'] },
+    },
+    orderBy: { updatedAt: 'desc' },
+  })
+  if (!report) throw httpError(409, 'Generate the report before changing its visibility.')
+
+  const wasReleased = report.status === 'RELEASED'
+  const visible = req.body.visible
+  const updated = await prisma.$transaction(async (tx) => {
+    const saved = await tx.report.update({
+      where: { id: report.id },
+      data: { status: visible ? 'RELEASED' : 'GENERATED', releasedAt: visible ? (report.releasedAt || new Date()) : null },
+    })
+    const participant = await tx.participant.update({
+      where: { id: req.params.participantId },
+      data: reportType === '360' ? { reportStatus: visible ? 'RELEASED' : 'GENERATED', lastActivityAt: new Date() } : {},
+      include: { user: true },
+    })
+    if (visible && !wasReleased) {
+      await queueEmail({
+        templateId: reportType === '360' ? 'report-360-released' : 'report-dc-released',
+        toEmail: participant.user.email,
+        toName: participant.user.name,
+        context: { 'Participant Name': participant.user.name },
+        entity: 'Report',
+        entityId: saved.id,
+      }, tx)
+    }
+    return saved
+  })
+
+  res.json({ data: { id: updated.id, type: updated.type, status: updated.status.toLowerCase(), releasedAt: updated.releasedAt?.toISOString() || null } })
 }))
 
 reportsRouter.post('/:participantId/360/release', asyncHandler(async (req, res) => {

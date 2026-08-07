@@ -263,9 +263,6 @@ export default function TDReports() {
                       <td className="px-5 py-4 text-xs text-gray-600">{participant.bu}</td>
                       {selectedReportType !== 'all' && <td className="px-5 py-4">
                         <p className="text-xs font-semibold text-[#172033]">{participant.responses}/{participant.totalResponses}</p>
-                        <div className="w-20 h-1.5 bg-gray-100 rounded-full mt-1">
-                          <div className="h-1.5 bg-violet-500 rounded-full" style={{ width: `${participant.totalResponses ? participant.responses / participant.totalResponses * 100 : 0}%` }} />
-                        </div>
                       </td>}
                       {selectedReportType !== 'all' && <td className="px-5 py-4">
                         <span className={`inline-flex px-2 py-1 rounded-full border text-[10px] font-semibold ${

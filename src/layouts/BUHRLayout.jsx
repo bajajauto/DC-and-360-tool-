@@ -2,6 +2,7 @@ import { ClipboardList, FileText, LayoutDashboard, LogOut } from 'lucide-react'
 import { Link, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useUser } from '../context/UserContext'
 import bajajBrandLockup from '../assets/bajaj-brand-lockup.png'
+import RoleSwitchBanner from '../components/RoleSwitchBanner'
 
 const navItems = [
   { to: '/buhr/dashboard', label: 'BU Dashboard', icon: LayoutDashboard },
@@ -12,9 +13,10 @@ const navItems = [
 export default function BUHRLayout() {
   const { pathname } = useLocation()
   const navigate = useNavigate()
-  const { user, logout } = useUser()
+  const { user, logout, switchRole } = useUser()
 
   if (!user || !user.roles.includes('buhr')) return <Navigate to="/" replace />
+  const hasParticipantView = user.roles.includes('participant')
 
   return (
     <div className="min-h-screen bg-[#f4f7fb] text-[#0f172a]">
@@ -33,8 +35,17 @@ export default function BUHRLayout() {
         </div>
       </header>
 
-      <div className="flex min-h-[calc(100vh-52px)]">
-        <aside className="sticky top-[52px] h-[calc(100vh-52px)] w-[228px] shrink-0 border-r border-[#d5dce5] bg-white px-3 py-4">
+      {hasParticipantView && (
+        <div className="sticky top-[52px] z-20">
+          <RoleSwitchBanner
+            target="participant"
+            onSwitch={() => { switchRole('participant'); navigate('/participant/dashboard') }}
+          />
+        </div>
+      )}
+
+      <div className={`flex ${hasParticipantView ? 'min-h-[calc(100vh-105px)]' : 'min-h-[calc(100vh-52px)]'}`}>
+        <aside className={`sticky w-[228px] shrink-0 border-r border-[#d5dce5] bg-white px-3 py-4 ${hasParticipantView ? 'top-[105px] h-[calc(100vh-105px)]' : 'top-[52px] h-[calc(100vh-52px)]'}`}>
           <p className="px-3 pb-2 pt-1 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">Workspace</p>
           <nav className="space-y-1">
             {navItems.map(({ to, label, icon: Icon }) => {

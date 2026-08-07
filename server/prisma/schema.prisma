@@ -79,6 +79,29 @@ model User {
   sentEmails      EmailOutbox[]       @relation("EmailActor")
 }
 
+model EmployeeDirectoryEntry {
+  id            String   @id @default(cuid())
+  employeeId    String   @unique
+  email         String?
+  name          String
+  positionLevel String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([positionLevel])
+  @@index([email])
+}
+
+model EmployeeDirectoryImport {
+  id           String   @id
+  fileName     String
+  total        Int
+  withEmail    Int
+  withoutEmail Int
+  uploadedAt   DateTime @default(now())
+  uploadedById String?
+}
+
 model Cohort {
   id           String        @id @default(cuid())
   slug         String        @unique
@@ -245,6 +268,7 @@ model NotificationTemplate {
 
 model EmailOutbox {
   id                  String                @id @default(cuid())
+  dedupeKey           String?               @unique
   templateId          String?
   template            NotificationTemplate? @relation(fields: [templateId], references: [templateId])
   toEmail             String

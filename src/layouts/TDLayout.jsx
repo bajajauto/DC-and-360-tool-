@@ -3,6 +3,7 @@ import {
   Bell,
   ChevronDown,
   ClipboardList,
+  Database,
   FileText,
   FileSpreadsheet,
   LayoutDashboard,
@@ -21,6 +22,7 @@ const navSections = [
     items: [
       { to: '/td/dashboard', label: 'Dashboard', icon: LayoutDashboard },
       { to: '/td/cohorts', label: 'Current Cohort', icon: Users },
+      { to: '/td/employee-directory', label: 'Employee Directory', icon: Database },
       { to: '/td/reports', label: 'Report Repository', icon: FileText },
     ],
   },

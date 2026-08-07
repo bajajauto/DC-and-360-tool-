@@ -13,6 +13,7 @@ import {
 import { deriveTaskStatus, taskCompletionPercent, toNomineeDto, toParticipantSummary } from '../utils/mappers.js'
 import { createQueuedEmail, sendEmail } from '../notifications/service.js'
 import { getBehaviourIds, getSurveySections } from '../../../src/data/surveyConfig.js'
+import { hasDeadlinePassed } from '../utils/deadlines.js'
 
 export const participantsRouter = Router()
 
@@ -38,6 +39,92 @@ const nomineesPayloadSchema = z.object({
   nominees: z.array(nomineeSchema).min(1),
 })
 
+const nomineeEligibilitySchema = nomineeSchema.pick({
+  email: true,
+  employeeId: true,
+  isExternal: true,
+  relationship: true,
+})
+
+const RESTRICTED_POSITION_LEVELS = new Set(['MX', 'CX', 'DX', 'L0', 'L1'])
+const RESTRICTED_NOMINATION_MESSAGE = 'You cannot choose the selected user as your 360 respondent for this category. You may add them under the Reporting Manager, Skip Manager, or BU Head category (wherever applicable) instead.'
+const BLOCKED_SELF_SELECTION_MESSAGE = 'Selection of this user as a 360° respondent is restricted.'
+const BLOCKED_SELF_SELECTION_EMPLOYEE_IDS = new Set(['26207', '36020', '10258', '54521'])
+const BLOCKED_SELF_SELECTION_EMAILS = new Set([
+  'pshrivastava@bajajauto.co.in',
+  'ajoseph@bajajauto.co.in',
+  'kpdsa@bajajauto.co.in',
+  'rsharma@bajajauto.co.in',
+])
+
+function normalizedPositionLevel(value) {
+  return String(value || '').trim().toUpperCase()
+}
+
+function matchesMasterContact(nominee, masterData, prefix) {
+  const email = normalizeEmail(nominee.email)
+  const employeeId = String(nominee.employeeId || '').trim().toLowerCase()
+  const masterEmail = String(masterData[`${prefix}Email`] || '').trim()
+  return (masterEmail && email === normalizeEmail(masterEmail))
+    || (employeeId && employeeId === String(masterData[`${prefix}EmployeeId`] || '').trim().toLowerCase())
+}
+
+function restrictedNomineeIsApplicable(nominee, masterData) {
+  if (nominee.relationship === 'reporting-manager') return matchesMasterContact(nominee, masterData, 'reportingManager')
+  if (nominee.relationship === 'skip-manager') {
+    return matchesMasterContact(nominee, masterData, 'skipManager') || matchesMasterContact(nominee, masterData, 'buHead')
+  }
+  return false
+}
+
+async function findDirectoryEntry(nominee, db = prisma) {
+  if (nominee.isExternal) return null
+  const email = normalizeEmail(nominee.email)
+  const employeeId = String(nominee.employeeId || '').trim()
+  return db.employeeDirectoryEntry.findFirst({
+    where: { OR: [{ email }, ...(employeeId ? [{ employeeId }] : [])] },
+  })
+}
+
+async function assertNomineePositionEligibility(nominee, participant, db = prisma) {
+  const employeeId = String(nominee.employeeId || '').trim()
+  if (BLOCKED_SELF_SELECTION_EMPLOYEE_IDS.has(employeeId) || BLOCKED_SELF_SELECTION_EMAILS.has(normalizeEmail(nominee.email))) {
+    throw httpError(400, BLOCKED_SELF_SELECTION_MESSAGE)
+  }
+  const directoryEntry = await findDirectoryEntry(nominee, db)
+  if (directoryEntry && (BLOCKED_SELF_SELECTION_EMPLOYEE_IDS.has(String(directoryEntry.employeeId || '').trim())
+    || BLOCKED_SELF_SELECTION_EMAILS.has(normalizeEmail(directoryEntry.email)))) {
+    throw httpError(400, BLOCKED_SELF_SELECTION_MESSAGE)
+  }
+  if (!directoryEntry || !RESTRICTED_POSITION_LEVELS.has(normalizedPositionLevel(directoryEntry.positionLevel))) return directoryEntry
+  const masterData = participant.masterData && typeof participant.masterData === 'object' ? participant.masterData : {}
+  if (!restrictedNomineeIsApplicable(nominee, masterData)) throw httpError(400, RESTRICTED_NOMINATION_MESSAGE)
+  return directoryEntry
+}
+
+function assertNomineeIsNotParticipant(nominee, participant) {
+  const nomineeEmail = normalizeEmail(nominee.email)
+  const participantEmail = normalizeEmail(participant.user.email)
+  const nomineeEmployeeId = String(nominee.employeeId || '').trim().toLowerCase()
+  const participantEmployeeId = String(participant.user.employeeId || '').trim().toLowerCase()
+  if (nomineeEmail === participantEmail || (nomineeEmployeeId && participantEmployeeId && nomineeEmployeeId === participantEmployeeId)) {
+    throw httpError(400, 'You cannot nominate yourself as a 360 respondent. Your self survey is included automatically.')
+  }
+}
+
+function assertNomineesAreUnique(nominees) {
+  const emails = nominees.map((nominee) => normalizeEmail(nominee.email)).filter(Boolean)
+  if (new Set(emails).size !== emails.length) {
+    throw httpError(400, 'Each person can only be nominated once.')
+  }
+  const employeeIds = nominees
+    .map((nominee) => String(nominee.employeeId || '').trim().toLowerCase())
+    .filter(Boolean)
+  if (new Set(employeeIds).size !== employeeIds.length) {
+    throw httpError(400, 'Each person can only be nominated once.')
+  }
+}
+
 const participantWorkSchema = z.object({
   answers: z.record(z.string(), z.unknown()),
   submit: z.boolean().optional().default(false),
@@ -54,16 +141,24 @@ function validResponse(value, minimum = 1) {
 function validateParticipantWork(type, answers) {
   if (type === 'pre-work') {
     const invalid = PRE_WORK_QUESTION_KEYS.filter((key) => !validResponse(answers[key], 15))
-    if (invalid.length) throw httpError(400, 'Please answer every Pre-Work question with at least 15 characters. Placeholder responses such as NA, None, hyphens, or dots are not accepted.')
+    if (invalid.length) throw httpError(400, 'Please answer every Self Reflection question with at least 15 characters. Placeholder responses such as NA, None, hyphens, or dots are not accepted.')
     return
   }
 
-  const transitionKeys = [1, 2, 3].flatMap((number) => ['role', 'roleDescription', 'bu', 'duration'].map((key) => `transition${number}_${key}`))
+  const transitionFields = ['role', 'roleDescription', 'bu', 'duration']
+  const transitionKeys = transitionFields.map((key) => `transition1_${key}`)
   const shortFields = ['currentRole', ...transitionKeys]
   const reflectionFields = ['responsibilities', 'highlight1', 'highlight2', 'challenge1', 'challenge2']
   const optionalReflectionFields = ['highlight3', 'challenge3']
   const invalidOptionalResponse = optionalReflectionFields.some((key) => answers[key] && !validResponse(answers[key], 15))
-  if (shortFields.some((key) => !validResponse(answers[key])) || reflectionFields.some((key) => !validResponse(answers[key], 15)) || invalidOptionalResponse) {
+  const validDuration = (value) => /^(0[1-9]|1[0-2])\/(19[6-9]\d|20\d{2})$/.test(String(value || ''))
+  const invalidRequiredDuration = !validDuration(answers.transition1_duration)
+  const invalidOptionalTransition = [2, 3].some((number) => {
+    const values = transitionFields.map((key) => answers[`transition${number}_${key}`])
+    return values.some((value) => String(value || '').trim())
+      && (values.slice(0, 3).some((value) => !validResponse(value)) || !validDuration(values[3]))
+  })
+  if (shortFields.some((key) => !validResponse(answers[key])) || invalidRequiredDuration || invalidOptionalTransition || reflectionFields.some((key) => !validResponse(answers[key], 15)) || invalidOptionalResponse) {
     throw httpError(400, 'Please complete every required Role Interview field. Detailed responses require at least 15 characters, and placeholder responses are not accepted.')
   }
 }
@@ -79,10 +174,7 @@ function formatCutoff(date) {
 }
 
 function hasCutoffPassed(cutoff, now = new Date()) {
-  if (!cutoff) return false
-  const endOfCutoffDay = new Date(cutoff)
-  endOfCutoffDay.setUTCHours(23, 59, 59, 999)
-  return now > endOfCutoffDay
+  return hasDeadlinePassed(cutoff, now)
 }
 
 function assertParticipantAccess(req, participant) {
@@ -100,7 +192,7 @@ async function findParticipant(id) {
       cohort: true,
       nominees: { orderBy: { createdAt: 'asc' } },
       feedbackTasks: { include: { responses: true } },
-      reports: { where: { type: '360' }, orderBy: { updatedAt: 'desc' }, take: 1 },
+      reports: { orderBy: { updatedAt: 'desc' } },
       assessorReviews: { orderBy: { updatedAt: 'desc' }, take: 1 },
     },
   })
@@ -116,7 +208,7 @@ const ROLE_INTERVIEW_KEYS = [
   'highlight2',
   'challenge1',
   'challenge2',
-  ...[1, 2, 3].flatMap((number) => ['role', 'roleDescription', 'bu', 'duration'].map((key) => `transition${number}_${key}`)),
+  ...['role', 'roleDescription', 'bu', 'duration'].map((key) => `transition1_${key}`),
 ]
 
 function countAnsweredPreWork(preWork) {
@@ -177,10 +269,11 @@ participantsRouter.get('/:participantId', asyncHandler(async (req, res) => {
   })
   const cutoffPassed = hasCutoffPassed(participant.cohort.threeSixtyCutoff)
   const nomineesSubmitted = participant.nominees.length > 0 && participant.nominees.every((nominee) => nominee.status === 'SUBMITTED')
+  const latest360Report = participant.reports.find((report) => report.type.toLowerCase() === '360') || null
   const taskStatus = deriveTaskStatus(participant, {
     allResponsesComplete,
     nomineesSubmitted,
-    latestReport: participant.reports[0] || null,
+    latestReport: latest360Report,
     latestAssessorReview: participant.assessorReviews[0] || null,
   })
   const respondents = buildRespondentStatuses(participant, nomineesSubmitted)
@@ -195,7 +288,15 @@ participantsRouter.get('/:participantId', asyncHandler(async (req, res) => {
   res.json({
     data: {
       ...toParticipantSummary(participant),
-      reportStatus: participant.reports[0]?.status?.toLowerCase() || (participant.reportStatus === 'READY' ? 'ready' : 'waiting'),
+      reportStatus: latest360Report?.status?.toLowerCase() || (participant.reportStatus === 'READY' ? 'ready' : 'waiting'),
+      reports: participant.reports.map((report) => ({
+        id: report.id,
+        type: report.type.toLowerCase(),
+        status: report.status.toLowerCase(),
+        generatedAt: report.generatedAt?.toISOString() || null,
+        releasedAt: report.releasedAt?.toISOString() || null,
+      })),
+      assessorTemplateUploaded: participant.assessorReviews[0]?.status === 'uploaded',
       masterData: participant.masterData || {},
       reportReady: participant.feedbackTasks.length > 0 && (allResponsesComplete || cutoffPassed),
       allResponsesComplete,
@@ -222,7 +323,6 @@ participantsRouter.get('/:participantId', asyncHandler(async (req, res) => {
           ? `${participant.cohort.eventStart.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })} - ${participant.cohort.eventEnd.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}`
           : 'TBD',
       },
-      nominees: participant.nominees.map(toNomineeDto),
     },
   })
 }))
@@ -244,7 +344,7 @@ participantsRouter.put('/:participantId/work/:type', asyncHandler(async (req, re
   const field = req.params.type === 'role-interview' ? 'roleInterview' : 'preWork'
   const current = participant[field]
   const cutoff = req.params.type === 'role-interview' ? participant.cohort.roleInterviewDeadline : participant.cohort.preWorkDeadline
-  if (hasCutoffPassed(cutoff)) throw httpError(409, `The ${req.params.type === 'role-interview' ? 'Role Interview' : 'Pre-Work'} cutoff has passed. This submission can no longer be edited.`)
+  if (hasCutoffPassed(cutoff)) throw httpError(409, `The ${req.params.type === 'role-interview' ? 'Role Interview' : 'Self Reflection'} cutoff has passed. This submission can no longer be edited.`)
   if (payload.submit) validateParticipantWork(req.params.type, payload.answers)
   const remainsSubmitted = current?.status === 'submitted'
   const submitted = payload.submit || remainsSubmitted
@@ -276,13 +376,16 @@ participantsRouter.put('/:participantId/nominees', asyncHandler(async (req, res)
   assertParticipantAccess(req, participant)
   if (hasCutoffPassed(participant.cohort.nominationDeadline)) throw httpError(409, 'The nomination deadline has passed. The nominee list can no longer be edited.')
   if (participant.nominees.some((nominee) => nominee.status === 'SUBMITTED')) throw httpError(409, 'Submitted nominations are final and cannot be edited')
-  const normalizedEmails = payload.nominees.map((nominee) => normalizeEmail(nominee.email))
-  if (new Set(normalizedEmails).size !== normalizedEmails.length) throw httpError(400, 'Each respondent email address can appear only once in the nominee list')
+  assertNomineesAreUnique(payload.nominees)
   if (payload.nominees.some((nominee) => !nominee.isExternal && !nominee.employeeId)) {
     throw httpError(400, 'Ticket ID is required for internal respondents')
   }
   if (payload.nominees.some((nominee) => nominee.isExternal && nominee.relationship !== 'peer')) {
     throw httpError(400, 'External stakeholders must be added within the Peers category')
+  }
+  for (const nominee of payload.nominees) {
+    assertNomineeIsNotParticipant(nominee, participant)
+    await assertNomineePositionEligibility(nominee, participant)
   }
   const lockedNominees = participant.nominees.filter((nominee) => nominee.locked)
   for (const locked of lockedNominees) {
@@ -336,6 +439,48 @@ participantsRouter.put('/:participantId/nominees', asyncHandler(async (req, res)
   })
 }))
 
+participantsRouter.post('/:participantId/nominees/check-eligibility', asyncHandler(async (req, res) => {
+  const nominee = nomineeEligibilitySchema.parse(req.body)
+  const participant = await findParticipant(req.params.participantId)
+  assertParticipantAccess(req, participant)
+  assertNomineeIsNotParticipant(nominee, participant)
+  const directoryEntry = await assertNomineePositionEligibility(nominee, participant)
+  res.json({
+    data: {
+      eligible: true,
+      verified: Boolean(directoryEntry),
+      positionLevel: directoryEntry?.positionLevel || null,
+    },
+  })
+}))
+
+participantsRouter.get('/:participantId/employee-directory', asyncHandler(async (req, res) => {
+  const participant = await findParticipant(req.params.participantId)
+  assertParticipantAccess(req, participant)
+  const query = String(req.query.q || '').trim()
+  if (query.length < 2) return res.json({ data: [] })
+  const rows = await prisma.employeeDirectoryEntry.findMany({
+    where: {
+      OR: [
+        { name: { contains: query, mode: 'insensitive' } },
+        { employeeId: { contains: query, mode: 'insensitive' } },
+        { email: { contains: query, mode: 'insensitive' } },
+      ],
+    },
+    orderBy: [{ name: 'asc' }, { employeeId: 'asc' }],
+    take: 10,
+  })
+  res.json({
+    data: rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      email: row.email,
+      employeeId: row.employeeId,
+      positionLevel: row.positionLevel,
+    })),
+  })
+}))
+
 participantsRouter.post('/:participantId/self-feedback-task', asyncHandler(async (req, res) => {
   const participant = await findParticipant(req.params.participantId)
   assertParticipantAccess(req, participant)
@@ -377,6 +522,14 @@ participantsRouter.post('/:participantId/nominees/submit', asyncHandler(async (r
   const participant = await findParticipant(req.params.participantId)
   assertParticipantAccess(req, participant)
   const nominees = participant.nominees
+  assertNomineesAreUnique(nominees)
+  for (const nominee of nominees) {
+    assertNomineeIsNotParticipant(nominee, participant)
+    await assertNomineePositionEligibility({
+      ...nominee,
+      relationship: nominee.relationship.toLowerCase().replaceAll('_', '-'),
+    }, participant)
+  }
   if (nominees.some((nominee) => nominee.status === 'SUBMITTED')) throw httpError(409, 'These nominations have already been submitted and are final')
 
   if (!nominees.length) throw httpError(400, 'Add nominees before submitting')
@@ -390,7 +543,7 @@ participantsRouter.post('/:participantId/nominees/submit', asyncHandler(async (r
     throw httpError(400, 'At least 4 peer nominees are required')
   }
 
-  const { submittedNominees, invites, pendingEmailIds } = await prisma.$transaction(async (tx) => {
+  const { submittedNominees, pendingEmailIds } = await prisma.$transaction(async (tx) => {
     await tx.nominee.updateMany({
       where: { participantId: participant.id },
       data: {
@@ -399,7 +552,6 @@ participantsRouter.post('/:participantId/nominees/submit', asyncHandler(async (r
       },
     })
 
-    const generatedInvites = []
     const queuedEmailIds = []
     const cutoffDate = participant.cohort.threeSixtyCutoff
     const cutoffLabel = formatCutoff(cutoffDate)
@@ -503,15 +655,6 @@ participantsRouter.post('/:participantId/nominees/submit', asyncHandler(async (r
         }, tx)
         queuedEmailIds.push(inviteEmail.id)
 
-        generatedInvites.push({
-          nomineeId: nominee.id,
-          taskId: task.id,
-          name: nominee.name,
-          email: normalizeEmail(nominee.email),
-          nomineeType,
-          inviteUrl,
-          expiresAt: expiresAt.toISOString(),
-        })
       }
     }
 
@@ -532,20 +675,22 @@ participantsRouter.post('/:participantId/nominees/submit', asyncHandler(async (r
     }, tx)
     queuedEmailIds.push(confirmationEmail.id)
 
-    const buhrs = await tx.user.findMany({
-      where: {
-        roles: { has: 'BUHR' },
-        businessUnit: participant.user.businessUnit,
-      },
-    })
+    const masterData = participant.masterData && typeof participant.masterData === 'object' ? participant.masterData : {}
+    const mappedBuhrEmail = normalizeEmail(masterData.buhrEmail)
+    const participantEmail = normalizeEmail(participant.user.email)
 
-    for (const buhr of buhrs) {
+    // Notify only the BUHR explicitly mapped to this participant. A BUHR role on
+    // the participant's own account, or another BUHR in the same BU, must not
+    // make the participant a recipient of this operational notification.
+    if (mappedBuhrEmail && mappedBuhrEmail !== participantEmail) {
+      const mappedBuhr = await tx.user.findUnique({ where: { email: mappedBuhrEmail } })
+      const buhrName = String(masterData.buhrName || mappedBuhr?.name || mappedBuhrEmail).trim()
       const buhrEmail = await createQueuedEmail({
         templateId: 'nominees-submitted-buhr',
-        toEmail: normalizeEmail(buhr.email),
-        toName: buhr.name,
+        toEmail: mappedBuhrEmail,
+        toName: buhrName,
         context: {
-          'BUHR Name': buhr.name,
+          'BUHR Name': buhrName,
           'Participant Name': participant.user.name,
           Cohort: participant.cohort.name,
           'Respondent Count': String(nominees.length),
@@ -570,7 +715,7 @@ participantsRouter.post('/:participantId/nominees/submit', asyncHandler(async (r
       orderBy: { createdAt: 'asc' },
     })
 
-    return { submittedNominees: submitted, invites: generatedInvites, pendingEmailIds: queuedEmailIds }
+    return { submittedNominees: submitted, pendingEmailIds: queuedEmailIds }
   })
 
   // Real SMTP sends happen after the transaction commits — doing them inside the
@@ -580,6 +725,5 @@ participantsRouter.post('/:participantId/nominees/submit', asyncHandler(async (r
 
   res.json({
     data: submittedNominees.map(toNomineeDto),
-    invites,
   })
 }))

@@ -9,7 +9,7 @@ import { useUser } from '../../context/UserContext'
 // names the cohort field the real deadline is read from (see formatDeadline).
 const baseJourneySteps = [
   { id: 1, label: 'Photograph', to: '/participant/photograph', status: 'pending', deadlineKey: 'photoDeadline' },
-  { id: 2, label: 'Pre-Work', to: '/participant/pre-work', status: 'pending', deadlineKey: 'preWorkDeadline' },
+  { id: 2, label: 'Self Reflection', to: '/participant/pre-work', status: 'pending', deadlineKey: 'preWorkDeadline' },
   { id: 3, label: 'Role Interview', to: '/participant/role-interview', status: 'pending', deadlineKey: 'roleInterviewDeadline' },
   { id: 4, label: '360 Nominees', to: '/participant/360-nominees', status: 'pending', deadlineKey: 'nominationDeadline' },
   { id: 5, label: 'Self 360 Survey', to: '/participant/self-360', status: 'locked', deadlineKey: 'threeSixtyCutoff' },
@@ -25,18 +25,9 @@ function formatDeadline(cohort, key) {
 const TASK_STATUS_KEY_BY_LABEL = {
   'Role Interview': 'role',
   Photograph: 'photo',
-  'Pre-Work': 'prework',
+  'Self Reflection': 'prework',
   '360 Feedback': 'feedback',
   'DC Report': 'report',
-}
-
-function nomineeCompletionPercent(nominees, submitted) {
-  if (submitted) return 100
-  const filledRequiredSlots =
-    Math.min(1, nominees.filter((nominee) => nominee.relationship === 'reporting-manager').length)
-    + Math.min(1, nominees.filter((nominee) => nominee.relationship === 'skip-manager').length)
-    + Math.min(4, nominees.filter((nominee) => nominee.relationship === 'peer').length)
-  return Math.round((filledRequiredSlots / 6) * 100)
 }
 
 function StatusBadge({ status }) {
@@ -85,7 +76,7 @@ function StepIcon({ status, step }) {
 }
 
 export default function Dashboard() {
-  const { user, participantData } = useUser()
+  const { user, participantData, refreshParticipantData } = useUser()
   const [selfTask, setSelfTask] = useState(null)
   const nominees = participantData?.nominees ?? []
   const nomineeStatus = nominees.some(n => n.status === 'submitted')
@@ -93,7 +84,10 @@ export default function Dashboard() {
     : nominees.length > 0
       ? 'saved'
       : 'pending'
-  const nomineeProgress = nomineeCompletionPercent(nominees, nomineeStatus === 'completed')
+
+  useEffect(() => {
+    if (user?.participantId) refreshParticipantData(user.participantId)
+  }, [refreshParticipantData, user?.participantId])
 
   useEffect(() => {
     if (nomineeStatus !== 'completed' || !user?.participantId) return
@@ -114,12 +108,11 @@ export default function Dashboard() {
   const visiblePendingTasks = []
   if (taskStatus?.prework && taskStatus.prework !== 'completed') {
     visiblePendingTasks.push({
-      title: 'Complete Pre-Work form',
+      title: 'Complete Self Reflection form',
       description: `${preWorkAnsweredCount} of 9 self-reflection questions answered`,
       to: '/participant/pre-work',
       deadline: formatDeadline(cohort, 'preWorkDeadline'),
       urgency: 'medium',
-      progress: preWorkAnsweredCount * 10,
     })
   }
   if (nomineeStatus !== 'completed') {
@@ -129,14 +122,12 @@ export default function Dashboard() {
       to: '/participant/360-nominees',
       deadline: formatDeadline(cohort, 'nominationDeadline'),
       urgency: 'medium',
-      progress: nomineeProgress,
     } : {
       title: 'Submit 360 Nominees',
       description: 'Select your feedback respondents from the directory',
       to: '/participant/360-nominees',
       deadline: formatDeadline(cohort, 'nominationDeadline'),
       urgency: 'high',
-      progress: 0,
     })
   }
   if (nomineeStatus === 'completed' && selfSurveyStatus !== 'completed') {
@@ -146,29 +137,10 @@ export default function Dashboard() {
       to: '/participant/self-360',
       deadline: formatDeadline(cohort, 'threeSixtyCutoff'),
       urgency: 'high',
-      progress: selfTask?.progress ?? 0,
     })
   }
   const completedSteps = journeySteps.filter((s) => s.status === 'completed').length
   const totalSteps = journeySteps.length
-  const roleQuestionCount = participantData?.roleInterviewQuestionCount ?? 0
-  const roleProgress = taskStatus?.role === 'completed'
-    ? 100
-    : roleQuestionCount
-      ? Math.round(((participantData?.roleInterviewAnsweredCount ?? 0) / roleQuestionCount) * 100)
-      : 0
-  const stageProgress = {
-    'Role Interview': roleProgress,
-    Photograph: taskStatus?.photo === 'completed' ? 100 : 0,
-    'Pre-Work': Math.min(100, preWorkAnsweredCount * 10),
-    'Self 360 Survey': selfSurveyStatus === 'completed' ? 100 : (selfTask?.progress ?? 0),
-    '360 Nominees': nomineeProgress,
-    '360 Feedback': participantData?.totalResponses
-      ? Math.round(((participantData?.responses ?? 0) / participantData.totalResponses) * 100)
-      : 0,
-    'DC Report': taskStatus?.report === 'completed' ? 100 : 0,
-  }
-  const progressPct = Math.round(journeySteps.reduce((sum, step) => sum + (stageProgress[step.label] ?? 0), 0) / totalSteps)
 
   return (
     <div className="p-6">
@@ -184,13 +156,6 @@ export default function Dashboard() {
             <p className="text-blue-200 text-sm font-medium">Your DC Journey Progress</p>
             <p className="text-2xl font-bold mt-0.5">{completedSteps} of {totalSteps} stages complete</p>
           </div>
-          <div className="text-right">
-            <p className="text-3xl font-bold">{progressPct}%</p>
-            <p className="text-blue-200 text-xs mt-0.5">Overall completion</p>
-          </div>
-        </div>
-        <div className="w-full bg-blue-800 rounded-full h-2">
-          <div className="bg-white rounded-full h-2 transition-all duration-500" style={{ width: `${progressPct}%` }} />
         </div>
         <p className="text-blue-200 text-xs mt-2">DC date: <span className="text-white font-medium">{cohort?.eventDate || 'TBD'}</span></p>
       </div>
@@ -242,16 +207,6 @@ export default function Dashboard() {
                     )}
                   </div>
                   <p className="text-xs text-gray-500 mb-3">{task.description}</p>
-                  {task.progress > 0 && (
-                    <div className="mb-3">
-                      <div className="flex justify-between text-[10px] text-gray-400 mb-1">
-                        <span>Progress</span><span>{task.progress}%</span>
-                      </div>
-                      <div className="w-full bg-gray-100 rounded-full h-1.5">
-                        <div className="bg-[#1e4d8c] rounded-full h-1.5" style={{ width: `${task.progress}%` }} />
-                      </div>
-                    </div>
-                  )}
                   <div className="flex items-center justify-between">
                     <p className="text-[10px] text-gray-400">Due: {task.deadline}</p>
                     <Link to={task.to} className="text-xs text-[#1e4d8c] font-medium hover:underline">Continue →</Link>

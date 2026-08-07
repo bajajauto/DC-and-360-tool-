@@ -72,10 +72,21 @@ export const api = {
   updateCohort: (cohortId, payload) =>
     apiFetch(`/api/cohorts/${cohortId}`, { method: 'PATCH', body: JSON.stringify(payload) }),
 
+  deleteCohort: (cohortId) =>
+    apiFetch(`/api/cohorts/${cohortId}`, { method: 'DELETE' }),
+
+  getEmployeeDirectoryStatus: () => apiFetch('/api/cohorts/employee-directory/status'),
+
+  importEmployeeDirectory: (fileName, entries) =>
+    apiFetch('/api/cohorts/employee-directory/import', { method: 'POST', body: JSON.stringify({ fileName, entries }) }),
+
   getCohortParticipants: (cohortId) => apiFetch(`/api/cohorts/${cohortId}/participants`),
 
   addCohortParticipant: (cohortId, payload) =>
     apiFetch(`/api/cohorts/${cohortId}/participants`, { method: 'POST', body: JSON.stringify(payload) }),
+
+  sendBuhrParticipantCredentials: (cohortId, emails) =>
+    apiFetch(`/api/cohorts/${cohortId}/participants/buhr-credentials`, { method: 'POST', body: JSON.stringify({ emails }) }),
 
   deleteCohortParticipant: (cohortId, participantId) =>
     apiFetch(`/api/cohorts/${cohortId}/participants/${participantId}`, { method: 'DELETE' }),
@@ -103,6 +114,15 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify({ nominees }),
     }),
+
+  checkNomineeEligibility: (participantId, nominee) =>
+    apiFetch(`/api/participants/${participantId}/nominees/check-eligibility`, {
+      method: 'POST',
+      body: JSON.stringify(nominee),
+    }),
+
+  searchEmployeeDirectory: (participantId, query) =>
+    apiFetch(`/api/participants/${participantId}/employee-directory?q=${encodeURIComponent(query || '')}`),
 
   getParticipantPhoto: (participantId) => apiFetch(`/api/participants/${participantId}/photo`),
 
@@ -132,6 +152,12 @@ export const api = {
   release360Report: (participantId) =>
     apiFetch(`/api/reports/${participantId}/360/release`, { method: 'POST' }),
 
+  setReportVisibility: (participantId, reportType, visible) =>
+    apiFetch(`/api/reports/${participantId}/${reportType}/visibility`, {
+      method: 'PUT',
+      body: JSON.stringify({ visible }),
+    }),
+
   generate360Report: (participantId) =>
     apiFetch(`/api/reports/${participantId}/360/generate`, { method: 'POST' }),
 
@@ -142,7 +168,12 @@ export const api = {
 
   getNotificationTemplates: () => apiFetch('/api/notifications/templates'),
 
+  saveNotificationAutomation: (templates) =>
+    apiFetch('/api/notifications/templates/automation', { method: 'PUT', body: JSON.stringify({ templates }) }),
+
   getNotificationRecipients: (templateId) => apiFetch(`/api/notifications/recipients?templateId=${encodeURIComponent(templateId || '')}`),
+  previewNotificationCc: (templateId, recipients) =>
+    apiFetch('/api/notifications/cc-preview', { method: 'POST', body: JSON.stringify({ templateId, recipients }) }),
 
   sendNotification: (payload) =>
     apiFetch('/api/notifications/send', { method: 'POST', body: JSON.stringify(payload) }),

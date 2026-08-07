@@ -31,7 +31,7 @@ export const accessAccountSeeds = [
     passwordEnv: 'BUHR_PASSWORD',
     defaultPassword: 'Buhr@123',
     designation: 'BUHR Partner',
-    businessUnit: 'EV & New Businesses',
+    businessUnit: 'Human Resources',
     roles: ['BUHR'],
   },
 ]

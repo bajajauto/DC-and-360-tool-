@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 const journeySteps = [
   { id: 1, label: 'Role Interview', to: '/participant/role-interview', status: 'completed', deadline: '15 Jun' },
   { id: 2, label: 'Photograph', to: '/participant/photograph', status: 'completed', deadline: '15 Jun' },
-  { id: 3, label: 'Pre-Work', to: '/participant/pre-work', status: 'in-progress', deadline: '20 Jun' },
+  { id: 3, label: 'Self Reflection', to: '/participant/pre-work', status: 'in-progress', deadline: '20 Jun' },
   { id: 4, label: '360 Nominees', to: '/participant/360-nominees', status: 'pending', deadline: '20 Jun' },
   { id: 5, label: 'Self 360 Survey', to: '/participant/self-360', status: 'locked', deadline: '30 Jun' },
   { id: 6, label: '360 Feedback', to: '/participant/360-status', status: 'locked', deadline: '30 Jun' },
@@ -12,7 +12,7 @@ const journeySteps = [
 
 const pendingTasks = [
   {
-    title: 'Complete Pre-Work form',
+    title: 'Complete Self Reflection form',
     description: '8 of 9 self-reflection questions answered',
     to: '/participant/pre-work',
     deadline: '20 Jun 2025',
@@ -76,7 +76,6 @@ function StepIcon({ status, step }: { status: string; step: number }) {
 export default function Dashboard() {
   const completedSteps = journeySteps.filter((s) => s.status === 'completed').length
   const totalSteps = journeySteps.length
-  const progressPct = Math.round((completedSteps / totalSteps) * 100)
 
   return (
     <div className="p-8 max-w-5xl mx-auto">
@@ -92,13 +91,6 @@ export default function Dashboard() {
             <p className="text-blue-200 text-sm font-medium">Your DC Journey Progress</p>
             <p className="text-2xl font-bold mt-0.5">{completedSteps} of {totalSteps} stages complete</p>
           </div>
-          <div className="text-right">
-            <p className="text-3xl font-bold">{progressPct}%</p>
-            <p className="text-blue-200 text-xs mt-0.5">Overall completion</p>
-          </div>
-        </div>
-        <div className="w-full bg-blue-800 rounded-full h-2">
-          <div className="bg-white rounded-full h-2 transition-all duration-500" style={{ width: `${progressPct}%` }} />
         </div>
         <p className="text-blue-200 text-xs mt-2">DC date: <span className="text-white font-medium">25–26 July 2025</span></p>
       </div>
@@ -150,16 +142,6 @@ export default function Dashboard() {
                     )}
                   </div>
                   <p className="text-xs text-gray-500 mb-3">{task.description}</p>
-                  {task.progress > 0 && (
-                    <div className="mb-3">
-                      <div className="flex justify-between text-[10px] text-gray-400 mb-1">
-                        <span>Progress</span><span>{task.progress}%</span>
-                      </div>
-                      <div className="w-full bg-gray-100 rounded-full h-1.5">
-                        <div className="bg-[#1e4d8c] rounded-full h-1.5" style={{ width: `${task.progress}%` }} />
-                      </div>
-                    </div>
-                  )}
                   <div className="flex items-center justify-between">
                     <p className="text-[10px] text-gray-400">Due: {task.deadline}</p>
                     <Link to={task.to} className="text-xs text-[#1e4d8c] font-medium hover:underline">Continue →</Link>

@@ -7,7 +7,7 @@ import { exportCohortNomineeStatus, exportCohortProcessStatus } from '../../lib/
 const tabs = [
   { id: 'participants', label: 'Participants' },
   { id: 'manage', label: 'Manage Participants' },
-  { id: 'threesixty', label: '360 Progress' },
+  { id: 'threesixty', label: '360 Responses' },
   { id: 'assessors', label: 'Assessor Status' },
   { id: 'reports', label: 'Reports' },
 ]
@@ -53,7 +53,7 @@ function Metric({ label, value, sub, tone = 'text-[#0f172a]' }) {
 function RoleGuide() {
   const steps = [
     'Create a cohort, download the Employee Details template, fill and upload it.',
-    'Participants complete their Role Interview, Pre-Work, photograph and 360 nominations within the configured deadlines.',
+    'Participants complete their Role Interview, Self Reflection, photograph and 360 nominations within the configured deadlines.',
     'Launch and track 360 feedback. Respondents receive task-specific magic links immediately, with reminders and delivery status available in Email History.',
     'Assessors review participant evidence and upload the completed assessor-analysis workbook for each participant.',
     'Generate, review and release the 360° Feedback Report and final Development Centre Report when all required inputs are ready.',
@@ -102,7 +102,7 @@ const dcTypeOptions = ['EX to LX', 'LX to MX']
 const deadlineFieldDefs = [
   { key: 'roleInterviewDeadline', label: 'Role Interview Deadline' },
   { key: 'photoDeadline', label: 'Photograph Deadline' },
-  { key: 'preWorkDeadline', label: 'Pre-Work Deadline' },
+  { key: 'preWorkDeadline', label: 'Self Reflection Deadline' },
   { key: 'nominationDeadline', label: 'Nomination Deadline' },
   { key: 'threeSixtyCutoff', label: '360 Cutoff' },
 ]
@@ -141,6 +141,111 @@ function cohortToForm(cohort) {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
+const COHORT_TEMPLATE_HEADERS = [
+  'Emp Name ', 'Ticket ID ', 'DOJ', 'Designation', 'Job Level ', 'Position Level', 'Age ', 'Gender',
+  'Phone No.', 'Legal Entity', 'Sector ', 'Department', 'BU', 'Location', 'Email ID ',
+  'Reporting manager Name', 'Ticket Id ', 'Email ID ', 'Skip Manager Name  ', 'ticket Id ', 'email id ',
+  'BU head Name ', 'Ticket Id ', 'Email', 'BUHR Name ', 'Ticket id ', 'email ',
+]
+
+const COHORT_TEMPLATE_HEADER_COLORS = [
+  ...Array(15).fill('F6C6AD'),
+  ...Array(3).fill('4E95D9'),
+  ...Array(3).fill('84E291'),
+  ...Array(3).fill('E59EDD'),
+  ...Array(3).fill('61CBF4'),
+]
+
+async function downloadCohortCreationTemplate() {
+  const XLSX = await import('xlsx')
+  const worksheet = XLSX.utils.aoa_to_sheet([COHORT_TEMPLATE_HEADERS, Array(27).fill(''), Array(27).fill('')])
+  COHORT_TEMPLATE_HEADERS.forEach((_, index) => {
+    const cell = worksheet[XLSX.utils.encode_cell({ r: 0, c: index })]
+    cell.s = {
+      fill: { patternType: 'solid', fgColor: { rgb: COHORT_TEMPLATE_HEADER_COLORS[index] } },
+      font: { bold: true, color: { rgb: '000000' } },
+      alignment: { vertical: 'center' },
+    }
+  })
+  worksheet['!cols'] = COHORT_TEMPLATE_HEADERS.map((header, index) => ({
+    wch: index === 17 ? 28 : index === 18 ? 20 : Math.max(10, Math.min(24, header.trim().length + 3)),
+  }))
+  worksheet['!freeze'] = { xSplit: 0, ySplit: 1 }
+  const workbook = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Employee Details')
+  XLSX.writeFile(workbook, 'DC-Cohort-Creation-Template.xlsx')
+}
+
+async function parseParticipantTemplate(file) {
+  const XLSX = await import('xlsx')
+  const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array' })
+  const sheet = workbook.Sheets[workbook.SheetNames[0]]
+  const values = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: false })
+  const headers = (values[0] || []).map((value, index) => String(value).trim() || `Column ${index + 1}`)
+  const nameCol = headers.findIndex((header) => header.toLowerCase() === 'emp name')
+  if (nameCol === -1 || headers.length - nameCol < 27 || !headers[nameCol + 1].toLowerCase().includes('ticket')) {
+    throw new Error('This file does not match the configured 27-column cohort creation template.')
+  }
+
+  const col = (offset) => nameCol + offset
+  const text = (value) => String(value ?? '').trim()
+  const required = [col(0), col(1), col(3), col(12), col(14), col(24), col(25), col(26)]
+  const emailColumns = [col(14), col(17), col(20), col(23), col(26)]
+  const firstCandidateIsEmployee = text(values[1]?.[col(1)]) && EMAIL_RE.test(text(values[1]?.[col(14)]))
+  const dataRows = values.slice(firstCandidateIsEmployee ? 1 : 2).filter((row) => row.some((value) => text(value)))
+  if (!dataRows.length) throw new Error('The workbook contains no participant rows. Add data below the Field Type row.')
+
+  const errors = []
+  const candidates = []
+  const seenIds = new Map()
+  const seenEmails = new Map()
+
+  dataRows.forEach((row, index) => {
+    const rowNumber = index + (firstCandidateIsEmployee ? 2 : 3)
+    const missing = required.filter((column) => !text(row[column]))
+    missing.forEach((column) => errors.push({ row: rowNumber, ticket: text(row[col(1)]) || '-', field: headers[column], issue: 'Missing (mandatory)' }))
+    emailColumns.forEach((column) => {
+      const value = text(row[column])
+      if (value && !EMAIL_RE.test(value)) errors.push({ row: rowNumber, ticket: text(row[col(1)]) || '-', field: headers[column], issue: `Not a valid email: ${value}` })
+    })
+
+    const employeeId = text(row[col(1)]).toLowerCase()
+    const email = text(row[col(14)]).toLowerCase()
+    if (employeeId) {
+      if (seenIds.has(employeeId)) errors.push({ row: rowNumber, ticket: text(row[col(1)]), field: 'Ticket ID', issue: `Duplicate Ticket ID (also row ${seenIds.get(employeeId)})` })
+      else seenIds.set(employeeId, rowNumber)
+    }
+    if (email) {
+      if (seenEmails.has(email)) errors.push({ row: rowNumber, ticket: text(row[col(1)]), field: 'Email', issue: `Duplicate email (also row ${seenEmails.get(email)})` })
+      else seenEmails.set(email, rowNumber)
+    }
+
+    const masterData = Object.fromEntries(headers.map((header, column) => [`${header}_${column + 1}`, text(row[column])]))
+    Object.assign(masterData, {
+      reportingManagerName: text(row[col(15)]), reportingManagerEmployeeId: text(row[col(16)]), reportingManagerEmail: text(row[col(17)]),
+      skipManagerName: text(row[col(18)]), skipManagerEmployeeId: text(row[col(19)]), skipManagerEmail: text(row[col(20)]),
+      buHeadName: text(row[col(21)]), buHeadEmployeeId: text(row[col(22)]), buHeadEmail: text(row[col(23)]),
+      buhrName: text(row[col(24)]), buhrEmployeeId: text(row[col(25)]), buhrEmail: text(row[col(26)]),
+      jobLevel: text(row[col(4)]), positionLevel: text(row[col(5)]), department: text(row[col(11)]), location: text(row[col(13)]),
+    })
+    candidates.push({
+      rowNumber,
+      name: text(row[col(0)]), employeeId: text(row[col(1)]), email: text(row[col(14)]), designation: text(row[col(3)]), businessUnit: text(row[col(12)]),
+      reportingManager: { name: text(row[col(15)]), employeeId: text(row[col(16)]), email: text(row[col(17)]) },
+      skipManager: { name: text(row[col(18)]), employeeId: text(row[col(19)]), email: text(row[col(20)]) },
+      buHead: { name: text(row[col(21)]), employeeId: text(row[col(22)]), email: text(row[col(23)]) },
+      buhr: { name: text(row[col(24)]), employeeId: text(row[col(25)]), email: text(row[col(26)]) },
+      masterData,
+    })
+  })
+
+  const erroredRows = new Set(errors.map((error) => error.row))
+  return {
+    rows: candidates.filter((row) => !erroredRows.has(row.rowNumber)),
+    validation: { total: dataRows.length, validCount: dataRows.length - erroredRows.size, errorRowCount: erroredRows.size, errors: errors.sort((a, b) => a.row - b.row) },
+  }
+}
+
 function CohortFormModal({ mode, initialCohort, onClose, onSubmit }) {
   const [form, setForm] = useState(() => (initialCohort ? cohortToForm(initialCohort) : emptyCohortForm()))
   const [saving, setSaving] = useState(false)
@@ -168,7 +273,7 @@ function CohortFormModal({ mode, initialCohort, onClose, onSubmit }) {
       // assuming a fixed position, so both layouts work.
       const nameCol = headers.findIndex((header) => header.toLowerCase() === 'emp name')
       if (nameCol === -1 || headers.length - nameCol < 27 || !headers[nameCol + 1].toLowerCase().includes('ticket')) {
-        throw new Error('This file does not match the 28-column master data template.')
+        throw new Error('This file does not match the configured 27-column cohort creation template.')
       }
       const col = (offset) => nameCol + offset
 
@@ -217,7 +322,7 @@ function CohortFormModal({ mode, initialCohort, onClose, onSubmit }) {
           reportingManagerName: text(row[col(15)]), reportingManagerEmployeeId: text(row[col(16)]), reportingManagerEmail: text(row[col(17)]),
           skipManagerName: text(row[col(18)]), skipManagerEmployeeId: text(row[col(19)]), skipManagerEmail: text(row[col(20)]),
           buHeadName: text(row[col(21)]), buHeadEmployeeId: text(row[col(22)]), buHeadEmail: text(row[col(23)]),
-          buhrName: text(row[col(24)]), buhrEmail: text(row[col(26)]),
+          buhrName: text(row[col(24)]), buhrEmployeeId: text(row[col(25)]), buhrEmail: text(row[col(26)]),
           jobLevel: text(row[col(4)]), positionLevel: text(row[col(5)]), department: text(row[col(11)]), location: text(row[col(13)]),
         })
         candidateRows.push({
@@ -338,8 +443,20 @@ function CohortFormModal({ mode, initialCohort, onClose, onSubmit }) {
 
           {mode === 'create' && (
             <div className="border-t border-[#e2e8f0] pt-4">
-              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Participant master sheet</label>
-              <p className="mb-3 text-xs leading-5 text-slate-500">Upload the completed 28-column Excel template. Participant accounts and BUHR access will be created with the cohort. Participants will enter all 360 nominees themselves.</p>
+              <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Participant master sheet</label>
+                  <p className="max-w-xl text-xs leading-5 text-slate-500">Upload the completed configured 27-column Excel template. Participant accounts and BUHR access will be created with the cohort. Participants will enter all 360 nominees themselves.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={downloadCohortCreationTemplate}
+                  className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-[#1e5fba] bg-white px-3 py-2 text-xs font-semibold text-[#1e5fba] hover:bg-[#ebf2fa]"
+                >
+                  <Download size={14} />
+                  Download Cohort Creation Template
+                </button>
+              </div>
               <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-dashed border-[#c2ccda] bg-[#f8fafc] px-4 py-5 text-sm font-medium text-slate-600 hover:border-[#1e5fba] hover:bg-[#ebf2fa]">
                 <Upload size={18} />
                 {fileName || 'Choose master data workbook'}
@@ -418,7 +535,7 @@ function ParticipantsTab({ rows, generated, onManage }) {
         <table className="w-full border-collapse bg-white text-left text-[13px]">
           <thead className="bg-[#ebf2fa]">
             <tr>
-              {['Ticket ID', 'Name', 'BU', 'Nominations', 'Pre-Work', 'Photo', '360 Responses', '360° Feedback Report Status', 'DC Report Status', ''].map((label) => (
+              {['Ticket ID', 'Name', 'BU', 'Nominations', 'Self Reflection', 'Photo', '360 Responses', '360° Feedback Report Status', 'DC Report Status', ''].map((label) => (
                 <th key={label} className="border-b border-[#d5dce5] px-3 py-2.5 text-[11px] font-bold uppercase tracking-wide text-slate-600">{label}</th>
               ))}
             </tr>
@@ -466,61 +583,158 @@ function ParticipantsTab({ rows, generated, onManage }) {
 }
 
 function EmployeeUploadTab() {
-  const rules = [
-    'All columns mandatory except Phone. Ticket ID must be unique within the file and against existing participants.',
-    'All employee, manager, skip and BUHR email columns must contain valid email addresses.',
-    'Date of Birth must be DD-MM-YYYY and a real calendar date. Gender must be F or M.',
-    'Nothing is created until TD confirms the validation summary.',
-  ]
+  const [entries, setEntries] = useState([])
+  const [fileName, setFileName] = useState('')
+  const [validation, setValidation] = useState(null)
+  const [currentDirectory, setCurrentDirectory] = useState(null)
+  const [loadingCurrent, setLoadingCurrent] = useState(true)
+  const [uploading, setUploading] = useState(false)
+  const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    api.getEmployeeDirectoryStatus()
+      .then((result) => setCurrentDirectory(result.data || null))
+      .catch((err) => setError(err.message))
+      .finally(() => setLoadingCurrent(false))
+  }, [])
+
+  async function readDirectoryFile(event) {
+    const file = event.target.files?.[0]
+    if (!file) return
+    setError('')
+    setMessage('')
+    setEntries([])
+    try {
+      const XLSX = await import('xlsx')
+      const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array' })
+      const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { defval: '' })
+      const text = (value) => String(value ?? '').trim()
+      const email = (value) => {
+        const normalized = text(value).toLowerCase()
+        return EMAIL_RE.test(normalized) ? normalized : null
+      }
+      const parsed = rows.map((row, index) => ({
+        row: index + 2,
+        employeeId: text(row['Users Sys Id']),
+        name: text(row['Full Name as per Aadhar Card']),
+        positionLevel: text(row['Position Position Level (Label)']).toUpperCase(),
+        email: email(row['Email Address']),
+      }))
+      const invalid = parsed.filter((entry) => !entry.employeeId || !entry.name || !entry.positionLevel)
+      if (invalid.length) throw new Error(`${invalid.length} row${invalid.length === 1 ? '' : 's'} are missing Ticket ID, name, or position level. First affected row: ${invalid[0].row}.`)
+      const unique = [...new Map(parsed.map((entry) => [entry.employeeId.toLowerCase(), entry])).values()]
+      setEntries(unique.map(({ row: _row, ...entry }) => entry))
+      setFileName(file.name)
+      setValidation({ total: unique.length, withEmail: unique.filter((entry) => entry.email).length, withoutEmail: unique.filter((entry) => !entry.email).length })
+    } catch (err) {
+      setFileName('')
+      setValidation(null)
+      setError(err.message || 'Unable to read the employee directory workbook.')
+    }
+  }
+
+  async function uploadDirectory() {
+    if (!entries.length) return
+    if (!window.confirm(`Replace the Azure employee directory with ${entries.length} records from ${fileName}?`)) return
+    setUploading(true)
+    setError('')
+    setMessage('')
+    try {
+      const result = await api.importEmployeeDirectory(fileName, entries)
+      setCurrentDirectory({
+        fileName: result.data.fileName,
+        total: result.data.imported,
+        withEmail: result.data.withEmail,
+        withoutEmail: result.data.withoutEmail,
+        uploadedAt: result.data.importedAt,
+      })
+      setEntries([])
+      setFileName('')
+      setValidation(null)
+      setMessage(`Employee directory updated: ${result.data.imported} records (${result.data.withEmail} with email, ${result.data.withoutEmail} without email).`)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setUploading(false)
+    }
+  }
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border border-[#7ba6e0] bg-[#ebf2fa] p-4 text-sm text-[#123e77]">
-        <strong>This one upload powers cohort setup.</strong> Participant logins and BUHR visibility are created from it. Participants enter the name and email address for every 360 nominee themselves.
-      </div>
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader title="Step 1: Download Template" subtitle="One row per participant with the full employee master columns." />
-          <p className="mb-4 text-sm leading-6 text-slate-600">Columns include Ticket ID, Name, Email, Sector, BU, Function, BUHR, Manager, Skip / BU Head, Date of Birth, Gender and Phone.</p>
-          <button className="inline-flex items-center gap-2 rounded-lg bg-[#1e5fba] px-4 py-2 text-sm font-semibold text-white hover:bg-[#0e3f87]">
-            <Download size={15} />
-            Download Employee Details Template
-          </button>
-        </Card>
-        <Card>
-          <CardHeader title="Step 2: Upload Filled File" subtitle="Excel or CSV. Rows are validated before account creation." />
-          <button className="flex w-full flex-col items-center justify-center rounded-xl border-2 border-dashed border-[#c2ccda] bg-[#f4f7fb] px-5 py-8 text-center hover:border-[#1e5fba] hover:bg-[#ebf2fa]">
-            <Upload size={30} className="mb-2 text-slate-500" />
-            <span className="font-medium text-[#0f172a]">Drop the filled file here or click to upload</span>
-            <span className="mt-1 text-xs text-slate-500">Excel (.xlsx) or CSV</span>
-          </button>
-        </Card>
-      </div>
       <Card>
-        <CardHeader title="Validation rules applied to every row" />
-        <div className="grid gap-3 md:grid-cols-2">
-          {rules.map((rule, index) => (
-            <div key={rule} className="flex gap-3 rounded-xl bg-[#f4f7fb] p-3 text-sm text-slate-600">
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#ebf2fa] text-xs font-bold text-[#1e5fba]">{index + 1}</span>
-              <span>{rule}</span>
+        <CardHeader title="Current Employee Directory" subtitle="The active directory used for employee search and nomination-level validation." />
+        {loadingCurrent ? <p className="text-sm text-slate-500">Loading current directory…</p> : currentDirectory ? (
+          <div>
+            <div className="flex items-center gap-3 rounded-xl border border-[#d5dce5] bg-[#f8fbff] p-4">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#ebf2fa] text-[#1e5fba]"><FileText size={20}/></div>
+              <div className="min-w-0"><p className="truncate text-sm font-semibold text-[#0f172a]">{currentDirectory.fileName || 'Previously uploaded employee directory'}</p><p className="mt-1 text-xs text-slate-500">{currentDirectory.uploadedAt ? `Uploaded ${new Date(currentDirectory.uploadedAt).toLocaleString('en-GB')}` : 'Upload date unavailable'}{!currentDirectory.fileName ? ' · Original filename was not stored' : ''}</p></div>
             </div>
-          ))}
-        </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-3"><Metric label="Employees" value={currentDirectory.total}/><Metric label="With Email" value={currentDirectory.withEmail} tone="text-[#15803d]"/><Metric label="Without Email" value={currentDirectory.withoutEmail} tone="text-[#a66a10]"/></div>
+          </div>
+        ) : <p className="rounded-xl border border-dashed border-[#c2ccda] bg-[#f8fafc] px-4 py-6 text-center text-sm text-slate-500">No employee directory has been uploaded yet.</p>}
       </Card>
+      <Card>
+        <CardHeader title="Update Employee Directory" subtitle="Expected columns: Users Sys Id, Full Name as per Aadhar Card, Position Position Level (Label), and Email Address." />
+        {message && <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{message}</div>}
+        {error && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+        <label className="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-[#c2ccda] bg-[#f4f7fb] px-5 py-7 text-center hover:border-[#1e5fba] hover:bg-[#ebf2fa]">
+            <Upload size={30} className="mb-2 text-slate-500" />
+            <span className="font-medium text-[#0f172a]">{fileName || 'Choose EC employee dump'}</span>
+            <span className="mt-1 text-xs text-slate-500">Excel (.xlsx or .xls) · employee data is not stored as a file</span>
+            <input type="file" accept=".xlsx,.xls" onChange={readDirectoryFile} className="sr-only" />
+        </label>
+        {validation && <div className="mt-4 grid gap-3 sm:grid-cols-3"><Metric label="Employees" value={validation.total} /><Metric label="With Email" value={validation.withEmail} tone="text-[#15803d]" /><Metric label="Without Email" value={validation.withoutEmail} tone="text-[#a66a10]" /></div>}
+        <button type="button" onClick={uploadDirectory} disabled={!entries.length || uploading} className="mt-4 inline-flex items-center gap-2 rounded-lg bg-[#1e5fba] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#0e3f87] disabled:cursor-not-allowed disabled:opacity-50"><Upload size={15} />{uploading ? 'Uploading…' : 'Upload to Azure Directory'}</button>
+      </Card>
+    </div>
+  )
+}
+
+export function EmployeeDirectoryPage() {
+  return (
+    <div className="px-9 py-8">
+      <div className="mx-auto max-w-[1200px]">
+        <p className="mb-2 text-xs text-slate-500">Talent Development / Employee Directory</p>
+        <h1 className="font-serif text-[34px] font-semibold leading-tight text-[#1e4d8c]">Employee Directory</h1>
+        <p className="mb-6 mt-1 text-sm text-slate-600">View the active employee directory and replace it with the latest EC employee dump.</p>
+        <EmployeeUploadTab />
+      </div>
     </div>
   )
 }
 
 function ManageParticipantsTab({ cohort, rows, onAdded, onDeleted }) {
   const emptyRow = () => ({ name: '', employeeId: '', email: '', designation: '', businessUnit: '' })
-  const [forms, setForms] = useState([emptyRow()])
+  const [forms, setForms] = useState([])
+  const [fileName, setFileName] = useState('')
+  const [validation, setValidation] = useState(null)
   const [saving, setSaving] = useState(false)
   const [deletingId, setDeletingId] = useState(null)
   const [message, setMessage] = useState('')
-  const complete = forms.length > 0 && forms.every((form) => Object.values(form).every((value) => value.trim()))
+  const complete = forms.length > 0 && validation?.errorRowCount === 0
 
   function update(index, field, value) {
     setForms((current) => current.map((form, formIndex) => formIndex === index ? { ...form, [field]: value } : form))
+  }
+
+  async function handleParticipantWorkbook(event) {
+    const file = event.target.files?.[0]
+    if (!file) return
+    setMessage('')
+    setForms([])
+    setValidation(null)
+    setFileName('')
+    try {
+      const parsed = await parseParticipantTemplate(file)
+      setForms(parsed.rows)
+      setValidation(parsed.validation)
+      setFileName(file.name)
+    } catch (error) {
+      setMessage(error.message || 'Unable to read the participant workbook.')
+    } finally {
+      event.target.value = ''
+    }
   }
 
   async function addParticipants() {
@@ -534,7 +748,11 @@ function ManageParticipantsTab({ cohort, rows, onAdded, onDeleted }) {
         added.push(data)
         onAdded(data)
       }
-      setForms([emptyRow()])
+      const buhrEmails = [...new Set(forms.map((form) => form.buhr.email.toLowerCase()))]
+      await api.sendBuhrParticipantCredentials(cohort.id, buhrEmails)
+      setForms([])
+      setFileName('')
+      setValidation(null)
       setMessage(`${added.length} participant${added.length === 1 ? '' : 's'} added to ${cohort.name}.`)
     } catch (error) {
       setMessage(error.message)
@@ -559,6 +777,28 @@ function ManageParticipantsTab({ cohort, rows, onAdded, onDeleted }) {
     }
   }
 
+  const participantImportPanel = (
+    <div className="space-y-5">
+      {message && <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">{message}</div>}
+      <Card>
+        <CardHeader title="Add Participants" subtitle="Use the same completed 27-column Employee Details template used during cohort creation." />
+        <div className="rounded-xl border border-[#7ba6e0] bg-[#ebf2fa] p-4 text-sm text-[#123e77]">All participant, manager, skip manager, BU head and BUHR details will be stored. The respective BUHR account is created or updated automatically.</div>
+        <label className="mt-4 flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-[#c2ccda] bg-[#f4f7fb] px-5 py-7 text-center hover:border-[#1e5fba] hover:bg-[#ebf2fa]">
+          <Upload size={30} className="mb-2 text-slate-500" />
+          <span className="font-medium text-[#0f172a]">{fileName || 'Choose completed Employee Details template'}</span>
+          <span className="mt-1 text-xs text-slate-500">Excel (.xlsx or .xls) · full configured 27-column structure required</span>
+          <input type="file" accept=".xlsx,.xls" onChange={handleParticipantWorkbook} className="sr-only" />
+        </label>
+        {validation && <div className="mt-4 grid gap-3 sm:grid-cols-3"><Metric label="Rows found" value={validation.total}/><Metric label="Valid participants" value={validation.validCount} tone="text-[#15803d]"/><Metric label="Rows with errors" value={validation.errorRowCount} tone={validation.errorRowCount ? 'text-[#b91c1c]' : 'text-[#15803d]'}/></div>}
+        {validation?.errors.length > 0 && <div className="mt-4 max-h-52 overflow-auto rounded-xl border border-red-200"><table className="w-full text-left text-xs"><thead className="sticky top-0 bg-red-50 text-red-800"><tr><th className="px-3 py-2">Row</th><th className="px-3 py-2">Ticket ID</th><th className="px-3 py-2">Column</th><th className="px-3 py-2">Issue</th></tr></thead><tbody>{validation.errors.map((error, index) => <tr key={`${error.row}-${error.field}-${index}`} className="border-t border-red-100"><td className="px-3 py-2">{error.row}</td><td className="px-3 py-2">{error.ticket}</td><td className="px-3 py-2">{error.field}</td><td className="px-3 py-2 text-red-700">{error.issue}</td></tr>)}</tbody></table></div>}
+        <div className="mt-4 flex justify-end"><button onClick={addParticipants} disabled={!forms.length || validation?.errorRowCount > 0 || saving} className="inline-flex items-center gap-2 rounded-lg bg-[#1e5fba] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40"><Plus size={15}/>{saving ? 'Adding…' : `Add ${forms.length || ''} Participant${forms.length === 1 ? '' : 's'}`}</button></div>
+      </Card>
+      <Card><CardHeader title={`All Participants (${rows.length})`} subtitle="This unified roster includes participants from the cohort-creation Excel and participants added later. Deleting a participant permanently removes their cohort work and access."/><div className="overflow-x-auto rounded-xl border border-[#d5dce5]"><table className="w-full min-w-[820px] text-left text-sm"><thead className="bg-[#ebf2fa]"><tr>{['Ticket ID', 'Participant', 'Email', 'Business Unit', 'Action'].map((label) => <th key={label} className="border-b px-3 py-2.5 text-[11px] font-bold uppercase text-slate-600">{label}</th>)}</tr></thead><tbody>{rows.length === 0 ? <tr><td colSpan={5} className="px-4 py-8 text-center text-sm text-slate-500">No participants have been added to this cohort yet.</td></tr> : rows.map((participant) => <tr key={participant.id}><td className="border-b px-3 py-3 text-slate-500">{participant.employeeId}</td><td className="border-b px-3 py-3"><p className="font-semibold">{participant.name}</p><p className="text-xs text-slate-500">{participant.designation}</p></td><td className="border-b px-3 py-3 text-slate-600">{participant.email}</td><td className="border-b px-3 py-3 text-slate-600">{participant.bu}</td><td className="border-b px-3 py-3 text-right"><button onClick={() => removeParticipant(participant)} disabled={deletingId === participant.id} className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-40"><Trash2 size={13}/>{deletingId === participant.id ? 'Deleting…' : 'Delete Participant'}</button></td></tr>)}</tbody></table></div></Card>
+    </div>
+  )
+
+  return participantImportPanel
+
   return <div className="space-y-5">{message && <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">{message}</div>}<Card><CardHeader title="Add Participants" subtitle="Add one or several participant accounts directly to this cohort."/><div className="space-y-3">{forms.map((form, index) => <div key={index} className="rounded-xl border border-[#d5dce5] bg-[#f8fbff] p-4"><div className="mb-3 flex items-center justify-between"><p className="text-xs font-bold uppercase tracking-wide text-[#1e5fba]">Participant {index + 1}</p>{forms.length > 1 && <button onClick={() => setForms((current) => current.filter((_, formIndex) => formIndex !== index))} className="text-xs font-semibold text-red-500">Remove row</button>}</div><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5"><input value={form.name} onChange={(event) => update(index, 'name', event.target.value)} placeholder="Full name" className="rounded-lg border border-[#c2ccda] px-3 py-2.5 text-sm"/><input value={form.employeeId} onChange={(event) => update(index, 'employeeId', event.target.value)} placeholder="Ticket ID" className="rounded-lg border border-[#c2ccda] px-3 py-2.5 text-sm"/><input type="email" value={form.email} onChange={(event) => update(index, 'email', event.target.value)} placeholder="Email address" className="rounded-lg border border-[#c2ccda] px-3 py-2.5 text-sm"/><input value={form.designation} onChange={(event) => update(index, 'designation', event.target.value)} placeholder="Designation" className="rounded-lg border border-[#c2ccda] px-3 py-2.5 text-sm"/><input value={form.businessUnit} onChange={(event) => update(index, 'businessUnit', event.target.value)} placeholder="Business unit" className="rounded-lg border border-[#c2ccda] px-3 py-2.5 text-sm"/></div></div>)}</div><div className="mt-4 flex flex-wrap justify-between gap-3"><button onClick={() => setForms((current) => [...current, emptyRow()])} className="inline-flex items-center gap-2 rounded-lg border border-[#1e5fba] px-4 py-2.5 text-sm font-semibold text-[#1e5fba] hover:bg-blue-50"><Plus size={15}/>Add Another</button><button onClick={addParticipants} disabled={!complete || saving} className="inline-flex items-center gap-2 rounded-lg bg-[#1e5fba] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40"><Plus size={15}/>{saving ? 'Adding…' : `Add ${forms.length} Participant${forms.length === 1 ? '' : 's'}`}</button></div></Card><Card><CardHeader title={`Participants (${rows.length})`} subtitle="Removing a participant permanently deletes their cohort work and access."/><div className="overflow-hidden rounded-xl border border-[#d5dce5]"><table className="w-full text-left text-sm"><thead className="bg-[#ebf2fa]"><tr>{['Ticket ID', 'Participant', 'Email', 'Business Unit', ''].map((label) => <th key={label} className="border-b px-3 py-2.5 text-[11px] font-bold uppercase text-slate-600">{label}</th>)}</tr></thead><tbody>{rows.map((participant) => <tr key={participant.id}><td className="border-b px-3 py-3 text-slate-500">{participant.employeeId}</td><td className="border-b px-3 py-3"><p className="font-semibold">{participant.name}</p><p className="text-xs text-slate-500">{participant.designation}</p></td><td className="border-b px-3 py-3 text-slate-600">{participant.email}</td><td className="border-b px-3 py-3 text-slate-600">{participant.bu}</td><td className="border-b px-3 py-3 text-right"><button onClick={() => removeParticipant(participant)} disabled={deletingId === participant.id} className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-40"><Trash2 size={13}/>{deletingId === participant.id ? 'Removing…' : 'Remove'}</button></td></tr>)}</tbody></table></div></Card></div>
 }
 
@@ -568,7 +808,7 @@ function ThreeSixtyTab({ rows }) {
   return (
     <Card>
       <CardHeader
-        title="360 Progress"
+        title="360 Responses"
         subtitle="Overall response counts. Scores and individual answers are never exposed here."
         action={(
           <div className="flex gap-2">
@@ -648,10 +888,35 @@ function AssessorTab({ rows }) {
   )
 }
 
-function ReportsTab({ rows, generated, onGenerate }) {
+function ReportsTab({ rows, generated, onGenerate, onVisibilityChanged }) {
+  const [visibilityAction, setVisibilityAction] = useState('')
+  const [visibilityError, setVisibilityError] = useState('')
+
+  async function toggleVisibility(participant, report) {
+    if (!report || !['generated', 'released'].includes(report.status)) return
+    const actionKey = `${participant.id}:${report.type}`
+    setVisibilityAction(actionKey)
+    setVisibilityError('')
+    try {
+      const result = await api.setReportVisibility(participant.id, report.type, report.status !== 'released')
+      onVisibilityChanged(participant.id, report.id, result.data)
+    } catch (err) {
+      setVisibilityError(err.message || 'Unable to update report visibility.')
+    } finally {
+      setVisibilityAction('')
+    }
+  }
+
+  function VisibilityToggle({ participant, report, available }) {
+    const released = report?.status === 'released'
+    const busy = visibilityAction === `${participant.id}:${report?.type}`
+    return <button type="button" role="switch" aria-checked={released} aria-label={`${released ? 'Hide' : 'Publish'} ${report?.type?.toUpperCase() || ''} report for ${participant.name}`} title={!available ? 'Generate this report before changing visibility' : released ? 'Hide report' : 'Publish report'} disabled={!available || busy} onClick={() => toggleVisibility(participant, report)} className={`inline-flex h-5 w-10 items-center rounded-full p-0.5 transition-colors ${released ? 'bg-[#15803d]' : 'bg-slate-300'} disabled:cursor-not-allowed disabled:opacity-60`}><span className={`h-4 w-4 rounded-full bg-white transition-transform ${released ? 'translate-x-5' : ''}`} /></button>
+  }
+
   return (
     <Card>
       <CardHeader title="Report Status" subtitle="Generate, review and release 360 and DC reports separately." action={<button onClick={onGenerate} className="inline-flex items-center gap-2 rounded-lg bg-[#1e5fba] px-3 py-2 text-xs font-semibold text-white hover:bg-[#0e3f87]"><FileText size={14} />Generate ready reports</button>} />
+      {visibilityError && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{visibilityError}</div>}
       <div className="overflow-hidden rounded-xl border border-[#d5dce5]">
         <table className="w-full border-collapse bg-white text-left text-[13px]">
           <thead className="bg-[#ebf2fa]">
@@ -668,9 +933,9 @@ function ReportsTab({ rows, generated, onGenerate }) {
                   <td className="border-b border-[#d5dce5] px-3 py-3 text-slate-500">{participant.employeeId}</td>
                   <td className="border-b border-[#d5dce5] px-3 py-3 font-semibold">{participant.name}</td>
                   <td className="border-b border-[#d5dce5] px-3 py-3">{report360Available ? <Badge tone="success">{report360.status === 'released' ? 'Released' : 'Generated'}</Badge> : <Badge>Not generated</Badge>}</td>
-                  <td className="border-b border-[#d5dce5] px-3 py-3"><span className={`inline-flex h-5 w-10 items-center rounded-full p-0.5 ${report360?.status === 'released' ? 'bg-[#15803d]' : 'bg-slate-300'}`}><span className={`h-4 w-4 rounded-full bg-white transition-transform ${report360?.status === 'released' ? 'translate-x-5' : ''}`} /></span></td>
+                  <td className="border-b border-[#d5dce5] px-3 py-3"><VisibilityToggle participant={participant} report={report360} available={report360Available} /></td>
                   <td className="border-b border-[#d5dce5] px-3 py-3">{dcReportAvailable ? <Badge tone="success">{dcReport.status === 'released' ? 'Released' : 'Generated'}</Badge> : <Badge>Not generated</Badge>}</td>
-                  <td className="border-b border-[#d5dce5] px-3 py-3"><span className={`inline-flex h-5 w-10 items-center rounded-full p-0.5 ${dcReport?.status === 'released' ? 'bg-[#15803d]' : 'bg-slate-300'}`}><span className={`h-4 w-4 rounded-full bg-white transition-transform ${dcReport?.status === 'released' ? 'translate-x-5' : ''}`} /></span></td>
+                  <td className="border-b border-[#d5dce5] px-3 py-3"><VisibilityToggle participant={participant} report={dcReport} available={dcReportAvailable} /></td>
                 </tr>
               )
             })}
@@ -693,6 +958,7 @@ export default function Cohorts({ view = 'dashboard' }) {
   const [loadingParticipants, setLoadingParticipants] = useState(false)
   const [error, setError] = useState('')
   const [modalState, setModalState] = useState(null) // { mode: 'create' | 'edit', cohort? }
+  const [deletingCohortId, setDeletingCohortId] = useState('')
 
   function refreshCohorts() {
     return api.getCohorts().then((result) => {
@@ -712,6 +978,28 @@ export default function Cohorts({ view = 'dashboard' }) {
       if (result?.data?.id) setCohortId(result.data.id)
     }
     setModalState(null)
+  }
+
+  async function handleDeleteCohort(target) {
+    const confirmation = window.prompt(`This permanently deletes ${target.name}, its participants, submissions, nominations, feedback tasks, links, email history and reports.\n\nCohort name: ${target.name}\n\nType the cohort name shown above exactly to confirm:`)
+    if (confirmation === null) return
+    if (confirmation.trim() !== target.name) {
+      setError('Cohort deletion cancelled because the name did not match exactly.')
+      return
+    }
+    setDeletingCohortId(target.id)
+    setError('')
+    try {
+      await api.deleteCohort(target.id)
+      const remaining = cohorts.filter((item) => item.id !== target.id)
+      setCohorts(remaining)
+      setCohortId((current) => current === target.id ? remaining.at(-1)?.id || '' : current)
+      if (cohortId === target.id) setAllParticipants([])
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setDeletingCohortId('')
+    }
   }
 
   useEffect(() => {
@@ -761,10 +1049,6 @@ export default function Cohorts({ view = 'dashboard' }) {
     return allInCohort.filter((participant) => `${participant.name} ${participant.employeeId} ${participant.bu} ${participant.designation}`.toLowerCase().includes(normalized))
   }, [allInCohort, query])
 
-  const nominationsIn = allInCohort.filter((participant) => participant.nominationsSubmitted).length
-  const released = allInCohort.filter((participant) => ['generated', 'released'].includes(participant.reportStatus)).length
-  const responses = allInCohort.reduce((sum, participant) => sum + participant.responses, 0)
-  const responseTotal = allInCohort.reduce((sum, participant) => sum + participant.totalResponses, 0)
   const ready = allInCohort.filter((participant) => participant.reportStatus === 'ready').length
 
   if (loadingCohorts) {
@@ -791,9 +1075,12 @@ export default function Cohorts({ view = 'dashboard' }) {
               <div className="flex flex-wrap items-center gap-3"><h1 className="font-serif text-[34px] font-semibold leading-tight text-[#1e4d8c]">{cohort.name}</h1><Badge tone="info">Live cohort</Badge></div>
               <p className="mt-1 text-sm text-slate-600">{cohort.programme} · {cohort.eventDate} · {allInCohort.length} participant{allInCohort.length === 1 ? '' : 's'}</p>
             </div>
-            <select value={cohortId} onChange={(event) => setCohortId(event.target.value)} className="min-w-80 rounded-lg border border-[#c2ccda] bg-white px-3 py-2.5 text-sm font-semibold text-slate-700">
-              {cohorts.map((item) => <option key={item.id} value={item.id}>{item.name} · {item.eventDate}</option>)}
-            </select>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <select value={cohortId} onChange={(event) => setCohortId(event.target.value)} className="min-w-80 rounded-lg border border-[#c2ccda] bg-white px-3 py-2.5 text-sm font-semibold text-slate-700">
+                {cohorts.map((item) => <option key={item.id} value={item.id}>{item.name} · {item.eventDate}</option>)}
+              </select>
+              <button onClick={() => setModalState({ mode: 'edit', cohort })} className="inline-flex items-center gap-2 rounded-lg bg-[#1e5fba] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#0e3f87]"><Pencil size={15}/>Edit Cohort</button>
+            </div>
           </div>
         )}
         {modalState && (
@@ -818,19 +1105,17 @@ export default function Cohorts({ view = 'dashboard' }) {
           </div>
         )}
 
-        {!isCurrentView && <div className="mb-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {!isCurrentView && <div className="mb-5 grid gap-3 md:grid-cols-2">
           <Metric label="Active Cohorts" value={cohorts.length} sub={cohort ? `${cohort.name} selected` : 'No cohort yet'} tone="text-[#1e5fba]" />
           <Metric label="Participants" value={allInCohort.length} sub="in current cohort" />
-          <Metric label="Nominations Submitted by Participants" value={nominationsIn} sub={`${Math.round((nominationsIn / Math.max(1, allInCohort.length)) * 100)}% submitted`} tone="text-[#15803d]" />
-          <Metric label="Respondent Feedback Forms Received" value={`${responses}/${responseTotal}`} sub={`${Math.round((responses / Math.max(1, responseTotal)) * 100)}% received out of nominees invited`} tone="text-[#6a4c93]" />
         </div>}
 
         {!isCurrentView && cohort && (
           <Card className="mb-5">
             <CardHeader
-              title="Current Cohort"
+              title="Active Cohort"
               subtitle={`${cohort.name} · ${cohort.programme} · ${cohort.eventDate}`}
-              action={<Badge tone="info">Live cohort</Badge>}
+              action={<div className="flex items-center gap-2"><Badge tone="info">Live cohort</Badge><button onClick={() => setModalState({ mode: 'edit', cohort })} className="inline-flex items-center gap-1.5 rounded-lg border border-[#1e5fba] bg-white px-3 py-1.5 text-xs font-semibold text-[#1e5fba] hover:bg-[#ebf2fa]"><Pencil size={13}/>Edit Cohort</button></div>}
             />
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
@@ -873,6 +1158,14 @@ export default function Cohorts({ view = 'dashboard' }) {
                     <td className="border-b border-[#d5dce5] px-3 py-3"><Badge tone="info">Live</Badge></td>
                     <td className="border-b border-[#d5dce5] px-3 py-3 text-right">
                       <button
+                        onClick={(event) => { event.stopPropagation(); handleDeleteCohort(item) }}
+                        disabled={deletingCohortId === item.id}
+                        className="mr-1 inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
+                        aria-label={`Delete ${item.name}`}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                      <button
                         onClick={(event) => { event.stopPropagation(); setModalState({ mode: 'edit', cohort: item }) }}
                         className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-[#ebf2fa] hover:text-[#1e5fba]"
                         aria-label={`Edit ${item.name}`}
@@ -913,7 +1206,7 @@ export default function Cohorts({ view = 'dashboard' }) {
           {activeTab === 'manage' && <ManageParticipantsTab cohort={cohort} rows={allInCohort} onAdded={(participant) => { setAllParticipants((current) => [...current, participant].sort((a, b) => a.name.localeCompare(b.name))); setCohorts((current) => current.map((item) => item.id === cohort.id ? { ...item, participantCount: (item.participantCount || 0) + 1 } : item)) }} onDeleted={(participantId) => { setAllParticipants((current) => current.filter((participant) => participant.id !== participantId)); setCohorts((current) => current.map((item) => item.id === cohort.id ? { ...item, participantCount: Math.max(0, (item.participantCount || 0) - 1) } : item)) }} />}
           {activeTab === 'threesixty' && <ThreeSixtyTab rows={allInCohort} />}
           {activeTab === 'assessors' && <AssessorTab rows={allInCohort} />}
-          {activeTab === 'reports' && <ReportsTab rows={allInCohort} generated={generated} onGenerate={() => setGenerated(true)} />}
+          {activeTab === 'reports' && <ReportsTab rows={allInCohort} generated={generated} onGenerate={() => setGenerated(true)} onVisibilityChanged={(participantId, reportId, updatedReport) => setAllParticipants((current) => current.map((participant) => participant.id !== participantId ? participant : { ...participant, reportStatus: updatedReport.type === '360' ? updatedReport.status : participant.reportStatus, reports: (participant.reports || []).map((report) => report.id === reportId ? { ...report, status: updatedReport.status, releasedAt: updatedReport.releasedAt } : report) }))} />}
         </div>}
       </div>
     </div>

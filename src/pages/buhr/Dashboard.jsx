@@ -17,11 +17,6 @@ function Metric({ label, value, icon: Icon, sub }) {
   )
 }
 
-function percent(participant) {
-  if (!participant.totalResponses) return 0
-  return Math.round((participant.responses / participant.totalResponses) * 100)
-}
-
 const viewCopy = {
   dashboard: { title: 'BU Dashboard', subtitle: 'Portfolio overview and current Development Centre status', table: 'Current status' },
   people: { title: 'People Status', subtitle: 'Track every participant mapped to your business unit', table: 'People in Development Centre' },
@@ -117,7 +112,7 @@ export default function BUHRDashboard({ view = 'dashboard' }) {
             <table className="w-full border-collapse bg-white text-left text-[13px]">
               <thead className="bg-[#ebf2fa]">
                 <tr>
-                  {['Ticket ID', 'Employee', 'Business Unit', 'Cohort', '360 Progress', '360° Feedback Report', 'DC Report', 'Actions'].map((label) => (
+                  {['Ticket ID', 'Employee', 'Business Unit', 'Cohort', '360 Responses', '360° Feedback Report', 'DC Report', 'Actions'].map((label) => (
                     <th key={label} className={`border-b border-[#d5dce5] px-5 py-3 text-[11px] font-bold uppercase tracking-wide text-slate-600 ${['360° Feedback Report', 'DC Report', 'Actions'].includes(label) ? 'w-40 text-center' : ''}`}>{label}</th>
                   ))}
                 </tr>
@@ -142,7 +137,7 @@ export default function BUHRDashboard({ view = 'dashboard' }) {
                     </td>
                     <td className="border-b border-[#e8edf4] px-5 py-4">
                       <p className="font-semibold text-slate-800">{participant.responses}/{participant.totalResponses}</p>
-                      <p className="mt-0.5 text-[11px] text-slate-500">{percent(participant)}% respondent completion</p>
+                      <p className="mt-0.5 text-[11px] text-slate-500">responses received</p>
                     </td>
                     {['360', 'dc'].map((type) => {
                       const report = participant.reports?.find((item) => item.type === type)

@@ -2,14 +2,14 @@ import 'dotenv/config'
 import path from 'node:path'
 import XLSX from 'xlsx'
 import { PrismaClient } from '@prisma/client'
-import { hashPassword } from '../src/utils/passwords.js'
+import { generatePassword, hashPassword } from '../src/utils/passwords.js'
 import { seedAccessAccounts } from './accessAccounts.js'
 import { queueEmail } from '../src/notifications/service.js'
+import { createParticipantMagicLink } from '../src/utils/magicLinks.js'
 
 const prisma = new PrismaClient()
 
 const DEFAULT_FILE = String.raw`C:\Users\achaturvedi2\Documents\Docs for DC Tool\Docs for DC Tool\master data template.xlsx`
-const DEFAULT_PASSWORD = process.env.MOCK_USER_PASSWORD || 'Welcome@123'
 
 function text(value) {
   return value === undefined || value === null ? '' : String(value).trim()
@@ -51,7 +51,6 @@ async function main() {
     .map((row) => toUser(row, null))
     .filter((row) => row.employeeId && row.name && row.email)
 
-  const passwordHash = await hashPassword(DEFAULT_PASSWORD)
   const cohort = await prisma.cohort.upsert({
     where: { slug: 'hr-dc-360-mock' },
     update: {
@@ -69,9 +68,10 @@ async function main() {
 
   let imported = 0
   for (const row of rows) {
+    const participantPassword = generatePassword()
     const userData = {
       ...row,
-      passwordHash,
+      passwordHash: await hashPassword(participantPassword),
     }
 
     const existingUser = await prisma.user.findUnique({ where: { email: userData.email } })
@@ -100,6 +100,7 @@ async function main() {
     })
 
     if (!existingUser) {
+      const participantLink = await createParticipantMagicLink(prisma, { userId: user.id, email: user.email, participantId: participant.id })
       await queueEmail({
         templateId: 'welcome',
         toEmail: user.email,
@@ -107,9 +108,12 @@ async function main() {
         context: {
           'Participant Name': user.name,
           Cohort: cohort.name,
-          'Password Link': process.env.APP_URL || '',
+          'Participant Email': user.email,
+          'Participant Password': participantPassword,
+          'Login Link': participantLink.inviteUrl,
           'Nomination Deadline': 'the deadline set for your cohort',
         },
+        magicLinkId: participantLink.magicLink.id,
         entity: 'Participant',
         entityId: participant.id,
       })
@@ -121,7 +125,7 @@ async function main() {
   const accessCredentials = await seedAccessAccounts(prisma)
 
   console.log(`Imported ${imported} HR users into ${cohort.name}`)
-  console.log(`Mock credential for all imported users: employeeId or email + ${DEFAULT_PASSWORD}`)
+  console.log('Each newly imported participant received a unique random password in their welcome email')
   for (const credential of accessCredentials) {
     console.log(`${credential.label}: ${credential.employeeId} or ${credential.email} + ${credential.password}`)
   }

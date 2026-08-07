@@ -286,7 +286,7 @@ export default function FeedbackForm({ returnTo = '/respondent/dashboard', taskI
   const navigate = useNavigate()
   const outletContext = useOutletContext()
   const setSurveyNavigation = outletContext?.setSurveyNavigation
-  const { user } = useUser()
+  const { user, logout, updateRespondentTaskStatus, refreshParticipantData } = useUser()
   const [loadedTask, setLoadedTask] = useState(null)
 
   const task = loadedTask || user?.respondentTasks.find((t) => t.id === taskId)
@@ -341,7 +341,6 @@ export default function FeedbackForm({ returnTo = '/respondent/dashboard', taskI
   const answeredCount = getValidRatingCount(ratings, behaviourIds)
   const sectionReflectionAnsweredCount = getCompletedCommentCount(sectionSsc, surveySections)
   const requiredAnsweredCount = answeredCount + sectionReflectionAnsweredCount
-  const progressPct = Math.round((requiredAnsweredCount / requiredTotal) * 100)
   const allRated = answeredCount === totalRatings
   const reflectionsComplete = sectionReflectionAnsweredCount === totalCommentFields
   const canSubmit = allRated && reflectionsComplete
@@ -383,13 +382,16 @@ export default function FeedbackForm({ returnTo = '/respondent/dashboard', taskI
     const timeoutId = window.setTimeout(() => {
       import('../../lib/api').then(({ api }) => {
         api.saveFeedbackDraft(taskId, draftPayload)
-          .then(() => setSaveStatus('saved'))
+          .then(() => {
+            setSaveStatus('saved')
+            updateRespondentTaskStatus(taskId, 'saved')
+          })
           .catch(() => setSaveStatus('idle'))
       })
     }, 800)
 
     return () => window.clearTimeout(timeoutId)
-  }, [draftPayload, submitted, taskId, draftLoaded])
+  }, [draftPayload, submitted, taskId, draftLoaded, updateRespondentTaskStatus])
 
   const handleRate = useCallback((behaviourId, value) => {
     setRatings((prev) => ({ ...prev, [behaviourId]: value }))
@@ -406,7 +408,10 @@ export default function FeedbackForm({ returnTo = '/respondent/dashboard', taskI
     setSaveStatus('saving')
     import('../../lib/api').then(({ api }) => {
       api.saveFeedbackDraft(taskId, draftPayload)
-        .then(() => setSaveStatus('saved'))
+        .then(() => {
+          setSaveStatus('saved')
+          updateRespondentTaskStatus(taskId, 'saved')
+        })
         .catch(() => setSaveStatus('idle'))
     })
   }
@@ -415,7 +420,12 @@ export default function FeedbackForm({ returnTo = '/respondent/dashboard', taskI
     if (!canSubmit) return
     import('../../lib/api').then(({ api }) => {
       api.submitFeedback(taskId, draftPayload)
-        .then(() => setSubmitted(true))
+        .then(() => {
+          setLoadedTask((current) => current ? { ...current, status: 'submitted' } : current)
+          updateRespondentTaskStatus(taskId, 'submitted')
+          if (user?.participantId) refreshParticipantData(user.participantId)
+          setSubmitted(true)
+        })
         .catch(() => {})
     })
   }
@@ -432,7 +442,14 @@ export default function FeedbackForm({ returnTo = '/respondent/dashboard', taskI
   }
 
   if (submitted) {
-    return <SubmissionConfirmation task={task} onBack={() => navigate(returnTo)} />
+    return <SubmissionConfirmation
+      task={task}
+      buttonLabel={useWideParticipantLayout ? 'Back to Dashboard' : 'Finish'}
+      onBack={() => {
+        if (useWideParticipantLayout) navigate(returnTo)
+        else { logout(); navigate('/') }
+      }}
+    />
   }
 
   const currentSection = currentStep > 0 ? surveySections[currentStep - 1] : null
@@ -459,9 +476,6 @@ export default function FeedbackForm({ returnTo = '/respondent/dashboard', taskI
               </p>
               <span className="ml-2 shrink-0 text-xs text-gray-400">{requiredAnsweredCount}/{requiredTotal}</span>
             </div>
-            <div className="h-1.5 w-full rounded-full bg-gray-100">
-              <div className="h-1.5 rounded-full bg-[#1e4d8c] transition-all duration-300" style={{ width: `${progressPct}%` }} />
-            </div>
           </div>
           <span className="hidden rounded-full border border-[#d5dce5] bg-[#f4f7fb] px-3 py-1 text-[10px] font-semibold text-slate-600 sm:inline-flex">
             {surveyVariant === SURVEY_VARIANTS.SENIOR_LEADER ? `Senior leader · ${totalRatings} statements` : `Standard · ${totalRatings} statements`}
@@ -480,7 +494,7 @@ export default function FeedbackForm({ returnTo = '/respondent/dashboard', taskI
             <h1 className="mt-1 text-2xl font-semibold text-[#172033]">
               {currentStep === 0 ? 'Instructions' : `Section ${sectionLabels[currentStep - 1]}: ${currentSection.title}`}
             </h1>
-            <p className="mt-1 text-sm text-slate-500">Rate {task.participantName} only on behaviour you have personally observed.</p>
+            {task.relationship !== 'Self' && <p className="mt-1 text-sm text-slate-500">Rate {task.participantName} only on behaviour you have personally observed.</p>}
           </div>
           <p className="text-xs text-slate-400">{currentStep === 0 ? 'Read before beginning' : `Section ${currentStep} of ${surveySections.length}`}</p>
         </div>
@@ -540,7 +554,7 @@ export default function FeedbackForm({ returnTo = '/respondent/dashboard', taskI
   )
 }
 
-function SubmissionConfirmation({ task, onBack }) {
+function SubmissionConfirmation({ task, onBack, buttonLabel }) {
   return (
     <div className="p-8 max-w-lg mx-auto text-center">
       <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-5">
@@ -550,7 +564,9 @@ function SubmissionConfirmation({ task, onBack }) {
       </div>
       <h2 className="text-xl font-bold text-[#1a1f2e] mb-2">Feedback Submitted</h2>
       <p className="text-sm text-gray-500 mb-1">
-        Your feedback for <span className="font-medium text-[#1a1f2e]">{task.participantName}</span> has been recorded.
+        {task.relationship === 'Self'
+          ? 'Submitted for yourself.'
+          : <>Your feedback for <span className="font-medium text-[#1a1f2e]">{task.participantName}</span> has been recorded.</>}
       </p>
       <p className="text-xs text-gray-400 mb-8">
         Responses are confidential and will be aggregated before appearing in the 360° Feedback Report.
@@ -559,7 +575,7 @@ function SubmissionConfirmation({ task, onBack }) {
         onClick={onBack}
         className="px-5 py-2.5 bg-[#1e4d8c] text-white text-sm font-medium rounded-lg hover:bg-[#183f73] transition-colors"
       >
-        Back to My Tasks
+        {buttonLabel}
       </button>
     </div>
   )
