@@ -7,6 +7,7 @@ import {
   getMagicLinkExpiry,
   hashMagicToken,
 } from '../utils/magicLinks.js'
+import { hasDeadlinePassed } from '../utils/deadlines.js'
 
 const STAGE_ITEMS = [
   { stage: 'ROLE_INTERVIEW', deadlineField: 'roleInterviewDeadline', label: 'Role Interview' },
@@ -316,7 +317,7 @@ async function sendThreeSixtyClosedNotices(db) {
     if (!tasks.length) continue
 
     const allSubmitted = tasks.every((task) => task.status === 'SUBMITTED')
-    const cutoffPassed = participant.cohort.threeSixtyCutoff && participant.cohort.threeSixtyCutoff < now
+    const cutoffPassed = hasDeadlinePassed(participant.cohort.threeSixtyCutoff, now)
     if (!allSubmitted && !cutoffPassed) continue
 
     if (await alreadyQueuedEver(db, 'threesixty-closed', 'Participant', participant.id)) continue

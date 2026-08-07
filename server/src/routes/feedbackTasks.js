@@ -4,6 +4,7 @@ import { prisma } from '../db.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
 import { httpError } from '../utils/httpError.js'
 import { queueEmail } from '../notifications/service.js'
+import { hasDeadlinePassed } from '../utils/deadlines.js'
 
 export const feedbackTasksRouter = Router()
 
@@ -54,6 +55,7 @@ feedbackTasksRouter.get('/:taskId', asyncHandler(async (req, res) => {
 feedbackTasksRouter.put('/:taskId/draft', asyncHandler(async (req, res) => {
   const task = await findTask(req.params.taskId)
   assertTaskAccess(req, task)
+  if (hasDeadlinePassed(task.dueAt)) throw httpError(409, 'The 360 feedback deadline has passed. This response can no longer be edited.')
   const payload = responseSchema.parse(req.body)
 
   const response = await prisma.$transaction(async (tx) => {
@@ -88,7 +90,9 @@ feedbackTasksRouter.put('/:taskId/draft', asyncHandler(async (req, res) => {
 }))
 
 feedbackTasksRouter.post('/:taskId/submit', asyncHandler(async (req, res) => {
-  assertTaskAccess(req, await findTask(req.params.taskId))
+  const existingTask = await findTask(req.params.taskId)
+  assertTaskAccess(req, existingTask)
+  if (hasDeadlinePassed(existingTask.dueAt)) throw httpError(409, 'The 360 feedback deadline has passed. This response can no longer be submitted.')
   const payload = responseSchema.parse(req.body)
 
   const task = await prisma.$transaction(async (tx) => {

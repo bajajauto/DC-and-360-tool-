@@ -13,6 +13,7 @@ import {
 import { deriveTaskStatus, taskCompletionPercent, toNomineeDto, toParticipantSummary } from '../utils/mappers.js'
 import { createQueuedEmail, sendEmail } from '../notifications/service.js'
 import { getBehaviourIds, getSurveySections } from '../../../src/data/surveyConfig.js'
+import { hasDeadlinePassed } from '../utils/deadlines.js'
 
 export const participantsRouter = Router()
 
@@ -173,10 +174,7 @@ function formatCutoff(date) {
 }
 
 function hasCutoffPassed(cutoff, now = new Date()) {
-  if (!cutoff) return false
-  const endOfCutoffDay = new Date(cutoff)
-  endOfCutoffDay.setUTCHours(23, 59, 59, 999)
-  return now > endOfCutoffDay
+  return hasDeadlinePassed(cutoff, now)
 }
 
 function assertParticipantAccess(req, participant) {

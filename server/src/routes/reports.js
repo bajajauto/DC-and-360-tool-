@@ -8,6 +8,7 @@ import { generate360ReportForParticipant, get360ReportPreviewHtml, getOrGenerate
 import { build360ResponseDataWorkbook } from '../reports/build360ResponseData.js'
 import { queueEmail } from '../notifications/service.js'
 import { createZip } from '../utils/zip.js'
+import { hasDeadlinePassed } from '../utils/deadlines.js'
 
 export const reportsRouter = Router()
 
@@ -19,7 +20,7 @@ function isVisibleInRepository(report) {
   if (report.status === 'RELEASED') return true
   const allSubmitted = report.participant.feedbackTasks.length > 0 && report.participant.feedbackTasks.every((task) => task.status === 'SUBMITTED')
   const cutoff = report.participant.cohort.threeSixtyCutoff
-  const cutoffPassed = cutoff ? new Date() > new Date(new Date(cutoff).setUTCHours(23, 59, 59, 999)) : false
+  const cutoffPassed = hasDeadlinePassed(cutoff)
   return allSubmitted || cutoffPassed
 }
 
