@@ -2,6 +2,7 @@ import { ArrowRight, BriefcaseBusiness, Camera, Download, FileText, MessageSquar
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { api } from '../../lib/api'
+import { formatDateOfJoining } from '../../lib/dateFormatting'
 
 function StatusPill({ children, tone = 'gray' }) {
   const tones = {
@@ -46,6 +47,33 @@ function PersonPlaceholder({ size = 'sm', src = null, name = 'Participant' }) {
     <div className={`${classes} bg-[#e4eef9] text-[#1e4d8c] flex items-center justify-center shrink-0`}>
       <User size={size === 'lg' ? 42 : 19} strokeWidth={1.8} />
     </div>
+  )
+}
+
+function ParticipantDetails({ participant }) {
+  const details = [
+    ['Name', participant.name],
+    ['Ticket No', participant.employeeId],
+    ['Designation', participant.designation],
+    ['Current BU', participant.bu],
+    ['Level', participant.masterData?.jobLevel],
+    ['Chart Level', participant.masterData?.positionLevel],
+    ['Date of Joining', formatDateOfJoining(participant.masterData?.dateOfJoining || participant.masterData?.DOJ_3 || participant.masterData?.DOJ_4)],
+    ['Email', participant.email],
+  ]
+
+  return (
+    <section className="bg-white border border-[#e2e8f0] rounded-2xl p-6">
+      <h3 className="mb-5 text-xs font-bold uppercase tracking-wide text-slate-500">Participant details</h3>
+      <div className="grid gap-x-12 gap-y-5 sm:grid-cols-2">
+        {details.map(([label, value]) => (
+          <div key={label}>
+            <p className="text-xs text-slate-400">{label}</p>
+            <p className="mt-1 break-words text-sm font-semibold text-[#172033]">{value || '—'}</p>
+          </div>
+        ))}
+      </div>
+    </section>
   )
 }
 
@@ -167,6 +195,8 @@ export default function CandidateProfiles() {
                 </button>
               </div>
             </section>
+
+            <ParticipantDetails participant={selected} />
 
             <div className="grid lg:grid-cols-2 gap-5">
               <EvidenceCard icon={Camera} title="Participant Photograph" meta="Identity evidence" to={`/assessor/candidates/${selected.id}/photograph`} />
