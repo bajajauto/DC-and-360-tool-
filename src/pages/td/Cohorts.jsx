@@ -695,7 +695,16 @@ function EmployeeUploadTab() {
         ) : <p className="rounded-xl border border-dashed border-[#c2ccda] bg-[#f8fafc] px-4 py-6 text-center text-sm text-slate-500">No employee directory has been uploaded yet.</p>}
       </Card>
       <Card>
-        <CardHeader title="Update Employee Directory" subtitle="Expected columns: Users Sys Id, Full Name as per Aadhar Card, Position Position Level (Label), and Email Address." />
+        <CardHeader
+          title="Update Employee Directory"
+          subtitle="Expected columns: Users Sys Id, Full Name as per Aadhar Card, Position Position Level (Label), and Email Address."
+          action={(
+            <a href="/templates/employee-directory-template.xlsx" download="employee-directory-template.xlsx" className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-[#1e5fba] bg-white px-3.5 py-2 text-xs font-semibold text-[#1e5fba] hover:bg-[#ebf2fa]">
+              <Download size={14} />
+              Download Directory Template
+            </a>
+          )}
+        />
         {message && <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{message}</div>}
         {error && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
         <label className="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-[#c2ccda] bg-[#f4f7fb] px-5 py-7 text-center hover:border-[#1e5fba] hover:bg-[#ebf2fa]">
