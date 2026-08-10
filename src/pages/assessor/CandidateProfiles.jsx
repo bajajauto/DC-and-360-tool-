@@ -81,6 +81,7 @@ export default function CandidateProfiles() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [profiles, setProfiles] = useState([])
   const [selectedId, setSelectedId] = useState(() => searchParams.get('participantId'))
+  const [selectedCohortId, setSelectedCohortId] = useState('all')
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -96,13 +97,19 @@ export default function CandidateProfiles() {
       .finally(() => setLoading(false))
   }, [])
 
+  const cohorts = useMemo(() => [...new Map(profiles.map((profile) => [profile.cohortId, { id: profile.cohortId, name: profile.cohort }])).values()]
+    .sort((a, b) => a.name.localeCompare(b.name)), [profiles])
+
   const filteredProfiles = useMemo(() => {
     const needle = query.trim().toLowerCase()
-    if (!needle) return profiles
-    return profiles.filter((profile) => `${profile.name} ${profile.employeeId} ${profile.designation} ${profile.bu}`.toLowerCase().includes(needle))
-  }, [profiles, query])
+    return profiles.filter((profile) => {
+      const inCohort = selectedCohortId === 'all' || profile.cohortId === selectedCohortId
+      const matchesSearch = !needle || `${profile.name} ${profile.employeeId} ${profile.designation} ${profile.bu}`.toLowerCase().includes(needle)
+      return inCohort && matchesSearch
+    })
+  }, [profiles, query, selectedCohortId])
 
-  const selected = profiles.find((profile) => profile.id === selectedId) ?? filteredProfiles[0] ?? profiles[0]
+  const selected = filteredProfiles.find((profile) => profile.id === selectedId) ?? filteredProfiles[0] ?? null
 
   return (
     <div>
@@ -120,6 +127,23 @@ export default function CandidateProfiles() {
           <div className="p-5 border-b border-[#e8edf4]">
             <h2 className="font-semibold text-[#172033]">Participants</h2>
             <p className="text-xs text-gray-400 mt-1">Select a candidate to view submitted evidence.</p>
+            <label className="mt-4 block">
+              <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-wide text-slate-500">Filter by cohort</span>
+              <select
+                value={selectedCohortId}
+                onChange={(event) => {
+                  const cohortId = event.target.value
+                  const firstProfile = profiles.find((profile) => cohortId === 'all' || profile.cohortId === cohortId)
+                  setSelectedCohortId(cohortId)
+                  setSelectedId(firstProfile?.id || null)
+                  setSearchParams(firstProfile ? { participantId: firstProfile.id } : {}, { replace: true })
+                }}
+                className="w-full rounded-lg border border-[#dce3ed] bg-white px-3 py-2 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-100"
+              >
+                <option value="all">All cohorts</option>
+                {cohorts.map((cohort) => <option key={cohort.id} value={cohort.id}>{cohort.name}</option>)}
+              </select>
+            </label>
             <div className="relative mt-4">
               <Search size={15} className="absolute left-3 top-2.5 text-gray-400" />
               <input
@@ -134,7 +158,7 @@ export default function CandidateProfiles() {
             {loading && <p className="p-5 text-sm text-gray-500">Loading participants…</p>}
             {!loading && !filteredProfiles.length && <p className="p-5 text-sm text-gray-500">No participants available.</p>}
             {filteredProfiles.map((profile) => {
-              const active = profile.id === selected.id
+              const active = profile.id === selected?.id
               return (
                 <button
                   type="button"

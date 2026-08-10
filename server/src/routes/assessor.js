@@ -21,6 +21,7 @@ function toCandidate(participant) {
     employeeId: participant.user.employeeId,
     designation: participant.user.designation,
     bu: participant.user.businessUnit,
+    cohortId: participant.cohort.id,
     cohort: participant.cohort.name,
     stage: participant.stage.toLowerCase().replaceAll('_', ' '),
     progress: participant.progress,
