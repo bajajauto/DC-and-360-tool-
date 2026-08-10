@@ -57,6 +57,7 @@ const BLOCKED_SELF_SELECTION_EMAILS = new Set([
   'ajoseph@bajajauto.co.in',
   'kpdsa@bajajauto.co.in',
   'rsharma@bajajauto.co.in',
+  'rajivbajaj@bajajauto.co.in',
 ])
 
 function normalizedPositionLevel(value) {

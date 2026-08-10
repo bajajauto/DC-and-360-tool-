@@ -25,7 +25,7 @@ const RESTRICTED_NOMINATION_MESSAGE = 'You cannot choose the selected user as yo
 const MANAGER_IS_BU_HEAD_GUIDANCE = 'If your Reporting Manager is also the BU Head, please nominate another leader from the organization whose feedback you would like to receive under the Skip/BU Head category.'
 const BLOCKED_SELF_SELECTION_MESSAGE = 'Selection of this user as a 360° respondent is restricted.'
 const BLOCKED_SELF_SELECTION_EMPLOYEE_IDS = new Set(['26207', '36020', '10258', '54521'])
-const BLOCKED_SELF_SELECTION_EMAILS = new Set(['pshrivastava@bajajauto.co.in', 'ajoseph@bajajauto.co.in', 'kpdsa@bajajauto.co.in', 'rsharma@bajajauto.co.in'])
+const BLOCKED_SELF_SELECTION_EMAILS = new Set(['pshrivastava@bajajauto.co.in', 'ajoseph@bajajauto.co.in', 'kpdsa@bajajauto.co.in', 'rsharma@bajajauto.co.in', 'rajivbajaj@bajajauto.co.in'])
 
 const NOMINATION_CATEGORIES = [
   ['Self', 'Self-assessment completed by you.', '1', '1'],
