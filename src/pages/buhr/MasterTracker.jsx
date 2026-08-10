@@ -2,7 +2,7 @@ import { Download, Search, Users } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useUser } from '../../context/UserContext'
 import { api } from '../../lib/api'
-import { exportBuhrProcessStatus } from '../../lib/trackingExport'
+import { exportBuhrNomineeStatus, exportBuhrProcessStatus } from '../../lib/trackingExport'
 
 function StatusPill({ children, tone = 'neutral' }) {
   const tones = {
@@ -80,6 +80,11 @@ export default function BUHRMasterTracker() {
     exportBuhrProcessStatus(scope, scopedParticipants)
   }
 
+  function download360Tracker() {
+    const scope = selectedCohort ? `${payload?.businessUnit} - ${selectedCohort.name}` : payload?.businessUnit
+    exportBuhrNomineeStatus(scope, scopedParticipants)
+  }
+
   return (
     <div>
       <header className="flex min-h-20 items-center justify-between border-b border-[#e4e9f1] bg-white px-8 py-4">
@@ -129,6 +134,28 @@ export default function BUHRMasterTracker() {
                 Download Master Tracker Excel
               </button>
             </div>
+          </div>
+        </section>
+
+        <section className="mb-5 rounded-xl border border-[#d5dce5] bg-white p-5 shadow-[0_2px_16px_rgba(31,41,55,.06)]">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+            <div className="max-w-3xl">
+              <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-violet-50 text-violet-700">
+                <Users size={18} />
+              </div>
+              <h2 className="text-base font-semibold text-[#0f172a]">360 Response Tracker</h2>
+              <p className="mt-1 text-sm text-slate-600">One Excel row per self or nominated respondent for participants mapped to your BUHR account.</p>
+              <p className="mt-2 text-xs text-slate-500"><strong>Includes:</strong> Participant, cohort, respondent relationship, nomination details, completion status, and response date. Scores and answers are excluded.</p>
+            </div>
+            <button
+              type="button"
+              onClick={download360Tracker}
+              disabled={loading || !scopedParticipants.length}
+              className="inline-flex min-h-[38px] items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-violet-700 px-4 py-2.5 text-xs font-semibold text-white hover:bg-violet-800 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Download size={15} />
+              Download 360 Response Tracker Excel
+            </button>
           </div>
         </section>
 

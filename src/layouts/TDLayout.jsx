@@ -15,6 +15,7 @@ import {
 import { Link, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useUser } from '../context/UserContext'
 import bajajBrandLockup from '../assets/bajaj-brand-lockup.png'
+import SidebarAttribution from '../components/SidebarAttribution'
 
 const navSections = [
   {
@@ -91,6 +92,7 @@ export default function TDLayout() {
           ))}
 
           <div className="absolute bottom-4 left-3 right-3 border-t border-[#d5dce5] pt-3">
+            <SidebarAttribution />
             <button
               onClick={() => {
                 logout()

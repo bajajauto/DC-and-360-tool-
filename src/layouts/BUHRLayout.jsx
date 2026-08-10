@@ -3,6 +3,7 @@ import { Link, Navigate, Outlet, useLocation, useNavigate } from 'react-router-d
 import { useUser } from '../context/UserContext'
 import bajajBrandLockup from '../assets/bajaj-brand-lockup.png'
 import RoleSwitchBanner from '../components/RoleSwitchBanner'
+import SidebarAttribution from '../components/SidebarAttribution'
 
 const navItems = [
   { to: '/buhr/dashboard', label: 'BU Dashboard', icon: LayoutDashboard },
@@ -68,6 +69,7 @@ export default function BUHRLayout() {
           </nav>
 
           <div className="absolute bottom-4 left-3 right-3 border-t border-[#d5dce5] pt-3">
+            <SidebarAttribution />
             <button
               onClick={() => {
                 logout()

@@ -189,6 +189,45 @@ export function exportBuhrProcessStatus(businessUnit, participants) {
   ])
 }
 
+export function exportBuhrNomineeStatus(scope, participants) {
+  const nomineeRows = [
+    ['Participant', 'Employee ID', 'Participant designation', 'Business unit', 'Cohort', 'Relationship', 'Nominee name', 'Nominee email', '360 form status', 'Nominated on', 'Responded on'],
+    ...participants.flatMap((participant) => [
+      [
+        participant.name,
+        participant.employeeId,
+        participant.designation,
+        participant.bu,
+        participant.cohort?.name || 'Unassigned',
+        'Self',
+        `${participant.name} (Self)`,
+        participant.email || '',
+        participant.selfFeedback?.status === 'submitted' ? 'Done' : 'Not done',
+        '',
+        participant.selfFeedback?.respondedOn || '',
+      ],
+      ...(participant.nominees || []).map((nominee) => [
+        participant.name,
+        participant.employeeId,
+        participant.designation,
+        participant.bu,
+        participant.cohort?.name || 'Unassigned',
+        nominee.relationship,
+        nominee.name,
+        nominee.email,
+        nominee.feedbackStatus === 'submitted' ? 'Done' : 'Not done',
+        nominee.submittedAt || '',
+        nominee.respondedOn || '',
+      ]),
+    ]),
+  ]
+
+  const safeScope = String(scope || 'mapped-participants').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase()
+  downloadWorkbook(`${safeScope}-360-response-tracker.xls`, [
+    rowsToWorksheet('360 responses', nomineeRows),
+  ])
+}
+
 export function exportCohortNomineeStatus(cohort, participants) {
   const nomineeRows = [
     ['Participant', 'Employee ID', 'Participant designation', 'Business unit', 'Relationship', 'Nominee name', 'Nominee email', '360 form status', 'Nominated on', 'Responded on'],
