@@ -1,7 +1,6 @@
 import { LogOut, UsersRound } from 'lucide-react'
 import { Link, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useUser } from '../context/UserContext'
-import SidebarAttribution from '../components/SidebarAttribution'
 
 const navItems = [
   { to: '/assessor/candidates', label: 'Candidate Profiles', icon: UsersRound },
@@ -38,7 +37,6 @@ export default function AssessorLayout() {
         </nav>
 
         <div className="border-t border-white/10 p-4">
-          <SidebarAttribution dark />
           <div className="w-full flex items-center gap-3 rounded-lg px-2 py-2">
             <div className="w-8 h-8 rounded-full bg-blue-200 text-[#173f72] flex items-center justify-center text-xs font-bold">{user.initials}</div>
             <div className="flex-1 min-w-0">

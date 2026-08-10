@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { Link, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useUser } from '../context/UserContext'
 import RoleSwitchBanner from '../components/RoleSwitchBanner'
-import SidebarAttribution from '../components/SidebarAttribution'
 
 const navItems = [
   { to: '/participant/dashboard', label: 'Dashboard', icon: HomeIcon },
@@ -185,7 +184,6 @@ export default function ParticipantLayout() {
 
         {/* User card */}
         <div className="shrink-0 px-3 py-4 border-t border-[#e2e8f0]">
-          <SidebarAttribution />
           <div className="flex items-center gap-3 px-3 py-2">
             <div className="w-8 h-8 rounded-full bg-[#1e4d8c] flex items-center justify-center text-white text-xs font-semibold shrink-0">
               {user.initials}
