@@ -171,7 +171,11 @@ export const api = {
   saveNotificationAutomation: (templates) =>
     apiFetch('/api/notifications/templates/automation', { method: 'PUT', body: JSON.stringify({ templates }) }),
 
-  getNotificationRecipients: (templateId) => apiFetch(`/api/notifications/recipients?templateId=${encodeURIComponent(templateId || '')}`),
+  getNotificationRecipients: (templateId, cohortId = '') => {
+    const params = new URLSearchParams({ templateId: templateId || '' })
+    if (cohortId) params.set('cohortId', cohortId)
+    return apiFetch(`/api/notifications/recipients?${params.toString()}`)
+  },
   previewNotificationCc: (templateId, recipients) =>
     apiFetch('/api/notifications/cc-preview', { method: 'POST', body: JSON.stringify({ templateId, recipients }) }),
 

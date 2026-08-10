@@ -314,6 +314,7 @@ notificationsRouter.put('/templates/automation', asyncHandler(async (req, res) =
 
 notificationsRouter.get('/recipients', asyncHandler(async (req, res) => {
   const templateId = String(req.query.templateId || '')
+  const cohortId = String(req.query.cohortId || '').trim()
   if (RESPONDENT_TEMPLATES.has(templateId)) {
     const links = await prisma.magicLink.findMany({
       where: { role: 'RESPONDENT', expiresAt: { gt: new Date() } },
@@ -325,6 +326,7 @@ notificationsRouter.get('/recipients', asyncHandler(async (req, res) => {
       where: {
         id: { in: taskIds },
         status: templateId === 'respondent-thank-you' ? 'SUBMITTED' : { not: 'SUBMITTED' },
+        ...(cohortId ? { participant: { cohortId } } : {}),
       },
       select: { id: true },
     })
@@ -362,15 +364,29 @@ notificationsRouter.get('/recipients', asyncHandler(async (req, res) => {
     'TD Admin': 'TD',
   }[template.recipient]
 
+  let cohortBuhrEmails = null
+  if (cohortId && intendedRole === 'BUHR') {
+    const cohortParticipants = await prisma.participant.findMany({
+      where: { cohortId },
+      select: { masterData: true },
+    })
+    cohortBuhrEmails = [...new Set(cohortParticipants
+      .map((participant) => String(participant.masterData?.buhrEmail || '').trim().toLowerCase())
+      .filter(Boolean))]
+  }
+
   const users = await prisma.user.findMany({
     where: {
       email: { not: '' },
       ...(intendedRole ? { roles: { has: intendedRole } } : {}),
+      ...(cohortId && intendedRole === 'PARTICIPANT' ? { participant: { is: { cohortId } } } : {}),
+      ...(cohortBuhrEmails ? { email: { in: cohortBuhrEmails } } : {}),
     },
     orderBy: [{ name: 'asc' }, { email: 'asc' }],
     select: { id: true, name: true, email: true, employeeId: true, roles: true, businessUnit: true },
   })
   const participants = template.recipient === 'Manager' ? await prisma.participant.findMany({
+    where: cohortId ? { cohortId } : {},
     orderBy: [{ cohort: { createdAt: 'desc' } }, { user: { name: 'asc' } }],
     select: {
       id: true,

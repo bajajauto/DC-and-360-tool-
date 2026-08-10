@@ -299,6 +299,8 @@ function TemplateText({ text }) {
 
 export function NotificationTemplates() {
   const [templates, setTemplates] = useState([])
+  const [cohorts, setCohorts] = useState([])
+  const [selectedCohortId, setSelectedCohortId] = useState('')
   const [automationDraft, setAutomationDraft] = useState({})
   const [savingSettings, setSavingSettings] = useState(false)
   const [settingsNotice, setSettingsNotice] = useState('')
@@ -332,6 +334,12 @@ export function NotificationTemplates() {
   }, [])
 
   useEffect(() => {
+    api.getCohorts()
+      .then((result) => setCohorts(result.data || []))
+      .catch((err) => setError(err.message))
+  }, [])
+
+  useEffect(() => {
     if (!selected) return
     setSubject(selected.subject)
     setBody(selected.body)
@@ -342,7 +350,7 @@ export function NotificationTemplates() {
     setManualEmails([])
     setRecipientSearch('')
     setRecipientsLoading(true)
-    api.getNotificationRecipients(selected.templateId)
+    api.getNotificationRecipients(selected.templateId, selectedCohortId)
       .then((result) => {
         const intendedRole = {
           Participant: 'participant',
@@ -358,7 +366,7 @@ export function NotificationTemplates() {
       })
       .catch((err) => setError(err.message))
       .finally(() => setRecipientsLoading(false))
-  }, [selected])
+  }, [selected, selectedCohortId])
 
   const phases = [...new Set(templates.map((template) => template.phase))]
   const settingsChanged = templates.some((template) => automationDraft[template.templateId] !== template.active)
@@ -530,6 +538,11 @@ export function NotificationTemplates() {
             <CardHeader title="Review & send email" subtitle={`${selected.trigger} · ${selected.recipient}`} action={<Bell size={16} className="text-[#1e5fba]" />} />
             {notice && <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700">{notice}</div>}
 
+            <label className="mb-1 block text-xs font-semibold text-slate-700">Filter by cohort</label>
+            <select value={selectedCohortId} onChange={(event) => setSelectedCohortId(event.target.value)} className="mb-3 w-full rounded-lg border border-[#c2ccda] bg-white px-3 py-2 text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#d6e4f7]">
+              <option value="">All cohorts</option>
+              {cohorts.map((cohort) => <option key={cohort.id} value={cohort.id}>{cohort.name} · {cohort.programme}</option>)}
+            </select>
             <label className="mb-1 block text-xs font-semibold text-slate-700">Select recipients</label>
             <input value={recipientSearch} onChange={(event) => setRecipientSearch(event.target.value)} placeholder="Search name, email, role or BU" className="mb-2 w-full rounded-lg border border-[#c2ccda] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#d6e4f7]" />
             {!!visibleRecipients.length && <div className="mb-2 flex items-center justify-between text-[11px]">
