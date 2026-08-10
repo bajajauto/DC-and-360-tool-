@@ -46,6 +46,7 @@ function buildUserFromMagicLink(payload) {
     : []
 
   return {
+    id: payload.id || null,
     name,
     email,
     employeeId,

@@ -18,7 +18,6 @@ function assertBuhrSelf(req) {
 async function getBuhrUser(userId) {
   const user = await prisma.user.findUnique({ where: { id: userId } })
   if (!user || !user.roles.includes('BUHR')) throw httpError(403, 'BUHR access required')
-  if (!user.businessUnit) throw httpError(400, 'BUHR account is not mapped to a business unit')
   return user
 }
 
@@ -37,12 +36,7 @@ buhrRouter.get('/:userId/participants', asyncHandler(async (req, res) => {
   assertBuhrSelf(req)
   const buhr = await getBuhrUser(req.params.userId)
 
-  const businessUnitParticipants = await prisma.participant.findMany({
-    where: {
-      user: {
-        businessUnit: buhr.businessUnit,
-      },
-    },
+  const mappedParticipantCandidates = await prisma.participant.findMany({
     include: {
       user: true,
       cohort: true,
@@ -56,7 +50,7 @@ buhrRouter.get('/:userId/participants', asyncHandler(async (req, res) => {
       { user: { name: 'asc' } },
     ],
   })
-  const participants = businessUnitParticipants.filter((participant) => isMappedToBuhr(participant, buhr))
+  const participants = mappedParticipantCandidates.filter((participant) => isMappedToBuhr(participant, buhr))
 
   const rows = participants.map((participant) => {
     const report = latest360Report(participant)

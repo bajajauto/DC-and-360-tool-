@@ -561,8 +561,9 @@ function ParticipantsTab({ rows, generated, onManage }) {
           </thead>
           <tbody>
             {rows.map((participant) => {
-              const complete360 = participant.responses === participant.totalResponses && participant.totalResponses > 0
               const nominationsSubmitted = participant.nominationsSubmitted || participant.taskStatus?.nominees === 'completed'
+              const complete360 = nominationsSubmitted && participant.responses === participant.totalResponses && participant.totalResponses > 0
+              const responseLabel = nominationsSubmitted ? `${participant.responses}/${participant.totalResponses}` : '0/0'
               const preWorkSubmitted = participant.preWorkSubmitted || participant.taskStatus?.prework === 'completed'
               const photoSubmitted = participant.photoSubmitted || participant.taskStatus?.photo === 'completed'
               const report360 = participant.reports?.find((report) => report.type === '360')
@@ -583,7 +584,7 @@ function ParticipantsTab({ rows, generated, onManage }) {
                   <td className="border-b border-[#d5dce5] px-3 py-3"><Badge tone={nominationsSubmitted ? 'success' : 'warning'}>{nominationsSubmitted ? 'Submitted' : 'Not submitted'}</Badge></td>
                   <td className="border-b border-[#d5dce5] px-3 py-3"><Badge tone={preWorkSubmitted ? 'success' : 'warning'}>{preWorkSubmitted ? 'Submitted' : 'Pending'}</Badge></td>
                   <td className="border-b border-[#d5dce5] px-3 py-3"><Badge tone={photoSubmitted ? 'success' : 'warning'}>{photoSubmitted ? 'Uploaded' : 'Pending'}</Badge></td>
-                  <td className="border-b border-[#d5dce5] px-3 py-3"><Badge tone={complete360 ? 'success' : participant.responses ? 'info' : 'neutral'}>{participant.responses}/{participant.totalResponses}</Badge></td>
+                  <td className="border-b border-[#d5dce5] px-3 py-3"><Badge tone={complete360 ? 'success' : nominationsSubmitted && participant.responses ? 'info' : 'neutral'}>{responseLabel}</Badge></td>
                   <td className="border-b border-[#d5dce5] px-3 py-3"><Badge tone={reportTone}>{reportLabel}</Badge></td>
                   <td className="border-b border-[#d5dce5] px-3 py-3"><Badge tone={dcReportGenerated ? 'success' : 'warning'}>{dcReportLabel}</Badge></td>
                   <td className="border-b border-[#d5dce5] px-3 py-3 text-right">
