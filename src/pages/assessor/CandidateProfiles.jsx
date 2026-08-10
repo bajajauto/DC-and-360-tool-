@@ -118,7 +118,6 @@ export default function CandidateProfiles() {
           <p className="text-xs text-gray-400 mb-1">Assessor / Candidate Profiles</p>
           <h1 className="text-xl font-bold text-[#172033]">Candidate evidence review</h1>
         </div>
-        <StatusPill tone="blue">Evidence available</StatusPill>
       </header>
 
       <div className="p-8 max-w-[1500px] mx-auto grid xl:grid-cols-[340px_1fr] gap-6">
@@ -203,7 +202,6 @@ export default function CandidateProfiles() {
                         <span className="font-medium text-cyan-700">{selected.bu}</span>
                       </p>
                     </div>
-                    <StatusPill tone="blue">Ready for review</StatusPill>
                   </div>
                 </div>
               </div>
