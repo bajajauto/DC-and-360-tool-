@@ -67,6 +67,12 @@ const thinGrayBorder = {
   right: { style: 'thin', color: { rgb: 'D9E1F2' } },
 }
 
+const BAND_STYLES = {
+  Low: { fill: 'FDE9E7', font: 'C00000' },
+  Medium: { fill: 'FFF2CC', font: '9C6500' },
+  High: { fill: 'E2F0D9', font: '006100' },
+}
+
 function styleHeaderRow(ws, lastColumn, { fill = '1F4E78', color = 'FFFFFF' } = {}) {
   for (let column = 0; column <= lastColumn; column += 1) {
     const address = XLSX.utils.encode_cell({ r: 0, c: column })
@@ -211,6 +217,16 @@ export async function buildCohort360MasterWorkbook(db) {
   for (let row = 2; row <= workbenchRows.length; row += 1) {
     if (percentileSheet[`E${row}`]?.t === 'n') percentileSheet[`E${row}`].z = '0.00'
     if (percentileSheet[`F${row}`]?.t === 'n') percentileSheet[`F${row}`].z = '0.0'
+    const bandCell = percentileSheet[`G${row}`]
+    const bandStyle = BAND_STYLES[bandCell?.v]
+    if (bandCell && bandStyle) {
+      bandCell.s = {
+        fill: { patternType: 'solid', fgColor: { rgb: bandStyle.fill } },
+        font: { name: 'Calibri', sz: 11, bold: true, color: { rgb: bandStyle.font } },
+        alignment: { horizontal: 'center', vertical: 'center' },
+        border: thinGrayBorder,
+      }
+    }
   }
   XLSX.utils.book_append_sheet(workbook, percentileSheet, 'Percentile_Workbench')
   const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx', cellStyles: true })
