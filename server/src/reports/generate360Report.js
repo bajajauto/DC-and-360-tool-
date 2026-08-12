@@ -239,6 +239,10 @@ function buildReportTokens(participant) {
         tokens[`${key}_${group}`] = formatScore(getScore(submittedTasks, [behaviour.id], group))
       }
     }
+    // The nomination flow pools peers, internal customers and external stakeholders
+    // into PEER. The PPT template exposes both Peer and Internal Customer columns,
+    // so both columns must use that same confidential pooled score.
+    tokens[`${key}_ic`] = tokens[`${key}_peer`]
   })
 
   for (const section of SURVEY_SECTIONS) {
@@ -274,6 +278,7 @@ function buildReportTokens(participant) {
         ? formatScore(getCompetencyOverall(submittedTasks, behaviourIds, 'dr'))
         : 'NA'
       tokens[`${overviewCode}_ov_peer`] = formatScore(getCompetencyOverall(submittedTasks, behaviourIds, 'peer'))
+      tokens[`${overviewCode}_ov_ic`] = tokens[`${overviewCode}_ov_peer`]
     }
   }
 
@@ -532,6 +537,17 @@ async function renderPptx(tokens, outputPath) {
   await fs.mkdir(path.dirname(outputPath), { recursive: true })
   const template = await fs.readFile(pptxTemplatePath)
   const zip = new PizZip(template)
+  // The supplied template has one accidental GUID in place of the statement 18
+  // Skip/BU Head token. Repair it in-memory so every configured score can render.
+  const statementSlidePath = 'ppt/slides/slide11.xml'
+  const statementSlide = zip.file(statementSlidePath)?.asText()
+  if (statementSlide) {
+    zip.file(statementSlidePath, statementSlide.replace(
+      '{{0ACE7BD7-C860-1F38-0AEE-0C2B4442CDE5}}',
+      '{{s18_skip}}',
+    ))
+  }
+  addPptxFeedbackContinuationSlides(zip, tokens)
   const document = new Docxtemplater(zip, {
     delimiters: { start: '{{', end: '}}' },
     paragraphLoop: true,
@@ -545,6 +561,86 @@ async function renderPptx(tokens, outputPath) {
     compression: 'DEFLATE',
   })
   await fs.writeFile(outputPath, output)
+}
+
+function splitPptxFeedback(value, maxCharacters = 150) {
+  const words = String(value || '').trim().split(/\s+/).filter(Boolean)
+  const chunks = []
+  let chunk = ''
+  for (const originalWord of words) {
+    const wordParts = originalWord.length > maxCharacters
+      ? originalWord.match(new RegExp(`.{1,${maxCharacters}}`, 'g'))
+      : [originalWord]
+    for (const word of wordParts) {
+      const candidate = chunk ? `${chunk} ${word}` : word
+      if (chunk && candidate.length > maxCharacters) {
+        chunks.push(chunk)
+        chunk = word
+      } else chunk = candidate
+    }
+  }
+  if (chunk) chunks.push(chunk)
+  return chunks.length ? chunks : ['']
+}
+
+function addPptxFeedbackContinuationSlides(zip, tokens) {
+  const sections = [
+    { slide: 10, prefix: 'ssc_sec1' },
+    { slide: 14, prefix: 'ssc_sec2' },
+    { slide: 16, prefix: 'ssc_sec3' },
+    { slide: 18, prefix: 'ssc_sec4' },
+  ]
+  const fields = ['start', 'stop', 'continue', 'self']
+  const presentationPath = 'ppt/presentation.xml'
+  const presentationRelsPath = 'ppt/_rels/presentation.xml.rels'
+  const contentTypesPath = '[Content_Types].xml'
+  let presentation = zip.file(presentationPath).asText()
+  let presentationRels = zip.file(presentationRelsPath).asText()
+  let contentTypes = zip.file(contentTypesPath).asText()
+  const slideNumbers = Object.keys(zip.files).map((name) => name.match(/^ppt\/slides\/slide(\d+)\.xml$/)?.[1]).filter(Boolean).map(Number)
+  let nextSlideNumber = Math.max(...slideNumbers) + 1
+  let nextSlideId = Math.max(...[...presentation.matchAll(/<p:sldId id="(\d+)"/g)].map((match) => Number(match[1]))) + 1
+  let nextRelationshipId = Math.max(...[...presentationRels.matchAll(/Id="rId(\d+)"/g)].map((match) => Number(match[1]))) + 1
+
+  for (const section of sections) {
+    const chunksByField = Object.fromEntries(fields.map((field) => [field, splitPptxFeedback(tokens[`${section.prefix}_${field}`])]))
+    const pageCount = Math.max(...fields.map((field) => chunksByField[field].length))
+    fields.forEach((field) => { tokens[`${section.prefix}_${field}`] = chunksByField[field][0] || '' })
+    if (pageCount <= 1) continue
+
+    const sourceSlidePath = `ppt/slides/slide${section.slide}.xml`
+    const sourceRelsPath = `ppt/slides/_rels/slide${section.slide}.xml.rels`
+    const sourceSlide = zip.file(sourceSlidePath).asText()
+    const sourceRels = zip.file(sourceRelsPath)?.asText()
+    const sourceRelationship = [...presentationRels.matchAll(new RegExp(`<Relationship Id="(rId\\d+)"[^>]+Target="slides/slide${section.slide}\\.xml"[^>]*/>`, 'g'))][0]
+    if (!sourceRelationship) continue
+    let insertAfterRelationshipId = sourceRelationship[1]
+
+    for (let pageIndex = 1; pageIndex < pageCount; pageIndex += 1) {
+      const slideNumber = nextSlideNumber++
+      const relationshipId = `rId${nextRelationshipId++}`
+      let clonedSlide = sourceSlide
+      fields.forEach((field) => {
+        const originalToken = `{{${section.prefix}_${field}}}`
+        const continuationTokenName = `${section.prefix}_${field}_cont_${pageIndex}`
+        clonedSlide = clonedSlide.replaceAll(originalToken, `{{${continuationTokenName}}}`)
+        tokens[continuationTokenName] = chunksByField[field][pageIndex] || ''
+      })
+      zip.file(`ppt/slides/slide${slideNumber}.xml`, clonedSlide)
+      if (sourceRels) {
+        const clonedRels = sourceRels.replace(/<Relationship[^>]+Type="[^"]*\/notesSlide"[^>]*\/>/g, '')
+        zip.file(`ppt/slides/_rels/slide${slideNumber}.xml.rels`, clonedRels)
+      }
+      presentationRels = presentationRels.replace('</Relationships>', `<Relationship Id="${relationshipId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide${slideNumber}.xml"/></Relationships>`)
+      const anchor = new RegExp(`(<p:sldId id="\\d+" r:id="${insertAfterRelationshipId}"/>)`)
+      presentation = presentation.replace(anchor, `$1<p:sldId id="${nextSlideId++}" r:id="${relationshipId}"/>`)
+      insertAfterRelationshipId = relationshipId
+      contentTypes = contentTypes.replace('</Types>', `<Override PartName="/ppt/slides/slide${slideNumber}.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/></Types>`)
+    }
+  }
+  zip.file(presentationPath, presentation)
+  zip.file(presentationRelsPath, presentationRels)
+  zip.file(contentTypesPath, contentTypes)
 }
 
 function escapeHtml(value) {
