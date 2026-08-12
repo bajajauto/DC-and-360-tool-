@@ -146,7 +146,7 @@ export function TrackersExports() {
               <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">All historic and current cohorts in one workbook. Percentiles use non-Self responses only, and the Cohort column can be filtered in Excel.</p>
             </div>
           </div>
-          <ActionButton onClick={async () => { setError(''); try { await downloadCohort360Master() } catch (err) { setError(err.message || 'Unable to download the 360 master workbook.') } }} primary><Download size={14} />Download All-Cohorts Excel</ActionButton>
+          <ActionButton onClick={async () => { setError(''); try { await downloadCohort360Master() } catch (err) { setError(err.message || 'Unable to download the 360 master workbook.') } }} primary><Download size={14} />Download 360 Master Response Tracker</ActionButton>
         </div>
       </Card>
       <Card className="mb-5">
