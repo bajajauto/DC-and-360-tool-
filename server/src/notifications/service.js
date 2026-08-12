@@ -72,30 +72,31 @@ async function resolveParticipantId({ entity, entityId, metadata = {} }, db) {
 }
 
 export async function resolveCcRecipients({ templateId, toEmail, entity, entityId, metadata }, db = prisma) {
-  const roles = TEMPLATE_CC_ROLES[templateId] || []
-  if (!roles.length) return []
+  const roles = [...new Set(['LEARN', ...(TEMPLATE_CC_ROLES[templateId] || [])])]
+  const normalizedTo = normalizeEmail(toEmail)
+  const learnEmail = normalizeEmail(process.env.NOTIFICATION_LEARN_EMAIL || 'learn@bajajauto.co.in')
   const participantId = await resolveParticipantId({ entity, entityId, metadata }, db)
   if (!participantId) {
-    return roles.map((role) => ({
-      LEARN: process.env.NOTIFICATION_LEARN_EMAIL || 'learn@bajajauto.co.in',
+    const addresses = roles.map((role) => ({
+      LEARN: learnEmail,
       PALAK: process.env.NOTIFICATION_PALAK_EMAIL || 'pshukla1@bajajauto.co.in',
-    })[role]).map(normalizeEmail).filter(Boolean)
+    })[role])
+    return [...new Set(addresses.map(normalizeEmail).filter((email) => email && email !== normalizedTo))]
   }
 
   const participant = await db.participant.findUnique({
     where: { id: participantId },
     include: { user: true },
   })
-  if (!participant) return []
+  if (!participant) return learnEmail && learnEmail !== normalizedTo ? [learnEmail] : []
   const masterData = participant.masterData && typeof participant.masterData === 'object' ? participant.masterData : {}
   const addresses = roles.map((role) => ({
     PARTICIPANT: participant.user?.email,
     BUHR: masterData.buhrEmail,
     MANAGER: masterData.reportingManagerEmail,
-    LEARN: process.env.NOTIFICATION_LEARN_EMAIL || 'learn@bajajauto.co.in',
+    LEARN: learnEmail,
     PALAK: process.env.NOTIFICATION_PALAK_EMAIL || 'pshukla1@bajajauto.co.in',
   })[role])
-  const normalizedTo = normalizeEmail(toEmail)
   return [...new Set(addresses.map(normalizeEmail).filter((email) => email && email !== normalizedTo))]
 }
 
