@@ -187,7 +187,11 @@ reportsRouter.post('/:participantId/360/generate', asyncHandler(async (req, res)
 
 reportsRouter.get('/:participantId/360/download', asyncHandler(async (req, res) => {
   await assertReportDownloadAccess(req)
-  const generated = await getOrGenerate360Report(prisma, req.params.participantId)
+  // TD downloads should always reflect the current response data and generator
+  // template. Participant/assessor downloads retain the explicitly released file.
+  const generated = req.auth.roles.includes('td')
+    ? await generate360ReportForParticipant(prisma, req.params.participantId)
+    : await getOrGenerate360Report(prisma, req.params.participantId)
 
   res.download(generated.outputPath, generated.fileName || path.basename(generated.outputPath))
 }))

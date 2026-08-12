@@ -547,6 +547,18 @@ async function renderPptx(tokens, outputPath) {
       '{{s18_skip}}',
     ))
   }
+  const respondentMixSlidePath = 'ppt/slides/slide5.xml'
+  const respondentMixSlide = zip.file(respondentMixSlidePath)?.asText()
+  if (respondentMixSlide) {
+    const nominatedValues = [
+      tokens.mix_skip_nom,
+      tokens.mix_peer_ic_nom,
+      tokens.mix_total_nom,
+      tokens.mix_dr_nom,
+    ]
+    let nominatedIndex = 0
+    zip.file(respondentMixSlidePath, respondentMixSlide.replaceAll('[N]', () => nominatedValues[nominatedIndex++] || '0'))
+  }
   addPptxFeedbackContinuationSlides(zip, tokens)
   const document = new Docxtemplater(zip, {
     delimiters: { start: '{{', end: '}}' },
