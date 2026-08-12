@@ -6,6 +6,7 @@ import { asyncHandler } from '../middleware/asyncHandler.js'
 import { httpError } from '../utils/httpError.js'
 import { generate360ReportForParticipant, get360ReportPreviewHtml, getOrGenerate360Report } from '../reports/generate360Report.js'
 import { build360ResponseDataWorkbook } from '../reports/build360ResponseData.js'
+import { buildCohort360MasterWorkbook } from '../reports/buildCohort360Master.js'
 import { queueEmail } from '../notifications/service.js'
 import { createZip } from '../utils/zip.js'
 import { hasDeadlinePassed } from '../utils/deadlines.js'
@@ -158,6 +159,14 @@ reportsRouter.get('/bulk-download', asyncHandler(async (req, res) => {
   res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`)
   res.setHeader('Content-Length', zip.length)
   res.send(zip)
+}))
+
+reportsRouter.get('/cohort-360-master', asyncHandler(async (req, res) => {
+  requireTd(req)
+  const { buffer, fileName } = await buildCohort360MasterWorkbook(prisma)
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+  res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`)
+  res.send(buffer)
 }))
 
 reportsRouter.post('/:participantId/360/generate', asyncHandler(async (req, res) => {

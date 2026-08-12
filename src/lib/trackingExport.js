@@ -140,8 +140,9 @@ export function exportParticipantNomineeStatus(participant) {
 
 export function exportCohortProcessStatus(cohort, participants) {
   const processRows = [
-    ['Participant', 'Employee ID', 'Designation', 'Business unit', 'Current stage', 'Self 360', 'Other responses received', 'Other respondents', 'Other responses pending', ...reportAuditHeaders, 'Last activity', ...masterTrackerSteps.map((step) => step.label)],
+    ['Cohort', 'Participant', 'Employee ID', 'Designation', 'Business unit', 'Current stage', 'Self 360', 'Other responses received', 'Other respondents', 'Other responses pending', ...reportAuditHeaders, 'Last activity', ...masterTrackerSteps.map((step) => step.label)],
     ...participants.map((participant) => [
+      participant.cohort?.name || cohort.name,
       participant.name,
       participant.employeeId,
       participant.designation,
@@ -230,9 +231,10 @@ export function exportBuhrNomineeStatus(scope, participants) {
 
 export function exportCohortNomineeStatus(cohort, participants) {
   const nomineeRows = [
-    ['Participant', 'Employee ID', 'Participant designation', 'Business unit', 'Relationship', 'Nominee name', 'Nominee email', '360 form status', 'Nominated on', 'Responded on'],
+    ['Cohort', 'Participant', 'Employee ID', 'Participant designation', 'Business unit', 'Relationship', 'Nominee name', 'Nominee email', '360 form status', 'Nominated on', 'Responded on'],
     ...participants.flatMap((participant) => [
       [
+        participant.cohort?.name || cohort.name,
         participant.name,
         participant.employeeId,
         participant.designation,
@@ -245,6 +247,7 @@ export function exportCohortNomineeStatus(cohort, participants) {
         participant.selfFeedback?.respondedOn || '',
       ],
       ...(participant.nominees || []).map((nominee) => [
+        participant.cohort?.name || cohort.name,
         participant.name,
         participant.employeeId,
         participant.designation,

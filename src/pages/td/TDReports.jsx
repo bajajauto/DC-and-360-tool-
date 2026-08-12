@@ -2,7 +2,7 @@ import { ArrowUpRight, Check, Download, Eye, FileSpreadsheet, FileText, Search, 
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../../lib/api'
-import { download360Pptx, download360ResponseData, downloadReportArchive } from '../../lib/reportDownload'
+import { download360Pptx, download360ResponseData, downloadCohort360Master, downloadReportArchive } from '../../lib/reportDownload'
 
 function getCohort(cohorts, participant) {
   return cohorts.find((cohort) => cohort.id === participant.cohortId)
@@ -119,6 +119,15 @@ export default function TDReports() {
     }
   }
 
+  async function handleDownloadMasterWorkbook() {
+    setDownloadError('')
+    try {
+      await downloadCohort360Master()
+    } catch (err) {
+      setDownloadError(err.message || 'Unable to download the cohort 360 master workbook.')
+    }
+  }
+
   async function handleRelease(participant) {
     setReleaseError('')
 
@@ -202,6 +211,15 @@ export default function TDReports() {
                 <Search size={15} className="absolute left-3 top-2.5 text-gray-400" />
                 <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search reports" className="w-full rounded-lg border border-[#dce3ed] py-2 pl-9 pr-3 text-xs focus:outline-none focus:ring-2 focus:ring-blue-100 sm:w-56" />
               </div>
+              <button
+                type="button"
+                onClick={handleDownloadMasterWorkbook}
+                className="inline-flex min-h-8 items-center justify-center gap-2 rounded-lg border border-[#1e5fba] bg-white px-4 py-2 text-xs font-semibold text-[#1e5fba] hover:bg-blue-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
+                title="Download all historic and current cohort data with percentiles recalculated without Self ratings"
+              >
+                <FileSpreadsheet size={14} />
+                360 score workbook
+              </button>
               <button
                 type="button"
                 onClick={handleDownloadArchive}

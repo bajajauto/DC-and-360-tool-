@@ -4,6 +4,7 @@ import {
   Download,
   Eye,
   FileText,
+  FileSpreadsheet,
   Search,
   Save,
   Send,
@@ -12,6 +13,7 @@ import {
 } from 'lucide-react'
 import { exportCohortNomineeStatus, exportCohortProcessStatus } from '../../lib/trackingExport'
 import { api } from '../../lib/api'
+import { downloadCohort360Master } from '../../lib/reportDownload'
 
 function Page({ eyebrow, title, subtitle, action, children }) {
   return (
@@ -73,7 +75,7 @@ function ActionButton({ children, onClick, primary = false }) {
   )
 }
 
-const exportCards = [
+const operationalExportCards = [
   {
     id: 'master',
     icon: FileText,
@@ -98,59 +100,84 @@ export function TrackersExports() {
   const [cohortParticipants, setCohortParticipants] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const selectedCohort = cohortRows.find((item) => item.id === selectedCohortId)
+  const selectedCohort = selectedCohortId === 'all' ? { id: 'all-cohorts', name: 'All cohorts' } : cohortRows.find((item) => item.id === selectedCohortId)
 
   useEffect(() => {
     api.getCohorts().then(({ data }) => {
       const rows = data || []
       setCohortRows(rows)
-      setSelectedCohortId(rows.at(-1)?.id || '')
+      setSelectedCohortId('all')
     }).catch((err) => setError(err.message)).finally(() => setLoading(false))
   }, [])
 
   useEffect(() => {
-    if (!selectedCohortId) { setCohortParticipants([]); return }
+    if (!selectedCohortId || !cohortRows.length) { setCohortParticipants([]); return }
     setLoading(true)
-    api.getCohortParticipants(selectedCohortId).then(({ data }) => setCohortParticipants(data || [])).catch((err) => setError(err.message)).finally(() => setLoading(false))
-  }, [selectedCohortId])
+    const request = selectedCohortId === 'all'
+      ? Promise.all(cohortRows.map((cohort) => api.getCohortParticipants(cohort.id))).then((results) => ({ data: results.flatMap((result, index) => (result.data || []).map((participant) => ({ ...participant, cohort: cohortRows[index] }))) }))
+      : api.getCohortParticipants(selectedCohortId)
+    request.then(({ data }) => setCohortParticipants(data || [])).catch((err) => setError(err.message)).finally(() => setLoading(false))
+  }, [cohortRows, selectedCohortId])
 
-  function download(id) {
+  async function download(id) {
     if (!selectedCohort) return
-    if (id === 'threesixty') exportCohortNomineeStatus(selectedCohort, cohortParticipants)
-    else exportCohortProcessStatus(selectedCohort, cohortParticipants)
+    setError('')
+    try {
+      if (id === 'threesixty') exportCohortNomineeStatus(selectedCohort, cohortParticipants)
+      else exportCohortProcessStatus(selectedCohort, cohortParticipants)
+    } catch (err) {
+      setError(err.message || 'Unable to download the selected export.')
+    }
   }
 
   return (
     <Page
       eyebrow="Talent Development / Operations"
       title="Trackers and Exports"
-      subtitle="Select any current or historic DC cohort, then download its live status trackers."
+      subtitle="Download the all-cohorts 360 master workbook, or filter the operational status trackers by cohort."
     >
       {error && <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
       <Card className="mb-5">
-        <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500">DC cohort</label>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#ebf2fa] text-[#1e5fba]"><FileSpreadsheet size={18} /></div>
+            <div>
+              <h3 className="font-semibold text-[#0f172a]">360 Master Response Data</h3>
+              <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">All historic and current cohorts in one workbook. Percentiles use non-Self responses only, and the Cohort column can be filtered in Excel.</p>
+            </div>
+          </div>
+          <ActionButton onClick={async () => { setError(''); try { await downloadCohort360Master() } catch (err) { setError(err.message || 'Unable to download the 360 master workbook.') } }} primary><Download size={14} />Download All-Cohorts Excel</ActionButton>
+        </div>
+      </Card>
+      <Card className="mb-5">
+        <div className="mb-4">
+          <h2 className="text-lg font-bold text-[#1e5fba]">Operational Trackers</h2>
+          <p className="mt-1 text-xs text-slate-500">Select all cohorts or a specific cohort, then download either status tracker below.</p>
+        </div>
+        <div className="mb-4 border-b border-[#d5dce5] pb-4 text-sm text-[#123e77]">
+          <strong>Score data is TD-confidential.</strong> The operational trackers contain status only; the 360 Master Response Data workbook includes identifiable participant scores and anonymised respondent-level answers for authorised TD users.
+        </div>
+        <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500">Operational tracker cohort</label>
         <select value={selectedCohortId} onChange={(event) => setSelectedCohortId(event.target.value)} className="w-full max-w-lg rounded-lg border border-[#c2ccda] bg-white px-3 py-2.5 text-sm font-semibold text-slate-700">
+          <option value="all">All cohorts</option>
           {cohortRows.map((item) => <option key={item.id} value={item.id}>{item.name} · {item.programme} · {item.eventDate}</option>)}
         </select>
         <p className="mt-2 text-xs text-slate-500">{loading ? 'Loading cohort…' : `${cohortParticipants.length} participant${cohortParticipants.length === 1 ? '' : 's'} in this cohort`}</p>
-      </Card>
-      <div className="mb-5 rounded-xl border border-[#7ba6e0] bg-[#ebf2fa] p-4 text-sm text-[#123e77]">
-        <strong>Status only, never scores.</strong> Exports carry completion status for follow-ups. 360 ratings and individual responses are never included in any export.
-      </div>
-      <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
-        {exportCards.map(({ id, icon: Icon, title, desc, cols, best }) => (
-          <Card key={id} className="flex min-h-[240px] flex-col">
-            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-[#ebf2fa] text-[#1e5fba]"><Icon size={18} /></div>
-            <h3 className="font-semibold text-[#0f172a]">{title}</h3>
-            <p className="mt-2 text-sm leading-6 text-slate-600">{desc}</p>
-            <div className="my-3 rounded-lg bg-[#f1f5fa] px-3 py-2 text-[11px] leading-5 text-slate-500"><strong>Columns:</strong> {cols}</div>
-            <p className="mb-4 text-xs text-slate-500"><strong>Best for:</strong> {best}</p>
-            <div className="mt-auto">
-              <ActionButton onClick={() => download(id)} primary><Download size={14} />Download Excel</ActionButton>
+        <div className="mt-5 grid gap-4 border-t border-[#d5dce5] pt-5 lg:grid-cols-2">
+          {operationalExportCards.map(({ id, icon: Icon, title, desc, cols, best }) => (
+            <div key={id} className="flex min-h-[240px] flex-col rounded-xl border border-[#d5dce5] bg-white p-5">
+              <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-[#ebf2fa] text-[#1e5fba]"><Icon size={18} /></div>
+              <h3 className="font-semibold text-[#0f172a]">{title}</h3>
+              <p className="mt-2 text-sm leading-6 text-slate-600">{desc}</p>
+              <div className="my-3 rounded-lg bg-[#f1f5fa] px-3 py-2 text-[11px] leading-5 text-slate-500"><strong>Columns:</strong> {cols}</div>
+              <p className="mb-4 text-xs text-slate-500"><strong>Best for:</strong> {best}</p>
+              <div className="mt-auto">
+                <ActionButton onClick={() => download(id)} primary><Download size={14} />Download Excel</ActionButton>
+              </div>
             </div>
-          </Card>
-        ))}
-      </div>
+          ))}
+        </div>
+      </Card>
     </Page>
   )
 }
