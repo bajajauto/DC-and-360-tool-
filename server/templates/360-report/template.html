@@ -1033,6 +1033,22 @@
       pair.querySelector('.ssc-box').textContent = text
       return pair
     }
+    const splitFeedback = (text, maxCharacters = 900) => {
+      const words = text.trim().split(/\s+/).filter(Boolean)
+      const chunks = []
+      let chunk = ''
+      for (const word of words) {
+        const candidate = chunk ? `${chunk} ${word}` : word
+        if (chunk && candidate.length > maxCharacters) {
+          chunks.push(chunk)
+          chunk = word
+        } else {
+          chunk = candidate
+        }
+      }
+      if (chunk) chunks.push(chunk)
+      return chunks.length ? chunks : ['']
+    }
     const feedbackPages = [...document.querySelectorAll('.page')].filter((page) => page.querySelectorAll('.ssc-box').length === 4)
     for (const original of feedbackPages) {
       const title = original.querySelector('.t-title')?.innerHTML || 'OVERALL FEEDBACK'
@@ -1041,40 +1057,19 @@
       let current = makePage(title, subtitle)
       original.before(current.page)
       for (const entry of entries) {
-        let remaining = entry.text.trim()
-        let continued = false
-        while (remaining) {
-          const whole = makePair(continued ? `${entry.label} (continued)` : entry.label, remaining)
-          current.pad.appendChild(whole)
-          if (fits(current.pad)) break
-          whole.remove()
-          if (current.pad.querySelector('.ssc-pair')) {
+        const chunks = splitFeedback(entry.text)
+        chunks.forEach((chunk, index) => {
+          const label = index ? `${entry.label} (continued)` : entry.label
+          let pair = makePair(label, chunk)
+          current.pad.appendChild(pair)
+          if (!fits(current.pad)) {
+            pair.remove()
             current = makePage(title, subtitle, true)
             original.before(current.page)
-            continued = true
-            continue
+            pair = makePair(label, chunk)
+            current.pad.appendChild(pair)
           }
-          const words = remaining.split(/\s+/)
-          let low = 1
-          let high = words.length
-          let best = 0
-          while (low <= high) {
-            const middle = Math.floor((low + high) / 2)
-            const probe = makePair(continued ? `${entry.label} (continued)` : entry.label, words.slice(0, middle).join(' '))
-            current.pad.appendChild(probe)
-            const probeFits = fits(current.pad)
-            probe.remove()
-            if (probeFits) { best = middle; low = middle + 1 } else high = middle - 1
-          }
-          best = Math.max(1, best)
-          current.pad.appendChild(makePair(continued ? `${entry.label} (continued)` : entry.label, words.slice(0, best).join(' ')))
-          remaining = words.slice(best).join(' ')
-          if (remaining) {
-            current = makePage(title, subtitle, true)
-            original.before(current.page)
-            continued = true
-          }
-        }
+        })
       }
       original.remove()
     }
