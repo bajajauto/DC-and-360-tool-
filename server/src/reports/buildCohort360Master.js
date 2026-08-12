@@ -46,12 +46,11 @@ function respondentCodes(tasks) {
   return codes
 }
 
-function hazenPercentile(value, values) {
-  const sorted = [...values].sort((a, b) => a - b)
-  const first = sorted.findIndex((item) => item === value)
-  const last = sorted.length - 1 - [...sorted].reverse().findIndex((item) => item === value)
-  const averageRank = ((first + 1) + (last + 1)) / 2
-  return ((averageRank - 0.5) / sorted.length) * 100
+function inclusivePercentile(value, values) {
+  if (values.length === 1) return 50
+  const lowerCount = values.filter((item) => item < value).length
+  const tiedCount = values.filter((item) => item === value).length
+  return ((lowerCount + (tiedCount - 1) / 2) / (values.length - 1)) * 100
 }
 
 function sheet(rows, widths) {
@@ -120,20 +119,46 @@ export async function buildCohort360MasterWorkbook(db) {
 
   const percentileRows = []
   for (const competency of COMPETENCIES) {
-    const competencyScores = scores.filter((row) => row.competency === competency.code && row.others != null)
-    const values = competencyScores.map((row) => row.others)
-    for (const row of competencyScores) {
-      const percentile = hazenPercentile(row.others, values)
+    const competencyRows = scores.filter((row) => row.competency === competency.code)
+    const values = competencyRows.filter((row) => row.others != null).map((row) => row.others)
+    for (const row of competencyRows) {
+      if (row.others == null) {
+        percentileRows.push([row.cohort, row.name, row.ticket, competency.code, '', '', ''])
+        continue
+      }
+      const percentile = inclusivePercentile(row.others, values)
       percentileRows.push([row.cohort, row.name, row.ticket, competency.code, row.others, percentile, percentile <= 25 ? 'Low' : percentile <= 75 ? 'Medium' : 'High'])
     }
   }
 
-  const workbenchRows = [['Cohort', 'Participant Name', 'Ticket ID', 'Competency', 'Others Score (non-Self only)', 'Percentile (Hazen)', 'Band'], ...percentileRows]
+  const workbenchRows = [['Cohort', 'Participant Name', 'Ticket ID', 'Competency', 'Others Score (non-Self only)', 'Percentile (0-100)', 'Band', '', 'Band Rules', 'Definition'], ...percentileRows]
+  const notes = [
+    ['Low', '0 to 25'],
+    ['Medium', '>25 to 75'],
+    ['High', '>75 to 100'],
+    ['', ''],
+    ['Calculation', 'Method'],
+    ['Others Score', 'Average of numeric ratings where Respondent Group is not Self'],
+    ['Percentile', '0-100 percentile rank within the same competency; tied scores use average rank'],
+    ['Comparison pool', 'All participants with a non-Self score, across cohorts, for that competency'],
+    ['Auto-update', 'Generated from all submitted tool responses whenever this workbook is downloaded'],
+  ]
+  notes.forEach(([label, definition], index) => {
+    if (!workbenchRows[index + 1]) workbenchRows[index + 1] = []
+    workbenchRows[index + 1][8] = label
+    workbenchRows[index + 1][9] = definition
+  })
 
   const workbook = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(workbook, sheet(ratingRows, [22, 12, 24, 16, 16, 20, 28, 24, 22, 18, 14]), 'Raw_Ratings_TEMPLATE')
   XLSX.utils.book_append_sheet(workbook, sheet(commentRows, [22, 12, 24, 16, 12, 28, 24, 22, 42, 42, 42, 14]), 'Raw_Comments_TEMPLATE')
-  XLSX.utils.book_append_sheet(workbook, sheet(workbenchRows, [24, 26, 16, 20, 28, 22, 14]), 'Percentile_Workbench')
+  const percentileSheet = sheet(workbenchRows, [16, 28, 13, 14, 25, 19, 12, 3, 18, 48])
+  percentileSheet['!autofilter'] = { ref: `A1:G${workbenchRows.length}` }
+  for (let row = 2; row <= workbenchRows.length; row += 1) {
+    if (percentileSheet[`E${row}`]?.t === 'n') percentileSheet[`E${row}`].z = '0.00'
+    if (percentileSheet[`F${row}`]?.t === 'n') percentileSheet[`F${row}`].z = '0.0'
+  }
+  XLSX.utils.book_append_sheet(workbook, percentileSheet, 'Percentile_Workbench')
   const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' })
   return { buffer, fileName: 'All-Cohorts-360-Master-Response-Data.xlsx' }
 }
