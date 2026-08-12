@@ -204,7 +204,9 @@ function buildReportTokens(participant) {
   const peerIcNom = nominatedCounts.peer || 0
   const peerIcResp = respondedCounts.peer || 0
   const directReportsMeetMinimum = (respondedCounts.dr || 0) >= 2
-  const totalNom = (nominatedCounts.rm || 0) + (nominatedCounts.skip || 0) + peerIcNom + (nominatedCounts.dr || 0)
+  // The respondent-mix table displays Self as one nominated respondent, so the
+  // total must include that same row as well as all nominee groups.
+  const totalNom = 1 + (nominatedCounts.rm || 0) + (nominatedCounts.skip || 0) + peerIcNom + (nominatedCounts.dr || 0)
   const totalResp = submittedTasks.length
 
   const tokens = {
@@ -212,7 +214,9 @@ function buildReportTokens(participant) {
     cohort: participant.cohort?.name || '',
     report_month: formatMonth(),
     participant_name: participant.user.name || '',
+    mix_self_nom: '1',
     mix_self_resp: String(respondedCounts.self || 0),
+    mix_rm_nom: String(nominatedCounts.rm || 0),
     mix_rm_resp: String(respondedCounts.rm || 0),
     mix_skip_nom: String(nominatedCounts.skip || 0),
     mix_skip_resp: String(respondedCounts.skip || 0),

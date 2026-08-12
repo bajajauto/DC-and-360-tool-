@@ -270,7 +270,10 @@
     font-size:11pt; color:var(--ink); line-height:1.4;
     margin-top:5pt;
     white-space:pre-wrap;    /* preserve line breaks in feedback text */
+    overflow-wrap:anywhere;
   }
+  .ssc-continuation .t-title{ font-size:24pt; }
+  .ssc-continuation-note{ margin-top:5pt; font-size:9pt; color:#6b665b; font-style:italic; }
 
   /* ---------- REFLECTION WORKBOOK ---------- */
   .reflect-q{ font-size:12pt; color:var(--ink); font-weight:400; margin-top:14pt; }
@@ -490,8 +493,8 @@
         </tr>
       </thead>
       <tbody>
-        <tr><td class="behaviour">Self</td><td class="num">1</td><td class="num">{{mix_self_resp}}</td></tr>
-        <tr><td class="behaviour">Reporting Manager</td><td class="num">1</td><td class="num">{{mix_rm_resp}}</td></tr>
+        <tr><td class="behaviour">Self</td><td class="num">{{mix_self_nom}}</td><td class="num">{{mix_self_resp}}</td></tr>
+        <tr><td class="behaviour">Reporting Manager</td><td class="num">{{mix_rm_nom}}</td><td class="num">{{mix_rm_resp}}</td></tr>
         <tr><td class="behaviour">Skip Manager / BU Head</td><td class="num">{{mix_skip_nom}}</td><td class="num">{{mix_skip_resp}}</td></tr>
         <tr><td class="behaviour">Peers / Internal Customers / External Stakeholders</td><td class="num">{{mix_peer_ic_nom}}</td><td class="num">{{mix_peer_ic_resp}}</td></tr>
         <tr><td class="behaviour">Direct Reports</td><td class="num">{{mix_dr_nom}}</td><td class="num">{{mix_dr_resp}}</td></tr>
@@ -1001,5 +1004,82 @@
   <div class="pageno">20</div>
 </section>
 
+<script>
+  (() => {
+    const fits = (pad) => pad.scrollHeight <= pad.clientHeight - 34
+    const makePage = (title, subtitle, continuation = false) => {
+      const page = document.createElement('section')
+      page.className = `page${continuation ? ' ssc-continuation' : ''}`
+      const pad = document.createElement('div')
+      pad.className = 'pad'
+      pad.innerHTML = `<div class="t-title">${title}</div><div class="t-subtitle mt-s">${subtitle}</div>`
+      if (continuation) {
+        const note = document.createElement('div')
+        note.className = 'ssc-continuation-note'
+        note.textContent = 'Continued from the previous page'
+        pad.appendChild(note)
+      }
+      page.appendChild(pad)
+      const number = document.createElement('div')
+      number.className = 'pageno'
+      page.appendChild(number)
+      return { page, pad }
+    }
+    const makePair = (label, text) => {
+      const pair = document.createElement('div')
+      pair.className = 'ssc-pair'
+      pair.innerHTML = `<div class="ssc-label"></div><div class="ssc-box"></div>`
+      pair.querySelector('.ssc-label').textContent = label
+      pair.querySelector('.ssc-box').textContent = text
+      return pair
+    }
+    const feedbackPages = [...document.querySelectorAll('.page')].filter((page) => page.querySelectorAll('.ssc-box').length === 4)
+    for (const original of feedbackPages) {
+      const title = original.querySelector('.t-title')?.innerHTML || 'OVERALL FEEDBACK'
+      const subtitle = original.querySelector('.t-subtitle')?.innerHTML || ''
+      const entries = [...original.querySelectorAll('.ssc-box')].map((box) => ({ label: box.previousElementSibling?.textContent?.trim() || 'Feedback', text: box.textContent || '' }))
+      let current = makePage(title, subtitle)
+      original.before(current.page)
+      for (const entry of entries) {
+        let remaining = entry.text.trim()
+        let continued = false
+        while (remaining) {
+          const whole = makePair(continued ? `${entry.label} (continued)` : entry.label, remaining)
+          current.pad.appendChild(whole)
+          if (fits(current.pad)) break
+          whole.remove()
+          if (current.pad.querySelector('.ssc-pair')) {
+            current = makePage(title, subtitle, true)
+            original.before(current.page)
+            continued = true
+            continue
+          }
+          const words = remaining.split(/\s+/)
+          let low = 1
+          let high = words.length
+          let best = 0
+          while (low <= high) {
+            const middle = Math.floor((low + high) / 2)
+            const probe = makePair(continued ? `${entry.label} (continued)` : entry.label, words.slice(0, middle).join(' '))
+            current.pad.appendChild(probe)
+            const probeFits = fits(current.pad)
+            probe.remove()
+            if (probeFits) { best = middle; low = middle + 1 } else high = middle - 1
+          }
+          best = Math.max(1, best)
+          current.pad.appendChild(makePair(continued ? `${entry.label} (continued)` : entry.label, words.slice(0, best).join(' ')))
+          remaining = words.slice(best).join(' ')
+          if (remaining) {
+            current = makePage(title, subtitle, true)
+            original.before(current.page)
+            continued = true
+          }
+        }
+      }
+      original.remove()
+    }
+    document.querySelectorAll('.page .pageno').forEach((node, index) => { node.textContent = String(index + 1).padStart(2, '0') })
+  })()
+</script>
 </body>
 </html>
