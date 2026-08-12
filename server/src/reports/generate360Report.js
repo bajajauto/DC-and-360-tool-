@@ -615,29 +615,49 @@ function addPptxFeedbackContinuationSlides(zip, tokens) {
   let nextRelationshipId = Math.max(...[...presentationRels.matchAll(/Id="rId(\d+)"/g)].map((match) => Number(match[1]))) + 1
 
   for (const section of sections) {
-    const chunksByField = Object.fromEntries(fields.map((field) => [field, splitPptxFeedback(tokens[`${section.prefix}_${field}`])]))
-    const pageCount = Math.max(...fields.map((field) => chunksByField[field].length))
-    fields.forEach((field) => { tokens[`${section.prefix}_${field}`] = chunksByField[field][0] || '' })
-    if (pageCount <= 1) continue
-
     const sourceSlidePath = `ppt/slides/slide${section.slide}.xml`
     const sourceRelsPath = `ppt/slides/_rels/slide${section.slide}.xml.rels`
     const sourceSlide = zip.file(sourceSlidePath).asText()
     const sourceRels = zip.file(sourceRelsPath)?.asText()
+    const labels = {
+      start: 'Start doing:',
+      stop: 'Stop doing:',
+      continue: 'Continue doing:',
+      self: 'Self reflections (from your own form):',
+    }
+    // Match the preview: finish one category before moving to the next, filling
+    // the four available feedback boxes from top to bottom on each slide.
+    const entries = fields.flatMap((field) => splitPptxFeedback(tokens[`${section.prefix}_${field}`]).map((value, index) => ({
+      label: index ? `${labels[field]} (continued)` : labels[field],
+      value,
+    })))
+    const pages = Array.from({ length: Math.ceil(entries.length / fields.length) }, (_unused, index) =>
+      entries.slice(index * fields.length, (index + 1) * fields.length),
+    )
+    const configureSlide = (slideXml, pageEntries, pageIndex) => {
+      let configured = slideXml
+      fields.forEach((field, slotIndex) => {
+        const slot = pageEntries[slotIndex] || { label: '', value: '' }
+        const valueToken = `${section.prefix}_ppt_${pageIndex}_${slotIndex}`
+        const labelToken = `${valueToken}_label`
+        configured = configured.replace(`{{${section.prefix}_${field}}}`, `{{${valueToken}}}`)
+        configured = configured.replace(`<a:t>${labels[field]}</a:t>`, `<a:t>{{${labelToken}}}</a:t>`)
+        tokens[valueToken] = slot.value
+        tokens[labelToken] = slot.label
+      })
+      return configured
+    }
+    zip.file(sourceSlidePath, configureSlide(sourceSlide, pages[0], 0))
+    if (pages.length <= 1) continue
+
     const sourceRelationship = [...presentationRels.matchAll(new RegExp(`<Relationship Id="(rId\\d+)"[^>]+Target="slides/slide${section.slide}\\.xml"[^>]*/>`, 'g'))][0]
     if (!sourceRelationship) continue
     let insertAfterRelationshipId = sourceRelationship[1]
 
-    for (let pageIndex = 1; pageIndex < pageCount; pageIndex += 1) {
+    for (let pageIndex = 1; pageIndex < pages.length; pageIndex += 1) {
       const slideNumber = nextSlideNumber++
       const relationshipId = `rId${nextRelationshipId++}`
-      let clonedSlide = sourceSlide
-      fields.forEach((field) => {
-        const originalToken = `{{${section.prefix}_${field}}}`
-        const continuationTokenName = `${section.prefix}_${field}_cont_${pageIndex}`
-        clonedSlide = clonedSlide.replaceAll(originalToken, `{{${continuationTokenName}}}`)
-        tokens[continuationTokenName] = chunksByField[field][pageIndex] || ''
-      })
+      const clonedSlide = configureSlide(sourceSlide, pages[pageIndex], pageIndex)
       zip.file(`ppt/slides/slide${slideNumber}.xml`, clonedSlide)
       if (sourceRels) {
         const clonedRels = sourceRels.replace(/<Relationship[^>]+Type="[^"]*\/notesSlide"[^>]*\/>/g, '')
