@@ -1006,7 +1006,16 @@
 
 <script>
   (() => {
-    const fits = (pad) => pad.scrollHeight <= pad.clientHeight - 34
+    const fits = (pad) => {
+      const page = pad.closest('.page')
+      const lastPair = pad.querySelector('.ssc-pair:last-child')
+      if (!page || !lastPair) return true
+      const pageBottom = page.getBoundingClientRect().bottom
+      const contentBottom = lastPair.getBoundingClientRect().bottom
+      // Keep a clear footer area for the page number while using all remaining
+      // printable space above it.
+      return contentBottom <= pageBottom - 42
+    }
     const makePage = (title, subtitle, continuation = false) => {
       const page = document.createElement('section')
       page.className = `page${continuation ? ' ssc-continuation' : ''}`
