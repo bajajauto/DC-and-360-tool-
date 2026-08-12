@@ -1,4 +1,4 @@
-import XLSX from 'xlsx'
+import XLSX from 'xlsx-js-style'
 import { httpError } from '../utils/httpError.js'
 import { getSurveySections, SURVEY_SECTIONS } from '../../../src/data/surveyConfig.js'
 import { relationshipGroup } from './generate360Report.js'
@@ -58,6 +58,33 @@ function sheet(rows, widths) {
   ws['!cols'] = widths.map((wch) => ({ wch }))
   ws['!autofilter'] = { ref: ws['!ref'] }
   return ws
+}
+
+const thinGrayBorder = {
+  top: { style: 'thin', color: { rgb: 'D9E1F2' } },
+  bottom: { style: 'thin', color: { rgb: 'D9E1F2' } },
+  left: { style: 'thin', color: { rgb: 'D9E1F2' } },
+  right: { style: 'thin', color: { rgb: 'D9E1F2' } },
+}
+
+function styleHeaderRow(ws, lastColumn, { fill = '1F4E78', color = 'FFFFFF' } = {}) {
+  for (let column = 0; column <= lastColumn; column += 1) {
+    const address = XLSX.utils.encode_cell({ r: 0, c: column })
+    if (!ws[address]) continue
+    ws[address].s = {
+      fill: { patternType: 'solid', fgColor: { rgb: fill } },
+      font: { name: 'Calibri', sz: 11, bold: true, color: { rgb: color } },
+      alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+      border: thinGrayBorder,
+    }
+  }
+  ws['!rows'] = [{ hpt: 24 }]
+}
+
+function stylePlainDataSheet(ws, lastColumn) {
+  styleHeaderRow(ws, lastColumn)
+  ws['!autofilter'] = { ref: ws['!ref'] }
+  ws['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: 'A2', activePane: 'bottomLeft', state: 'frozen' }
 }
 
 export async function buildCohort360MasterWorkbook(db) {
@@ -150,15 +177,42 @@ export async function buildCohort360MasterWorkbook(db) {
   })
 
   const workbook = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(workbook, sheet(ratingRows, [22, 12, 24, 16, 16, 20, 28, 24, 22, 18, 14]), 'Raw_Ratings_TEMPLATE')
-  XLSX.utils.book_append_sheet(workbook, sheet(commentRows, [22, 12, 24, 16, 12, 28, 24, 22, 42, 42, 42, 14]), 'Raw_Comments_TEMPLATE')
+  const ratingsSheet = sheet(ratingRows, [22, 12, 24, 16, 16, 20, 28, 24, 22, 18, 14])
+  const commentsSheet = sheet(commentRows, [22, 12, 24, 16, 12, 28, 24, 22, 42, 42, 42, 14])
+  stylePlainDataSheet(ratingsSheet, 10)
+  stylePlainDataSheet(commentsSheet, 11)
+  XLSX.utils.book_append_sheet(workbook, ratingsSheet, 'Raw_Ratings_TEMPLATE')
+  XLSX.utils.book_append_sheet(workbook, commentsSheet, 'Raw_Comments_TEMPLATE')
   const percentileSheet = sheet(workbenchRows, [16, 28, 13, 14, 25, 19, 12, 3, 18, 48])
   percentileSheet['!autofilter'] = { ref: `A1:G${workbenchRows.length}` }
+  percentileSheet['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: 'A2', activePane: 'bottomLeft', state: 'frozen' }
+  styleHeaderRow(percentileSheet, 6)
+  for (const column of [8, 9]) {
+    const address = XLSX.utils.encode_cell({ r: 0, c: column })
+    percentileSheet[address].s = {
+      fill: { patternType: 'solid', fgColor: { rgb: 'D9EAF7' } },
+      font: { name: 'Calibri', sz: 11, bold: true, color: { rgb: '1F1F1F' } },
+      alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+      border: thinGrayBorder,
+    }
+  }
+  for (const row of [5]) {
+    for (const column of [8, 9]) {
+      const address = XLSX.utils.encode_cell({ r: row, c: column })
+      if (!percentileSheet[address]) continue
+      percentileSheet[address].s = {
+        fill: { patternType: 'solid', fgColor: { rgb: 'D9EAF7' } },
+        font: { name: 'Calibri', sz: 11, bold: true, color: { rgb: '1F1F1F' } },
+        alignment: { horizontal: 'left', vertical: 'center', wrapText: true },
+        border: thinGrayBorder,
+      }
+    }
+  }
   for (let row = 2; row <= workbenchRows.length; row += 1) {
     if (percentileSheet[`E${row}`]?.t === 'n') percentileSheet[`E${row}`].z = '0.00'
     if (percentileSheet[`F${row}`]?.t === 'n') percentileSheet[`F${row}`].z = '0.0'
   }
   XLSX.utils.book_append_sheet(workbook, percentileSheet, 'Percentile_Workbench')
-  const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' })
+  const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx', cellStyles: true })
   return { buffer, fileName: 'All-Cohorts-360-Master-Response-Data.xlsx' }
 }
