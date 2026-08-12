@@ -595,6 +595,43 @@ function splitPptxFeedback(value, maxCharacters = 150) {
   return chunks.length ? chunks : ['']
 }
 
+function configurePptxContinuationSlide(slideXml, sectionPrefix, field, value, pageIndex, labels, tokens) {
+  const valueToken = `${sectionPrefix}_ppt_cont_${pageIndex}`
+  const labelToken = `${valueToken}_label`
+  const fieldToken = `{{${sectionPrefix}_${field}}}`
+  const feedbackShapePattern = /<p:sp>(?:(?!<\/p:sp>)[\s\S])*?\{\{ssc_sec\d+_(?:start|stop|continue|self)\}\}(?:(?!<\/p:sp>)[\s\S])*?<\/p:sp>/g
+  const labelShapePattern = /<p:sp>(?:(?!<\/p:sp>)[\s\S])*?<a:t>(?:Start doing:|Stop doing:|Continue doing:|Self reflections \(from your own form\):)<\/a:t>(?:(?!<\/p:sp>)[\s\S])*?<\/p:sp>/g
+  const feedbackPanelPattern = /<p:sp>(?:(?!<\/p:sp>)[\s\S])*?<p:cNvPr[^>]+name="Rectangle (?:43|44|45|46)"(?:(?!<\/p:sp>)[\s\S])*?<\/p:sp>/g
+  let keptFeedback = false
+  let keptLabel = false
+  let keptPanel = false
+  let configured = slideXml.replace(feedbackPanelPattern, (shape) => {
+    if (keptPanel) return ''
+    keptPanel = true
+    return shape
+      .replace(/(<a:off x="504825" y=")\d+("\/>)/, '$11628775$2')
+      .replace(/(<a:ext cx="8382000" cy=")\d+("\/>)/, '$14953000$2')
+  })
+  configured = configured.replace(feedbackShapePattern, (shape) => {
+    if (!shape.includes(fieldToken) || keptFeedback) return ''
+    keptFeedback = true
+    return shape
+      .replace(fieldToken, `{{${valueToken}}}`)
+      .replace(/(<a:off x="647700" y=")\d+("\/>)/, '$12000250$2')
+      .replace(/(<a:ext cx="8410575" cy=")\d+("\/>)/, '$14381500$2')
+  })
+  configured = configured.replace(labelShapePattern, (shape) => {
+    if (!shape.includes(`<a:t>${labels[field]}</a:t>`) || keptLabel) return ''
+    keptLabel = true
+    return shape
+      .replace(`<a:t>${labels[field]}</a:t>`, `<a:t>{{${labelToken}}}</a:t>`)
+      .replace(/(<a:off x="647700" y=")\d+("\/>)/, '$11771650$2')
+  })
+  tokens[valueToken] = value
+  tokens[labelToken] = `${labels[field]} (continued)`
+  return configured
+}
+
 function addPptxFeedbackContinuationSlides(zip, tokens) {
   const sections = [
     { slide: 10, prefix: 'ssc_sec1' },
@@ -625,39 +662,32 @@ function addPptxFeedbackContinuationSlides(zip, tokens) {
       continue: 'Continue doing:',
       self: 'Self reflections (from your own form):',
     }
-    // Match the preview: finish one category before moving to the next, filling
-    // the four available feedback boxes from top to bottom on each slide.
-    const entries = fields.flatMap((field) => splitPptxFeedback(tokens[`${section.prefix}_${field}`]).map((value, index) => ({
-      label: index ? `${labels[field]} (continued)` : labels[field],
-      value,
-    })))
-    const pages = Array.from({ length: Math.ceil(entries.length / fields.length) }, (_unused, index) =>
-      entries.slice(index * fields.length, (index + 1) * fields.length),
-    )
-    const configureSlide = (slideXml, pageEntries, pageIndex) => {
-      let configured = slideXml
-      fields.forEach((field, slotIndex) => {
-        const slot = pageEntries[slotIndex] || { label: '', value: '' }
-        const valueToken = `${section.prefix}_ppt_${pageIndex}_${slotIndex}`
-        const labelToken = `${valueToken}_label`
-        configured = configured.replace(`{{${section.prefix}_${field}}}`, `{{${valueToken}}}`)
-        configured = configured.replace(`<a:t>${labels[field]}</a:t>`, `<a:t>{{${labelToken}}}</a:t>`)
-        tokens[valueToken] = slot.value
-        tokens[labelToken] = slot.label
-      })
-      return configured
-    }
-    zip.file(sourceSlidePath, configureSlide(sourceSlide, pages[0], 0))
-    if (pages.length <= 1) continue
+    const continuations = []
+    fields.forEach((field) => {
+      const chunks = splitPptxFeedback(tokens[`${section.prefix}_${field}`])
+      tokens[`${section.prefix}_${field}`] = chunks.shift() || ''
+      const remaining = chunks.join(' ')
+      splitPptxFeedback(remaining, 900).filter(Boolean).forEach((value) => continuations.push({ field, value }))
+    })
+    if (!continuations.length) continue
 
     const sourceRelationship = [...presentationRels.matchAll(new RegExp(`<Relationship Id="(rId\\d+)"[^>]+Target="slides/slide${section.slide}\\.xml"[^>]*/>`, 'g'))][0]
     if (!sourceRelationship) continue
     let insertAfterRelationshipId = sourceRelationship[1]
 
-    for (let pageIndex = 1; pageIndex < pages.length; pageIndex += 1) {
+    for (let pageIndex = 0; pageIndex < continuations.length; pageIndex += 1) {
       const slideNumber = nextSlideNumber++
       const relationshipId = `rId${nextRelationshipId++}`
-      const clonedSlide = configureSlide(sourceSlide, pages[pageIndex], pageIndex)
+      const continuation = continuations[pageIndex]
+      const clonedSlide = configurePptxContinuationSlide(
+        sourceSlide,
+        section.prefix,
+        continuation.field,
+        continuation.value,
+        pageIndex,
+        labels,
+        tokens,
+      )
       zip.file(`ppt/slides/slide${slideNumber}.xml`, clonedSlide)
       if (sourceRels) {
         const clonedRels = sourceRels.replace(/<Relationship[^>]+Type="[^"]*\/notesSlide"[^>]*\/>/g, '')
