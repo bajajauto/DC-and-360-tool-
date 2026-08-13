@@ -559,7 +559,7 @@ async function renderPptx(tokens, outputPath) {
     let nominatedIndex = 0
     zip.file(respondentMixSlidePath, respondentMixSlide.replaceAll('[N]', () => nominatedValues[nominatedIndex++] || '0'))
   }
-  addPptxFeedbackContinuationSlides(zip, tokens)
+  expandPptxFeedbackBoxes(zip)
   const document = new Docxtemplater(zip, {
     delimiters: { start: '{{', end: '}}' },
     paragraphLoop: true,
@@ -575,134 +575,34 @@ async function renderPptx(tokens, outputPath) {
   await fs.writeFile(outputPath, output)
 }
 
-function splitPptxFeedback(value, maxCharacters = 150) {
-  const words = String(value || '').trim().split(/\s+/).filter(Boolean)
-  const chunks = []
-  let chunk = ''
-  for (const originalWord of words) {
-    const wordParts = originalWord.length > maxCharacters
-      ? originalWord.match(new RegExp(`.{1,${maxCharacters}}`, 'g'))
-      : [originalWord]
-    for (const word of wordParts) {
-      const candidate = chunk ? `${chunk} ${word}` : word
-      if (chunk && candidate.length > maxCharacters) {
-        chunks.push(chunk)
-        chunk = word
-      } else chunk = candidate
-    }
-  }
-  if (chunk) chunks.push(chunk)
-  return chunks.length ? chunks : ['']
-}
+// Each Start/Stop/Continue/Self box only reserves one line of height in the
+// template (its panel otherwise sits mostly empty below it), which is why
+// anything more than a sentence used to need a second "(continued)" slide.
+// Instead of paginating, grow the box to use the rest of its panel and let
+// PowerPoint's own shrink-to-fit handle anything still too long for that —
+// the whole section stays on its one slide, matching the HTML preview.
+function expandPptxFeedbackBoxes(zip) {
+  const feedbackShapePattern = /<p:sp>(?:(?!<\/p:sp>)[\s\S])*?<\/p:sp>/g
+  const panelBottomByOffset = { 1628775: 2838450, 2990850: 4200525, 4352925: 5562600, 5715000: 6924675 }
 
-function configurePptxContinuationSlide(slideXml, sectionPrefix, field, value, pageIndex, labels, tokens) {
-  const valueToken = `${sectionPrefix}_ppt_cont_${pageIndex}`
-  const labelToken = `${valueToken}_label`
-  const fieldToken = `{{${sectionPrefix}_${field}}}`
-  const feedbackShapePattern = /<p:sp>(?:(?!<\/p:sp>)[\s\S])*?\{\{ssc_sec\d+_(?:start|stop|continue|self)\}\}(?:(?!<\/p:sp>)[\s\S])*?<\/p:sp>/g
-  const labelShapePattern = /<p:sp>(?:(?!<\/p:sp>)[\s\S])*?<a:t>(?:Start doing:|Stop doing:|Continue doing:|Self reflections \(from your own form\):)<\/a:t>(?:(?!<\/p:sp>)[\s\S])*?<\/p:sp>/g
-  const feedbackPanelPattern = /<p:sp>(?:(?!<\/p:sp>)[\s\S])*?<p:cNvPr[^>]+name="Rectangle (?:43|44|45|46)"(?:(?!<\/p:sp>)[\s\S])*?<\/p:sp>/g
-  let keptFeedback = false
-  let keptLabel = false
-  let keptPanel = false
-  let configured = slideXml.replace(feedbackPanelPattern, (shape) => {
-    if (keptPanel) return ''
-    keptPanel = true
-    return shape
-      .replace(/(<a:off x="504825" y=")\d+("\/>)/, '$11628775$2')
-      .replace(/(<a:ext cx="8382000" cy=")\d+("\/>)/, '$14953000$2')
-  })
-  configured = configured.replace(feedbackShapePattern, (shape) => {
-    if (!shape.includes(fieldToken) || keptFeedback) return ''
-    keptFeedback = true
-    return shape
-      .replace(fieldToken, `{{${valueToken}}}`)
-      .replace(/(<a:off x="647700" y=")\d+("\/>)/, '$12000250$2')
-      .replace(/(<a:ext cx="8410575" cy=")\d+("\/>)/, '$14381500$2')
-  })
-  configured = configured.replace(labelShapePattern, (shape) => {
-    if (!shape.includes(`<a:t>${labels[field]}</a:t>`) || keptLabel) return ''
-    keptLabel = true
-    return shape
-      .replace(`<a:t>${labels[field]}</a:t>`, `<a:t>{{${labelToken}}}</a:t>`)
-      .replace(/(<a:off x="647700" y=")\d+("\/>)/, '$11771650$2')
-  })
-  tokens[valueToken] = value
-  tokens[labelToken] = `${labels[field]} (continued)`
-  return configured
-}
+  for (const slideNumber of [10, 14, 16, 18]) {
+    const slidePath = `ppt/slides/slide${slideNumber}.xml`
+    const slideXml = zip.file(slidePath)?.asText()
+    if (!slideXml) continue
 
-function addPptxFeedbackContinuationSlides(zip, tokens) {
-  const sections = [
-    { slide: 10, prefix: 'ssc_sec1' },
-    { slide: 14, prefix: 'ssc_sec2' },
-    { slide: 16, prefix: 'ssc_sec3' },
-    { slide: 18, prefix: 'ssc_sec4' },
-  ]
-  const fields = ['start', 'stop', 'continue', 'self']
-  const presentationPath = 'ppt/presentation.xml'
-  const presentationRelsPath = 'ppt/_rels/presentation.xml.rels'
-  const contentTypesPath = '[Content_Types].xml'
-  let presentation = zip.file(presentationPath).asText()
-  let presentationRels = zip.file(presentationRelsPath).asText()
-  let contentTypes = zip.file(contentTypesPath).asText()
-  const slideNumbers = Object.keys(zip.files).map((name) => name.match(/^ppt\/slides\/slide(\d+)\.xml$/)?.[1]).filter(Boolean).map(Number)
-  let nextSlideNumber = Math.max(...slideNumbers) + 1
-  let nextSlideId = Math.max(...[...presentation.matchAll(/<p:sldId id="(\d+)"/g)].map((match) => Number(match[1]))) + 1
-  let nextRelationshipId = Math.max(...[...presentationRels.matchAll(/Id="rId(\d+)"/g)].map((match) => Number(match[1]))) + 1
-
-  for (const section of sections) {
-    const sourceSlidePath = `ppt/slides/slide${section.slide}.xml`
-    const sourceRelsPath = `ppt/slides/_rels/slide${section.slide}.xml.rels`
-    const sourceSlide = zip.file(sourceSlidePath).asText()
-    const sourceRels = zip.file(sourceRelsPath)?.asText()
-    const labels = {
-      start: 'Start doing:',
-      stop: 'Stop doing:',
-      continue: 'Continue doing:',
-      self: 'Self reflections (from your own form):',
-    }
-    const continuations = []
-    fields.forEach((field) => {
-      const chunks = splitPptxFeedback(tokens[`${section.prefix}_${field}`])
-      tokens[`${section.prefix}_${field}`] = chunks.shift() || ''
-      const remaining = chunks.join(' ')
-      splitPptxFeedback(remaining, 900).filter(Boolean).forEach((value) => continuations.push({ field, value }))
+    const updated = slideXml.replace(feedbackShapePattern, (shape) => {
+      if (!/\{\{ssc_sec\d+_(start|stop|continue|self)\}\}/.test(shape)) return shape
+      const offMatch = shape.match(/<a:off x="647700" y="(\d+)"\/>/)
+      const panelBottom = offMatch && panelBottomByOffset[Number(offMatch[1]) - 371475]
+      if (!panelBottom) return shape
+      const boxTop = Number(offMatch[1])
+      const newHeight = panelBottom - boxTop - 40000
+      return shape
+        .replace(/(<a:ext cx="8410575" cy=")\d+("\/>)/, `$1${newHeight}$2`)
+        .replace('<a:bodyPr wrap="square" lIns="0" tIns="0" rIns="0" bIns="0" rtlCol="0" anchor="t"/>', '<a:bodyPr wrap="square" lIns="0" tIns="0" rIns="0" bIns="0" rtlCol="0" anchor="t"><a:normAutofit/></a:bodyPr>')
     })
-    if (!continuations.length) continue
-
-    const sourceRelationship = [...presentationRels.matchAll(new RegExp(`<Relationship Id="(rId\\d+)"[^>]+Target="slides/slide${section.slide}\\.xml"[^>]*/>`, 'g'))][0]
-    if (!sourceRelationship) continue
-    let insertAfterRelationshipId = sourceRelationship[1]
-
-    for (let pageIndex = 0; pageIndex < continuations.length; pageIndex += 1) {
-      const slideNumber = nextSlideNumber++
-      const relationshipId = `rId${nextRelationshipId++}`
-      const continuation = continuations[pageIndex]
-      const clonedSlide = configurePptxContinuationSlide(
-        sourceSlide,
-        section.prefix,
-        continuation.field,
-        continuation.value,
-        pageIndex,
-        labels,
-        tokens,
-      )
-      zip.file(`ppt/slides/slide${slideNumber}.xml`, clonedSlide)
-      if (sourceRels) {
-        const clonedRels = sourceRels.replace(/<Relationship[^>]+Type="[^"]*\/notesSlide"[^>]*\/>/g, '')
-        zip.file(`ppt/slides/_rels/slide${slideNumber}.xml.rels`, clonedRels)
-      }
-      presentationRels = presentationRels.replace('</Relationships>', `<Relationship Id="${relationshipId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide${slideNumber}.xml"/></Relationships>`)
-      const anchor = new RegExp(`(<p:sldId id="\\d+" r:id="${insertAfterRelationshipId}"/>)`)
-      presentation = presentation.replace(anchor, `$1<p:sldId id="${nextSlideId++}" r:id="${relationshipId}"/>`)
-      insertAfterRelationshipId = relationshipId
-      contentTypes = contentTypes.replace('</Types>', `<Override PartName="/ppt/slides/slide${slideNumber}.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/></Types>`)
-    }
+    zip.file(slidePath, updated)
   }
-  zip.file(presentationPath, presentation)
-  zip.file(presentationRelsPath, presentationRels)
-  zip.file(contentTypesPath, contentTypes)
 }
 
 function escapeHtml(value) {

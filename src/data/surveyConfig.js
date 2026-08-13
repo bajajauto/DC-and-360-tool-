@@ -96,7 +96,7 @@ export const SURVEY_SECTIONS = [
         title: 'Solves Problems Creatively',
         shortCode: 'SPC',
         behaviours: [
-          { id: 'spc-1', text: 'Defines and analyses the problem' },
+          { id: 'spc-1', text: 'Defines & analyses the problem' },
           { id: 'spc-2', text: 'Identifies risks and constraints before planning actions to solve problems' },
           { id: 'spc-3', text: 'Implements solutions effectively', seniorLeader: true },
           { id: 'spc-4', text: 'Reviews progress and impact of solutions implemented', seniorLeader: true },
@@ -108,7 +108,7 @@ export const SURVEY_SECTIONS = [
         title: 'Champions Improvement & Positive Change',
         shortCode: 'CIPC',
         behaviours: [
-          { id: 'cipc-1', text: 'Identifies and advocates for opportunities for improvement / change', seniorLeader: true },
+          { id: 'cipc-1', text: 'Identifies & advocates for opportunities for improvement/ change', seniorLeader: true },
           { id: 'cipc-2', text: 'Identifies and aligns stakeholders for change' },
           { id: 'cipc-3', text: 'Enables and drives execution for change', seniorLeader: true },
           { id: 'cipc-4', text: 'Evaluates and sustains change outcomes', seniorLeader: true },
@@ -144,7 +144,7 @@ export const SURVEY_SECTIONS = [
           { id: 'amt-1', text: 'Aligns team goals with organisational priorities and helps team see how their work connects to the bigger picture' },
           { id: 'amt-2', text: 'Drives accountability and ownership in team' },
           { id: 'amt-3', text: 'Removes barriers and optimises resources for team', seniorLeader: true },
-          { id: 'amt-4', text: 'Fosters and recognises excellence in team' },
+          { id: 'amt-4', text: 'Fosters and recognizes excellence in team' },
           { id: 'amt-5', text: 'Role models desired behaviour', seniorLeader: true },
         ],
       },
@@ -153,7 +153,7 @@ export const SURVEY_SECTIONS = [
         title: 'Collaborate with All Interfaces',
         shortCode: 'CWAI',
         behaviours: [
-          { id: 'cwai-1', text: 'Builds and maintains critical stakeholder relationships', seniorLeader: true },
+          { id: 'cwai-1', text: 'Builds & maintains critical stakeholder relationships', seniorLeader: true },
           { id: 'cwai-2', text: 'Influences stakeholders and encourages team to collaborate' },
           { id: 'cwai-3', text: 'Negotiates and resolves conflicts for effective outcomes' },
         ],
@@ -193,7 +193,7 @@ export const SURVEY_SECTIONS = [
         behaviours: [
           {
             id: 'acfs-1',
-            text: 'Scans the external environment, builds informed business strategy, and converts it into concrete plans',
+            text: 'Scans the external environment, builds informed business strategy, and converts it into concrete plans.',
             seniorLeader: true,
           },
         ],
