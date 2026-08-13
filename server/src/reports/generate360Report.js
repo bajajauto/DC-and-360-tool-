@@ -591,19 +591,24 @@ const FEEDBACK_BASE_LINE_PT = 13.5
 // <a:normAutofit/> relies on the viewer recalculating it live, which many
 // renderers don't do. So compute the shrink ourselves from the real text
 // length instead of hoping the viewer figures it out.
-function computeAutofit(text, boxHeightEmu) {
+// PowerPoint does not reliably re-derive normAutofit's fontScale on open for
+// plain autoshapes (verified by rendering the actual output: the hint was
+// present in the XML but ignored) — so the font size and line spacing are
+// set directly instead. That's unambiguous: whatever we write is what
+// renders, with no autofit recalculation involved.
+function computeShrinkScale(text, boxHeightEmu) {
   const boxHeightPt = boxHeightEmu / EMU_PER_PT
-  const charsPerLine = FEEDBACK_BOX_WIDTH_PT / (FEEDBACK_BASE_FONT_PT * 0.5)
+  // Conservative width estimate plus a packing-efficiency discount: real
+  // text wraps less densely than an even character grid (varied word
+  // lengths waste space at line ends), so treat the box as holding less
+  // than the naive geometric estimate.
+  const charsPerLine = FEEDBACK_BOX_WIDTH_PT / (FEEDBACK_BASE_FONT_PT * 0.55)
   const maxLines = Math.floor(boxHeightPt / FEEDBACK_BASE_LINE_PT)
-  const capacity = charsPerLine * maxLines
+  const capacity = charsPerLine * maxLines * 0.8
   const length = String(text || '').length || 1
   // Both dimensions shrink together, so usable capacity grows roughly with
   // the square of the scale — solve for the scale that just fits `length`.
-  const scale = Math.max(0.4, Math.min(1, Math.sqrt(capacity / length)))
-  return {
-    fontScale: Math.round(scale * 100000),
-    lnSpcReduction: Math.round((1 - scale) * 20000),
-  }
+  return Math.max(0.38, Math.min(1, Math.sqrt(capacity / length)))
 }
 
 function expandPptxFeedbackBoxes(zip, tokens) {
@@ -623,10 +628,13 @@ function expandPptxFeedbackBoxes(zip, tokens) {
       if (!panelBottom) return shape
       const boxTop = Number(offMatch[1])
       const newHeight = panelBottom - boxTop - 40000
-      const { fontScale, lnSpcReduction } = computeAutofit(tokens[tokenMatch[1]], newHeight)
+      const scale = computeShrinkScale(tokens[tokenMatch[1]], newHeight)
+      const newSz = Math.round(1050 * scale)
+      const newLnSpc = Math.round(1350 * scale)
       return shape
         .replace(/(<a:ext cx="8410575" cy=")\d+("\/>)/, `$1${newHeight}$2`)
-        .replace('<a:bodyPr wrap="square" lIns="0" tIns="0" rIns="0" bIns="0" rtlCol="0" anchor="t"/>', `<a:bodyPr wrap="square" lIns="0" tIns="0" rIns="0" bIns="0" rtlCol="0" anchor="t"><a:normAutofit fontScale="${fontScale}" lnSpcReduction="${lnSpcReduction}"/></a:bodyPr>`)
+        .replace(/sz="1050"/g, `sz="${newSz}"`)
+        .replace(/<a:spcPts val="1350"\/>/g, `<a:spcPts val="${newLnSpc}"/>`)
     })
     zip.file(slidePath, updated)
   }
