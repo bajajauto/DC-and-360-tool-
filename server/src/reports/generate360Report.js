@@ -559,7 +559,7 @@ async function renderPptx(tokens, outputPath) {
     let nominatedIndex = 0
     zip.file(respondentMixSlidePath, respondentMixSlide.replaceAll('[N]', () => nominatedValues[nominatedIndex++] || '0'))
   }
-  expandPptxFeedbackBoxes(zip)
+  expandPptxFeedbackBoxes(zip, tokens)
   const document = new Docxtemplater(zip, {
     delimiters: { start: '{{', end: '}}' },
     paragraphLoop: true,
@@ -581,7 +581,32 @@ async function renderPptx(tokens, outputPath) {
 // Instead of paginating, grow the box to use the rest of its panel and let
 // PowerPoint's own shrink-to-fit handle anything still too long for that —
 // the whole section stays on its one slide, matching the HTML preview.
-function expandPptxFeedbackBoxes(zip) {
+const EMU_PER_PT = 12700
+const FEEDBACK_BOX_WIDTH_PT = 8410575 / EMU_PER_PT
+const FEEDBACK_BASE_FONT_PT = 10.5
+const FEEDBACK_BASE_LINE_PT = 13.5
+
+// PowerPoint (and most other viewers) only actually shrinks text when
+// normAutofit carries explicit fontScale/lnSpcReduction values — an empty
+// <a:normAutofit/> relies on the viewer recalculating it live, which many
+// renderers don't do. So compute the shrink ourselves from the real text
+// length instead of hoping the viewer figures it out.
+function computeAutofit(text, boxHeightEmu) {
+  const boxHeightPt = boxHeightEmu / EMU_PER_PT
+  const charsPerLine = FEEDBACK_BOX_WIDTH_PT / (FEEDBACK_BASE_FONT_PT * 0.5)
+  const maxLines = Math.floor(boxHeightPt / FEEDBACK_BASE_LINE_PT)
+  const capacity = charsPerLine * maxLines
+  const length = String(text || '').length || 1
+  // Both dimensions shrink together, so usable capacity grows roughly with
+  // the square of the scale — solve for the scale that just fits `length`.
+  const scale = Math.max(0.4, Math.min(1, Math.sqrt(capacity / length)))
+  return {
+    fontScale: Math.round(scale * 100000),
+    lnSpcReduction: Math.round((1 - scale) * 20000),
+  }
+}
+
+function expandPptxFeedbackBoxes(zip, tokens) {
   const feedbackShapePattern = /<p:sp>(?:(?!<\/p:sp>)[\s\S])*?<\/p:sp>/g
   const panelBottomByOffset = { 1628775: 2838450, 2990850: 4200525, 4352925: 5562600, 5715000: 6924675 }
 
@@ -591,15 +616,17 @@ function expandPptxFeedbackBoxes(zip) {
     if (!slideXml) continue
 
     const updated = slideXml.replace(feedbackShapePattern, (shape) => {
-      if (!/\{\{ssc_sec\d+_(start|stop|continue|self)\}\}/.test(shape)) return shape
+      const tokenMatch = shape.match(/\{\{(ssc_sec\d+_(?:start|stop|continue|self))\}\}/)
+      if (!tokenMatch) return shape
       const offMatch = shape.match(/<a:off x="647700" y="(\d+)"\/>/)
       const panelBottom = offMatch && panelBottomByOffset[Number(offMatch[1]) - 371475]
       if (!panelBottom) return shape
       const boxTop = Number(offMatch[1])
       const newHeight = panelBottom - boxTop - 40000
+      const { fontScale, lnSpcReduction } = computeAutofit(tokens[tokenMatch[1]], newHeight)
       return shape
         .replace(/(<a:ext cx="8410575" cy=")\d+("\/>)/, `$1${newHeight}$2`)
-        .replace('<a:bodyPr wrap="square" lIns="0" tIns="0" rIns="0" bIns="0" rtlCol="0" anchor="t"/>', '<a:bodyPr wrap="square" lIns="0" tIns="0" rIns="0" bIns="0" rtlCol="0" anchor="t"><a:normAutofit/></a:bodyPr>')
+        .replace('<a:bodyPr wrap="square" lIns="0" tIns="0" rIns="0" bIns="0" rtlCol="0" anchor="t"/>', `<a:bodyPr wrap="square" lIns="0" tIns="0" rIns="0" bIns="0" rtlCol="0" anchor="t"><a:normAutofit fontScale="${fontScale}" lnSpcReduction="${lnSpcReduction}"/></a:bodyPr>`)
     })
     zip.file(slidePath, updated)
   }
