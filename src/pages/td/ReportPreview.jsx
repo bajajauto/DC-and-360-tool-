@@ -1,8 +1,8 @@
-import { ArrowLeft, Eye, Printer } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { ArrowLeft, Download, Eye } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { Link, Navigate, useParams } from 'react-router-dom'
 import { api } from '../../lib/api'
-import { get360ReportPreviewUrl } from '../../lib/reportDownload'
+import { download360Pdf, get360ReportPreviewUrl } from '../../lib/reportDownload'
 
 export default function ReportPreview() {
   const { participantId } = useParams()
@@ -10,7 +10,6 @@ export default function ReportPreview() {
   const [loading, setLoading] = useState(true)
   const [downloadState, setDownloadState] = useState({ status: 'idle', message: '' })
   const [previewUrl, setPreviewUrl] = useState('')
-  const previewFrame = useRef(null)
 
   useEffect(() => {
     if (!participantId) return
@@ -38,8 +37,14 @@ export default function ReportPreview() {
     }
   }, [participantId, participant])
 
-  function handleDownload() {
-    previewFrame.current?.contentWindow?.print()
+  async function handleDownload() {
+    setDownloadState({ status: 'loading', message: '' })
+    try {
+      await download360Pdf(participant.id, participant.name)
+      setDownloadState({ status: 'idle', message: '' })
+    } catch (error) {
+      setDownloadState({ status: 'error', message: error.message })
+    }
   }
 
   if (loading) return <div className="p-8 text-sm text-gray-500">Loading report...</div>
@@ -57,18 +62,18 @@ export default function ReportPreview() {
             <h1 className="text-xl font-bold text-[#172033]">360 PowerPoint report</h1>
           </div>
         </div>
-        <button onClick={handleDownload} disabled={!previewUrl} className="flex items-center gap-2 rounded-lg bg-[#1e4d8c] px-4 py-2.5 text-xs font-semibold text-white disabled:opacity-60">
-          <Printer size={15} />
-          Save as PDF
+        <button onClick={handleDownload} disabled={downloadState.status === 'loading'} className="flex items-center gap-2 rounded-lg bg-[#1e4d8c] px-4 py-2.5 text-xs font-semibold text-white disabled:opacity-60">
+          <Download size={15} />
+          {downloadState.status === 'loading' ? 'Preparing...' : 'Download PDF'}
         </button>
       </header>
 
       <div className="mx-auto max-w-[1080px] px-8 py-4">
-        {previewUrl && <div className="flex items-center gap-3 rounded-xl border border-blue-200 bg-blue-50 p-3.5"><Eye size={17} className="shrink-0 text-[#1e4d8c]" /><p className="text-xs text-blue-800"><strong>TD preview.</strong> Choose <strong>Save as PDF</strong>, then select “Save as PDF” in the browser print dialog.</p></div>}
+        {previewUrl && <div className="flex items-center gap-3 rounded-xl border border-blue-200 bg-blue-50 p-3.5"><Eye size={17} className="shrink-0 text-[#1e4d8c]" /><p className="text-xs text-blue-800"><strong>TD preview.</strong> Download the populated report directly as a PDF.</p></div>}
         {downloadState.status === 'error' && <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">{downloadState.message}</div>}
       </div>
       {previewUrl
-        ? <iframe ref={previewFrame} title="360° Feedback Report preview" src={previewUrl} className="block min-h-[calc(100vh-80px)] w-full border-0 bg-slate-200" />
+        ? <iframe title="360° Feedback Report preview" src={previewUrl} className="block min-h-[calc(100vh-80px)] w-full border-0 bg-slate-200" />
         : downloadState.status !== 'error' && <div className="p-12 text-center text-sm text-gray-500">Preparing report preview...</div>}
     </div>
   )
