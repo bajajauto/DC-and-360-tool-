@@ -589,26 +589,57 @@ const FEEDBACK_BASE_LINE_PT = 13.5
 // PowerPoint (and most other viewers) only actually shrinks text when
 // normAutofit carries explicit fontScale/lnSpcReduction values — an empty
 // <a:normAutofit/> relies on the viewer recalculating it live, which many
-// renderers don't do. So compute the shrink ourselves from the real text
-// length instead of hoping the viewer figures it out.
+// renderers don't do. Compute the shrink from explicit line breaks and an
+// approximation of PowerPoint's word wrapping instead.
 // PowerPoint does not reliably re-derive normAutofit's fontScale on open for
 // plain autoshapes (verified by rendering the actual output: the hint was
 // present in the XML but ignored) — so the font size and line spacing are
 // set directly instead. That's unambiguous: whatever we write is what
 // renders, with no autofit recalculation involved.
+function estimatedWrappedLines(text, scale) {
+  const fontSize = FEEDBACK_BASE_FONT_PT * scale
+  const glyphWidth = (character) => {
+    if (/\s/.test(character)) return fontSize * 0.3
+    if (/[ilI.,'`:;!|]/.test(character)) return fontSize * 0.27
+    if (/[MW@%&#]/.test(character)) return fontSize * 0.82
+    if (/[A-Z0-9]/.test(character)) return fontSize * 0.62
+    return fontSize * 0.52
+  }
+  const widthOf = (value) => [...value].reduce((width, character) => width + glyphWidth(character), 0)
+  let lines = 0
+  for (const explicitLine of String(text || '').split(/\r?\n/)) {
+    if (!explicitLine) {
+      lines += 1
+      continue
+    }
+    let lineWidth = 0
+    for (const part of explicitLine.match(/\S+\s*/g) || ['']) {
+      let partWidth = widthOf(part)
+      if (lineWidth && lineWidth + partWidth > FEEDBACK_BOX_WIDTH_PT) {
+        lines += 1
+        lineWidth = 0
+      }
+      while (partWidth > FEEDBACK_BOX_WIDTH_PT) {
+        lines += 1
+        partWidth -= FEEDBACK_BOX_WIDTH_PT
+      }
+      lineWidth += partWidth
+    }
+    lines += 1
+  }
+  return lines
+}
+
 function computeShrinkScale(text, boxHeightEmu) {
   const boxHeightPt = boxHeightEmu / EMU_PER_PT
-  // Conservative width estimate plus a packing-efficiency discount: real
-  // text wraps less densely than an even character grid (varied word
-  // lengths waste space at line ends), so treat the box as holding less
-  // than the naive geometric estimate.
-  const charsPerLine = FEEDBACK_BOX_WIDTH_PT / (FEEDBACK_BASE_FONT_PT * 0.55)
-  const maxLines = Math.floor(boxHeightPt / FEEDBACK_BASE_LINE_PT)
-  const capacity = charsPerLine * maxLines * 0.8
-  const length = String(text || '').length || 1
-  // Both dimensions shrink together, so usable capacity grows roughly with
-  // the square of the scale — solve for the scale that just fits `length`.
-  return Math.max(0.38, Math.min(1, Math.sqrt(capacity / length)))
+  // Find the largest font that fits. The margin absorbs small differences in
+  // Montserrat metrics between PowerPoint and other PPTX viewers.
+  for (let scale = 1; scale >= 0.25; scale -= 0.01) {
+    const requiredHeight = estimatedWrappedLines(text, scale) * FEEDBACK_BASE_LINE_PT * scale
+    if (requiredHeight <= boxHeightPt * 0.9) return Number(scale.toFixed(2))
+  }
+  // Preserve all content on the slide even for unusually dense feedback.
+  return 0.25
 }
 
 function expandPptxFeedbackBoxes(zip, tokens) {
