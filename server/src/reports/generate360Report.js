@@ -659,13 +659,9 @@ function expandPptxFeedbackBoxes(zip, tokens) {
       if (!panelBottom) return shape
       const boxTop = Number(offMatch[1])
       const newHeight = panelBottom - boxTop - 40000
-      const scale = computeShrinkScale(tokens[tokenMatch[1]], newHeight)
-      const newSz = Math.round(1050 * scale)
-      const newLnSpc = Math.round(1350 * scale)
       return shape
         .replace(/(<a:ext cx="8410575" cy=")\d+("\/>)/, `$1${newHeight}$2`)
-        .replace(/sz="1050"/g, `sz="${newSz}"`)
-        .replace(/<a:spcPts val="1350"\/>/g, `<a:spcPts val="${newLnSpc}"/>`)
+        .replace(/<a:bodyPr([^>]*)\/>/, '<a:bodyPr$1><a:spAutoFit/></a:bodyPr>')
     })
     zip.file(slidePath, updated)
   }
