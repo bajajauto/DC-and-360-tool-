@@ -1,13 +1,14 @@
 import { ArrowLeft, Download, Eye } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useUser } from '../../context/UserContext'
-import { download360Pdf, get360ReportPreviewUrl } from '../../lib/reportDownload'
+import { download360PreviewPdf, get360ReportPreviewUrl } from '../../lib/reportDownload'
 
 export default function Report360() {
   const { user } = useUser()
   const [previewUrl, setPreviewUrl] = useState('')
   const [state, setState] = useState({ status: 'loading', message: '' })
+  const previewFrame = useRef(null)
 
   useEffect(() => {
     if (!user?.participantId) return
@@ -30,7 +31,7 @@ export default function Report360() {
   async function download() {
     setState({ status: 'downloading', message: '' })
     try {
-      await download360Pdf(user.participantId, user.name)
+      await download360PreviewPdf(previewFrame.current, user.name)
       setState({ status: 'ready', message: '' })
     } catch (error) {
       setState({ status: 'error', message: error.message })
@@ -60,7 +61,7 @@ export default function Report360() {
         {state.status === 'error' && <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">{state.message}</div>}
       </div>
       {previewUrl
-        ? <iframe title="360° Feedback Report" src={previewUrl} className="block min-h-[calc(100vh-80px)] w-full border-0 bg-slate-200" />
+        ? <iframe ref={previewFrame} title="360° Feedback Report" src={previewUrl} className="block min-h-[calc(100vh-80px)] w-full border-0 bg-slate-200" />
         : state.status !== 'error' && <div className="p-12 text-center text-sm text-gray-500">Preparing report preview…</div>}
     </div>
   )

@@ -28,6 +28,41 @@ export async function get360ReportPreviewUrl(participantId) {
   return URL.createObjectURL(new Blob([html], { type: 'text/html' }))
 }
 
+export async function download360PreviewPdf(iframe, participantName = 'participant') {
+  const previewDocument = iframe?.contentDocument
+  if (!previewDocument) throw new Error('The report preview is not ready yet.')
+
+  await previewDocument.fonts?.ready
+  await Promise.all([...previewDocument.images].map((img) => img.complete
+    ? Promise.resolve()
+    : new Promise((resolve) => {
+        img.addEventListener('load', resolve, { once: true })
+        img.addEventListener('error', resolve, { once: true })
+      })))
+
+  const pages = [...previewDocument.querySelectorAll('.page')]
+  if (!pages.length) throw new Error('The report preview contains no printable pages.')
+
+  const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+    import('html2canvas'),
+    import('jspdf'),
+  ])
+  const pdf = new jsPDF({ orientation: 'landscape', unit: 'in', format: [10.6875, 7.9583], compress: true })
+
+  for (let index = 0; index < pages.length; index += 1) {
+    const canvas = await html2canvas(pages[index], {
+      scale: 2,
+      backgroundColor: '#FFFAE2',
+      logging: false,
+      useCORS: true,
+    })
+    if (index > 0) pdf.addPage([10.6875, 7.9583], 'landscape')
+    pdf.addImage(canvas.toDataURL('image/jpeg', 0.96), 'JPEG', 0, 0, 10.6875, 7.9583, undefined, 'FAST')
+  }
+
+  pdf.save(`${participantName.replace(/\s+/g, '-')}-360-report.pdf`)
+}
+
 function assertPptxReport(response) {
   const type = response.headers.get('content-type') || ''
   if (!type.includes('presentationml.presentation') && !type.includes('application/octet-stream')) {
@@ -105,26 +140,6 @@ export async function download360ResponseData(participantId, participantName = '
   const link = document.createElement('a')
   link.href = url
   link.download = getFileName(response, `${participantName.replace(/\s+/g, '-')}-360-response-data.xlsx`)
-  document.body.appendChild(link)
-  link.click()
-  link.remove()
-  window.URL.revokeObjectURL(url)
-}
-
-export async function download360Pdf(participantId, participantName = 'participant') {
-  const token = getToken()
-  const response = await fetch(`${API_BASE}/api/reports/${participantId}/360/pdf`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  }).catch(() => { throw new Error('Backend API is not responding. Please try again.') })
-  if (!response.ok) {
-    const body = await response.json().catch(() => ({}))
-    throw new Error(body?.error?.message || 'Unable to generate the PDF report.')
-  }
-  const blob = await response.blob()
-  const url = window.URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = getFileName(response, `${participantName.replace(/\s+/g, '-')}-360-report.pdf`)
   document.body.appendChild(link)
   link.click()
   link.remove()

@@ -1,8 +1,8 @@
 import { ArrowLeft, Download, Eye } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, Navigate, useParams } from 'react-router-dom'
 import { api } from '../../lib/api'
-import { download360Pdf, get360ReportPreviewUrl } from '../../lib/reportDownload'
+import { download360PreviewPdf, get360ReportPreviewUrl } from '../../lib/reportDownload'
 
 export default function ReportPreview() {
   const { participantId } = useParams()
@@ -10,6 +10,7 @@ export default function ReportPreview() {
   const [loading, setLoading] = useState(true)
   const [downloadState, setDownloadState] = useState({ status: 'idle', message: '' })
   const [previewUrl, setPreviewUrl] = useState('')
+  const previewFrame = useRef(null)
 
   useEffect(() => {
     if (!participantId) return
@@ -40,7 +41,7 @@ export default function ReportPreview() {
   async function handleDownload() {
     setDownloadState({ status: 'loading', message: '' })
     try {
-      await download360Pdf(participant.id, participant.name)
+      await download360PreviewPdf(previewFrame.current, participant.name)
       setDownloadState({ status: 'idle', message: '' })
     } catch (error) {
       setDownloadState({ status: 'error', message: error.message })
@@ -73,7 +74,7 @@ export default function ReportPreview() {
         {downloadState.status === 'error' && <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">{downloadState.message}</div>}
       </div>
       {previewUrl
-        ? <iframe title="360° Feedback Report preview" src={previewUrl} className="block min-h-[calc(100vh-80px)] w-full border-0 bg-slate-200" />
+        ? <iframe ref={previewFrame} title="360° Feedback Report preview" src={previewUrl} className="block min-h-[calc(100vh-80px)] w-full border-0 bg-slate-200" />
         : downloadState.status !== 'error' && <div className="p-12 text-center text-sm text-gray-500">Preparing report preview...</div>}
     </div>
   )

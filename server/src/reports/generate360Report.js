@@ -2,7 +2,6 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import Docxtemplater from 'docxtemplater'
-import PDFDocument from 'pdfkit'
 import PizZip from 'pizzip'
 import { SURVEY_SECTIONS, getBehaviourIds, getSurveySections } from '../../../src/data/surveyConfig.js'
 import { httpError } from '../utils/httpError.js'
@@ -485,16 +484,21 @@ function drawCompetencyPages(doc, tokens) {
     })
 
     const number = SECTION_NUMBER_BY_ID[section.id]
+    addPage(doc, 'Start. Stop. Continue.', `Overall feedback on ${section.title}`)
     const cards = [
       ['Start doing', tokens[`ssc_sec${number}_start`]],
       ['Stop doing', tokens[`ssc_sec${number}_stop`]],
       ['Continue doing', tokens[`ssc_sec${number}_continue`]],
       ['Self reflections', tokens[`ssc_sec${number}_self`]],
     ]
-    cards.forEach(([title, value]) => {
-      addPage(doc, title, `Overall feedback on ${section.title}`)
-      doc.roundedRect(46, 126, doc.page.width - 92, doc.page.height - 190, 5).fillAndStroke(PDF.pale, PDF.tan)
-      textBlock(doc, value || 'No response provided.', 66, 150, doc.page.width - 132, { size: 10.5, lineGap: 5 })
+    cards.forEach(([title, value], index) => {
+      const column = index % 2
+      const row = Math.floor(index / 2)
+      const x = 46 + column * 252
+      const y = 128 + row * 282
+      doc.roundedRect(x, y, 230, 250, 4).fillAndStroke(PDF.pale, PDF.tan)
+      textBlock(doc, title, x + 15, y + 16, 200, { size: 11, bold: true, color: PDF.brown })
+      textBlock(doc, value || 'No response provided.', x + 15, y + 45, 200, { size: 8.5, lineGap: 4 })
     })
   })
 }
@@ -734,14 +738,6 @@ export async function generate360ReportForParticipant(db, participantId) {
     outputPath,
     fileName,
   }
-}
-
-export async function generate360PdfForParticipant(db, participantId) {
-  const participant = await getParticipantForReport(db, participantId)
-  const fileName = `${participantSlug(participant)}-360-report.pdf`
-  const outputPath = path.join(reportsDirectory, fileName)
-  await renderPdf(buildReportTokens(participant), outputPath)
-  return { outputPath, fileName }
 }
 
 export async function getOrGenerate360Report(db, participantId) {

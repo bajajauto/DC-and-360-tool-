@@ -4,7 +4,7 @@ import { Router } from 'express'
 import { prisma } from '../db.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
 import { httpError } from '../utils/httpError.js'
-import { generate360PdfForParticipant, generate360ReportForParticipant, get360ReportPreviewHtml, getOrGenerate360Report } from '../reports/generate360Report.js'
+import { generate360ReportForParticipant, get360ReportPreviewHtml, getOrGenerate360Report } from '../reports/generate360Report.js'
 import { build360ResponseDataWorkbook } from '../reports/build360ResponseData.js'
 import { buildCohort360MasterWorkbook } from '../reports/buildCohort360Master.js'
 import { queueEmail } from '../notifications/service.js'
@@ -194,12 +194,6 @@ reportsRouter.get('/:participantId/360/download', asyncHandler(async (req, res) 
     : await getOrGenerate360Report(prisma, req.params.participantId)
 
   res.download(generated.outputPath, generated.fileName || path.basename(generated.outputPath))
-}))
-
-reportsRouter.get('/:participantId/360/pdf', asyncHandler(async (req, res) => {
-  await assertReportDownloadAccess(req)
-  const generated = await generate360PdfForParticipant(prisma, req.params.participantId)
-  res.download(generated.outputPath, generated.fileName)
 }))
 
 reportsRouter.get('/:participantId/360/preview', asyncHandler(async (req, res) => {
