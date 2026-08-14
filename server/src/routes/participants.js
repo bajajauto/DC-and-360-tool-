@@ -482,7 +482,7 @@ participantsRouter.get('/:participantId/employee-directory', asyncHandler(async 
 participantsRouter.post('/:participantId/self-feedback-task', asyncHandler(async (req, res) => {
   const participant = await findParticipant(req.params.participantId)
   assertParticipantAccess(req, participant)
-  if (hasCutoffPassed(participant.cohort.nominationDeadline)) throw httpError(409, 'The nomination deadline has passed. Nominations can no longer be submitted.')
+  if (hasCutoffPassed(participant.cohort.threeSixtyCutoff)) throw httpError(409, 'The 360 feedback deadline has passed. The self survey can no longer be edited.')
   if (!participant.nominees.some((nominee) => nominee.status === 'SUBMITTED')) throw httpError(409, 'Submit your 360 nominations before starting the self survey')
 
   const existing = await prisma.feedbackTask.findFirst({
