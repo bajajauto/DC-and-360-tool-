@@ -53,11 +53,18 @@ export async function download360PreviewPdf(iframe, participantName = 'participa
     const canvas = await html2canvas(pages[index], {
       scale: 2,
       backgroundColor: '#FFFAE2',
+      foreignObjectRendering: true,
       logging: false,
       useCORS: true,
+      onclone: (clonedDocument) => {
+        clonedDocument.querySelectorAll('.page').forEach((page) => {
+          page.style.margin = '0'
+          page.style.boxShadow = 'none'
+        })
+      },
     })
     if (index > 0) pdf.addPage([10.6875, 7.9583], 'landscape')
-    pdf.addImage(canvas.toDataURL('image/jpeg', 0.96), 'JPEG', 0, 0, 10.6875, 7.9583, undefined, 'FAST')
+    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, 10.6875, 7.9583, undefined, 'FAST')
   }
 
   pdf.save(`${participantName.replace(/\s+/g, '-')}-360-report.pdf`)
