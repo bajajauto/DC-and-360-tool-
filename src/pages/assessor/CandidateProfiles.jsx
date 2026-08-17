@@ -1,4 +1,4 @@
-import { ArrowRight, BriefcaseBusiness, Camera, Download, FileText, MessageSquareText, Search, User } from 'lucide-react'
+import { ArrowRight, BriefcaseBusiness, Camera, FileText, MessageSquareText, Search, User } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { api } from '../../lib/api'
@@ -204,17 +204,6 @@ export default function CandidateProfiles() {
                     </div>
                   </div>
                 </div>
-              </div>
-              <div className="mt-5 flex justify-end border-t border-[#e8edf4] pt-4">
-                <button
-                  type="button"
-                  disabled
-                  title={`Download assessor template for ${selected.name}`}
-                  className="inline-flex cursor-not-allowed items-center gap-2 rounded-lg bg-[#1e5fba] px-4 py-2 text-xs font-semibold text-white shadow-sm"
-                >
-                  <Download size={14} />
-                  Download Assessor Template
-                </button>
               </div>
             </section>
 
