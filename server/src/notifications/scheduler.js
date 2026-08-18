@@ -14,6 +14,7 @@ const STAGE_ITEMS = [
   { stage: 'PHOTOGRAPH', deadlineField: 'photoDeadline', label: 'Photograph' },
   { stage: 'PRE_WORK', deadlineField: 'preWorkDeadline', label: 'Self Reflection' },
 ]
+const DEADLINE_REMINDER_DAYS = [3, 1, 0]
 
 function formatDate(date) {
   return date
@@ -122,7 +123,7 @@ async function stageReminderAlreadyQueuedToday(db, participant) {
 }
 
 // One consolidated Role Interview / Photograph / Self Reflection reminder per
-// participant at T-3/T-1 whenever any pending item's deadline triggers a run.
+// participant at T-3/T-1/T whenever any pending item's deadline triggers a run.
 async function sendStageDeadlineReminders(db) {
   const participants = await db.participant.findMany({
     where: { archivedAt: null },
@@ -133,7 +134,7 @@ async function sendStageDeadlineReminders(db) {
     const pendingItems = STAGE_ITEMS
       .filter((item) => !stageItemComplete(participant, item))
       .map((item) => ({ ...item, deadline: participant.cohort[item.deadlineField] }))
-    const triggeringItems = pendingItems.filter((item) => item.deadline && [3, 1].includes(daysUntil(item.deadline)))
+    const triggeringItems = pendingItems.filter((item) => item.deadline && DEADLINE_REMINDER_DAYS.includes(daysUntil(item.deadline)))
     if (!triggeringItems.length) continue
     if (await stageReminderAlreadyQueuedToday(db, participant)) continue
 
@@ -163,7 +164,7 @@ async function sendStageDeadlineReminders(db) {
   }
 }
 
-// Nomination reminders at T-3 and T-1 while the list is not submitted.
+// Nomination reminders at T-3, T-1, and T while the list is not submitted.
 async function sendNominationReminders(db) {
   const participants = await db.participant.findMany({
     where: { archivedAt: null },
@@ -171,7 +172,7 @@ async function sendNominationReminders(db) {
   })
   for (const participant of participants) {
     const deadline = participant.cohort.nominationDeadline
-    if (!deadline || ![3, 1].includes(daysUntil(deadline))) continue
+    if (!deadline || !DEADLINE_REMINDER_DAYS.includes(daysUntil(deadline))) continue
     const submitted = participant.nominees.length > 0 && participant.nominees.every((nominee) => nominee.status === 'SUBMITTED')
     if (submitted || await alreadyQueuedToday(db, 'nom-reminder', 'Participant', participant.id)) continue
     await queueEmail({
