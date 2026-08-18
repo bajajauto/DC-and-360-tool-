@@ -1043,14 +1043,27 @@
       return pair
     }
     const splitFeedback = (text, maxCharacters = 900) => {
-      const words = text.trim().split(/\s+/).filter(Boolean)
       const chunks = []
       let chunk = ''
-      for (const word of words) {
-        const candidate = chunk ? `${chunk} ${word}` : word
+      const lines = String(text || '').trim().split(/\r?\n/)
+      for (const line of lines) {
+        const words = line.trim().split(/\s+/).filter(Boolean)
+        let lineChunk = ''
+        for (const word of words) {
+          const candidate = lineChunk ? `${lineChunk} ${word}` : word
+          if (lineChunk && candidate.length > maxCharacters) {
+            if (chunk) chunks.push(chunk)
+            chunk = lineChunk
+            lineChunk = word
+          } else {
+            lineChunk = candidate
+          }
+        }
+        if (!lineChunk) continue
+        const candidate = chunk ? `${chunk}\n${lineChunk}` : lineChunk
         if (chunk && candidate.length > maxCharacters) {
           chunks.push(chunk)
-          chunk = word
+          chunk = lineChunk
         } else {
           chunk = candidate
         }
@@ -1062,7 +1075,7 @@
     for (const original of feedbackPages) {
       const title = original.querySelector('.t-title')?.innerHTML || 'OVERALL FEEDBACK'
       const subtitle = original.querySelector('.t-subtitle')?.innerHTML || ''
-      const entries = [...original.querySelectorAll('.ssc-box')].map((box) => ({ label: box.previousElementSibling?.textContent?.trim() || 'Feedback', text: box.textContent || '' }))
+      const entries = [...original.querySelectorAll('.ssc-box')].map((box) => ({ label: box.previousElementSibling?.textContent?.trim() || 'Feedback', text: box.innerText || box.textContent || '' }))
       let current = makePage(title, subtitle)
       original.before(current.page)
       for (const entry of entries) {
