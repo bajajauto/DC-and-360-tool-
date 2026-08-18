@@ -266,3 +266,26 @@ export function exportCohortNomineeStatus(cohort, participants) {
     rowsToWorksheet('360 nominees', nomineeRows),
   ])
 }
+
+export function exportCohort360ResponseSummary(cohort, participants) {
+  const responseRows = [
+    ['Ticket ID', 'Participant', 'Status', 'Nominated', 'Responded', 'Pending'],
+    ...participants
+      .filter((participant) => participant.nominees?.length)
+      .map((participant) => {
+        const pending = Math.max(0, participant.totalResponses - participant.responses)
+        return [
+          participant.employeeId,
+          participant.name,
+          pending ? 'Live' : 'Complete',
+          participant.totalResponses,
+          participant.responses,
+          pending,
+        ]
+      }),
+  ]
+
+  downloadWorkbook(`${cohort.id}-360-response-tracker.xls`, [
+    rowsToWorksheet('360 responses', responseRows),
+  ])
+}

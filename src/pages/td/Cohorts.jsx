@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../../lib/api'
 import { formatDateOfJoining } from '../../lib/dateFormatting'
-import { exportCohortNomineeStatus, exportCohortProcessStatus } from '../../lib/trackingExport'
+import { exportCohort360ResponseSummary, exportCohortProcessStatus } from '../../lib/trackingExport'
 
 const tabs = [
   { id: 'participants', label: 'Participants' },
@@ -876,7 +876,7 @@ function ManageParticipantsTab({ cohort, rows, onAdded, onDeleted }) {
   return <div className="space-y-5">{message && <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">{message}</div>}<Card><CardHeader title="Add Participants" subtitle="Add one or several participant accounts directly to this cohort."/><div className="space-y-3">{forms.map((form, index) => <div key={index} className="rounded-xl border border-[#d5dce5] bg-[#f8fbff] p-4"><div className="mb-3 flex items-center justify-between"><p className="text-xs font-bold uppercase tracking-wide text-[#1e5fba]">Participant {index + 1}</p>{forms.length > 1 && <button onClick={() => setForms((current) => current.filter((_, formIndex) => formIndex !== index))} className="text-xs font-semibold text-red-500">Remove row</button>}</div><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5"><input value={form.name} onChange={(event) => update(index, 'name', event.target.value)} placeholder="Full name" className="rounded-lg border border-[#c2ccda] px-3 py-2.5 text-sm"/><input value={form.employeeId} onChange={(event) => update(index, 'employeeId', event.target.value)} placeholder="Ticket ID" className="rounded-lg border border-[#c2ccda] px-3 py-2.5 text-sm"/><input type="email" value={form.email} onChange={(event) => update(index, 'email', event.target.value)} placeholder="Email address" className="rounded-lg border border-[#c2ccda] px-3 py-2.5 text-sm"/><input value={form.designation} onChange={(event) => update(index, 'designation', event.target.value)} placeholder="Designation" className="rounded-lg border border-[#c2ccda] px-3 py-2.5 text-sm"/><input value={form.businessUnit} onChange={(event) => update(index, 'businessUnit', event.target.value)} placeholder="Business unit" className="rounded-lg border border-[#c2ccda] px-3 py-2.5 text-sm"/></div></div>)}</div><div className="mt-4 flex flex-wrap justify-between gap-3"><button onClick={() => setForms((current) => [...current, emptyRow()])} className="inline-flex items-center gap-2 rounded-lg border border-[#1e5fba] px-4 py-2.5 text-sm font-semibold text-[#1e5fba] hover:bg-blue-50"><Plus size={15}/>Add Another</button><button onClick={addParticipants} disabled={!complete || saving} className="inline-flex items-center gap-2 rounded-lg bg-[#1e5fba] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40"><Plus size={15}/>{saving ? 'Adding…' : `Add ${forms.length} Participant${forms.length === 1 ? '' : 's'}`}</button></div></Card><Card><CardHeader title={`Participants (${rows.length})`} subtitle="Removing a participant permanently deletes their cohort work and access."/><div className="overflow-hidden rounded-xl border border-[#d5dce5]"><table className="w-full text-left text-sm"><thead className="bg-[#ebf2fa]"><tr>{['Ticket ID', 'Participant', 'Email', 'Business Unit', ''].map((label) => <th key={label} className="border-b px-3 py-2.5 text-[11px] font-bold uppercase text-slate-600">{label}</th>)}</tr></thead><tbody>{rows.map((participant) => <tr key={participant.id}><td className="border-b px-3 py-3 text-slate-500">{participant.employeeId}</td><td className="border-b px-3 py-3"><p className="font-semibold">{participant.name}</p><p className="text-xs text-slate-500">{participant.designation}</p></td><td className="border-b px-3 py-3 text-slate-600">{participant.email}</td><td className="border-b px-3 py-3 text-slate-600">{participant.bu}</td><td className="border-b px-3 py-3 text-right"><button onClick={() => removeParticipant(participant)} disabled={deletingId === participant.id} className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-40"><Trash2 size={13}/>{deletingId === participant.id ? 'Removing…' : 'Remove'}</button></td></tr>)}</tbody></table></div></Card></div>
 }
 
-function ThreeSixtyTab({ rows }) {
+function ThreeSixtyTab({ cohort, rows }) {
   const launched = rows.filter((participant) => participant.nominees?.length)
 
   return (
@@ -886,7 +886,7 @@ function ThreeSixtyTab({ rows }) {
         subtitle="Overall response counts. Scores and individual answers are never exposed here."
         action={(
           <div className="flex gap-2">
-            <button className="inline-flex items-center gap-1.5 rounded-lg border border-[#c2ccda] px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-[#ebf2fa]"><Download size={13} />Response Tracker</button>
+            <button type="button" onClick={() => exportCohort360ResponseSummary(cohort, rows)} className="inline-flex items-center gap-1.5 rounded-lg border border-[#c2ccda] px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-[#ebf2fa]"><Download size={13} />Response Tracker</button>
             <button className="inline-flex items-center gap-1.5 rounded-lg bg-[#1e5fba] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#0e3f87]"><Send size={13} />Send Reminders</button>
           </div>
         )}
@@ -1198,7 +1198,7 @@ export default function Cohorts({ view = 'dashboard' }) {
               </div>
               <div className="flex flex-wrap gap-2">
                 <button onClick={() => exportCohortProcessStatus(cohort, allInCohort)} className="inline-flex items-center gap-2 rounded-lg border border-[#c2ccda] bg-white px-4 py-2 text-[13px] font-medium text-slate-700 hover:border-[#1e5fba] hover:bg-[#ebf2fa] hover:text-[#1e5fba]"><Download size={14} />Cohort Master Tracker</button>
-                <button onClick={() => exportCohortNomineeStatus(cohort, allInCohort)} className="inline-flex items-center gap-2 rounded-lg border border-[#c2ccda] bg-white px-4 py-2 text-[13px] font-medium text-slate-700 hover:border-[#1e5fba] hover:bg-[#ebf2fa] hover:text-[#1e5fba]"><Download size={14} />360 Response Tracker</button>
+                <button onClick={() => exportCohort360ResponseSummary(cohort, allInCohort)} className="inline-flex items-center gap-2 rounded-lg border border-[#c2ccda] bg-white px-4 py-2 text-[13px] font-medium text-slate-700 hover:border-[#1e5fba] hover:bg-[#ebf2fa] hover:text-[#1e5fba]"><Download size={14} />360 Response Tracker</button>
                 <Link to="/td/cohorts" className="inline-flex items-center gap-2 rounded-lg bg-[#1e5fba] px-4 py-2 text-[13px] font-medium text-white hover:bg-[#0e3f87]">Open Current Cohort <ChevronRight size={14} /></Link>
               </div>
             </div>
@@ -1278,7 +1278,7 @@ export default function Cohorts({ view = 'dashboard' }) {
           {loadingParticipants && <Card><p className="text-sm text-slate-500">Loading participants...</p></Card>}
           {!loadingParticipants && activeTab === 'participants' && <ParticipantsTab rows={filteredRows} generated={generated} onManage={() => setActiveTab('manage')} />}
           {activeTab === 'manage' && <ManageParticipantsTab cohort={cohort} rows={allInCohort} onAdded={(participant) => { setAllParticipants((current) => [...current, participant].sort((a, b) => a.name.localeCompare(b.name))); setCohorts((current) => current.map((item) => item.id === cohort.id ? { ...item, participantCount: (item.participantCount || 0) + 1 } : item)) }} onDeleted={(participantId) => { setAllParticipants((current) => current.filter((participant) => participant.id !== participantId)); setCohorts((current) => current.map((item) => item.id === cohort.id ? { ...item, participantCount: Math.max(0, (item.participantCount || 0) - 1) } : item)) }} />}
-          {activeTab === 'threesixty' && <ThreeSixtyTab rows={allInCohort} />}
+          {activeTab === 'threesixty' && <ThreeSixtyTab cohort={cohort} rows={allInCohort} />}
           {activeTab === 'assessors' && <AssessorTab rows={allInCohort} />}
           {activeTab === 'reports' && <ReportsTab rows={allInCohort} generated={generated} onGenerate={() => setGenerated(true)} onVisibilityChanged={(participantId, reportId, updatedReport) => setAllParticipants((current) => current.map((participant) => participant.id !== participantId ? participant : { ...participant, reportStatus: updatedReport.type === '360' ? updatedReport.status : participant.reportStatus, reports: (participant.reports || []).map((report) => report.id === reportId ? { ...report, status: updatedReport.status, releasedAt: updatedReport.releasedAt } : report) }))} />}
         </div>}
