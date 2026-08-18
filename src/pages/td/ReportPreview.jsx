@@ -60,7 +60,7 @@ export default function ReportPreview() {
           </Link>
           <div>
             <p className="text-xs text-gray-400">{participant.name} / Reports</p>
-            <h1 className="text-xl font-bold text-[#172033]">360 PowerPoint report</h1>
+            <h1 className="text-xl font-bold text-[#172033]">360° Feedback Report</h1>
           </div>
         </div>
         <button onClick={handleDownload} disabled={downloadState.status === 'loading'} className="flex items-center gap-2 rounded-lg bg-[#1e4d8c] px-4 py-2.5 text-xs font-semibold text-white disabled:opacity-60">

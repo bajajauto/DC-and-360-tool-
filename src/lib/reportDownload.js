@@ -65,6 +65,37 @@ export async function download360PreviewPdf(iframe, participantName = 'participa
   pdf.save(`${participantName.replace(/\s+/g, '-')}-360-report.pdf`)
 }
 
+export async function download360Pdf(participantId, participantName = 'participant') {
+  const previewUrl = await get360ReportPreviewUrl(participantId)
+  const iframe = document.createElement('iframe')
+  iframe.src = previewUrl
+  iframe.title = '360° Feedback Report PDF renderer'
+  iframe.style.position = 'fixed'
+  iframe.style.left = '-10000px'
+  iframe.style.width = '1080px'
+  iframe.style.height = '800px'
+  iframe.style.border = '0'
+
+  try {
+    document.body.appendChild(iframe)
+    await new Promise((resolve, reject) => {
+      const timeout = window.setTimeout(() => reject(new Error('The report preview took too long to load.')), 30000)
+      iframe.addEventListener('load', () => {
+        window.clearTimeout(timeout)
+        resolve()
+      }, { once: true })
+      iframe.addEventListener('error', () => {
+        window.clearTimeout(timeout)
+        reject(new Error('Unable to load the report preview.'))
+      }, { once: true })
+    })
+    await download360PreviewPdf(iframe, participantName)
+  } finally {
+    iframe.remove()
+    URL.revokeObjectURL(previewUrl)
+  }
+}
+
 function assertPptxReport(response) {
   const type = response.headers.get('content-type') || ''
   if (!type.includes('presentationml.presentation') && !type.includes('application/octet-stream')) {

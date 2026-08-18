@@ -689,7 +689,10 @@ export async function get360ReportPreviewHtml(db, participantId) {
   const tokens = buildReportTokens(participant)
   const template = await loadHtmlTemplate()
 
-  return template.replace(/\{\{([a-z0-9_]+)\}\}/gi, (_match, tokenName) => escapeHtml(tokens[tokenName]))
+  return template.replace(/\{\{([a-z0-9_]+)\}\}/gi, (_match, tokenName) => {
+    const value = escapeHtml(tokens[tokenName])
+    return /^ssc_sec\d+_self$/i.test(tokenName) ? value.replace(/\r?\n/g, '<br>') : value
+  })
 }
 
 async function saveReportRecord(db, participant, outputPath) {

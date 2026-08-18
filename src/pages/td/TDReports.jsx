@@ -2,7 +2,7 @@ import { ArrowUpRight, Check, Download, Eye, FileSpreadsheet, FileText, Search, 
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../../lib/api'
-import { download360Pptx, download360ResponseData, downloadCohort360Master, downloadReportArchive } from '../../lib/reportDownload'
+import { download360Pdf, download360ResponseData, downloadCohort360Master, downloadReportArchive } from '../../lib/reportDownload'
 
 function getCohort(cohorts, participant) {
   return cohorts.find((cohort) => cohort.id === participant.cohortId)
@@ -90,7 +90,7 @@ export default function TDReports() {
     setDownloadError('')
 
     try {
-      await download360Pptx(participant.id, participant.name)
+      await download360Pdf(participant.id, participant.name)
     } catch (err) {
       setDownloadError(err.message || 'Unable to download the report.')
     }
@@ -299,7 +299,7 @@ export default function TDReports() {
                             <Eye size={14} />
                             Preview
                           </Link>}
-                          {selectedReportType !== 'all' && participant.reportType === '360' && <button type="button" onClick={() => handleDownload(participant)} className="w-8 h-8 rounded-lg border border-[#dce3ed] flex items-center justify-center text-gray-500 hover:bg-gray-50" aria-label={`Download ${participant.name} report`}>
+                          {selectedReportType !== 'all' && participant.reportType === '360' && <button type="button" onClick={() => handleDownload(participant)} className="w-8 h-8 rounded-lg border border-[#dce3ed] flex items-center justify-center text-gray-500 hover:bg-gray-50" aria-label={`Download ${participant.name} report as PDF`}>
                             <Download size={14} />
                           </button>}
                           {selectedReportType !== 'all' && participant.reportType === '360' && <button type="button" onClick={() => handleDownloadResponseData(participant)} className="w-8 h-8 rounded-lg border border-[#dce3ed] flex items-center justify-center text-gray-500 hover:bg-gray-50" aria-label={`Download ${participant.name} response data`} title="Download 360 response data (Excel)">
