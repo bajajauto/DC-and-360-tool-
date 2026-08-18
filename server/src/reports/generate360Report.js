@@ -191,10 +191,17 @@ function collectSelfReflection(tasks, sectionId) {
   const selfTask = tasks.find((task) => relationshipGroup(task.relationship) === 'self')
   const sectionSsc = selfTask?.responses?.[0]?.sectionSsc?.[sectionId]
   if (!sectionSsc) return ''
-  return ['start', 'stop', 'continue']
-    .map((key) => (typeof sectionSsc[key] === 'string' ? sectionSsc[key].trim() : ''))
+  return [
+    ['start', 'Start'],
+    ['stop', 'Stop'],
+    ['continue', 'Continue'],
+  ]
+    .map(([key, label]) => {
+      const value = typeof sectionSsc[key] === 'string' ? sectionSsc[key].trim() : ''
+      return value ? `${label} - ${value}` : ''
+    })
     .filter(Boolean)
-    .join(' ')
+    .join('\n')
 }
 
 function buildReportTokens(participant) {
