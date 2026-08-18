@@ -177,7 +177,7 @@ cohortsRouter.get('/', asyncHandler(async (req, res) => {
     orderBy: { createdAt: 'asc' },
     include: {
       _count: {
-        select: { participants: true },
+        select: { participants: { where: { archivedAt: null } } },
       },
     },
   })
@@ -218,11 +218,16 @@ cohortsRouter.post('/', asyncHandler(async (req, res) => {
             },
           })
         : await tx.user.create({ data: { ...participantUserData, email: participantEmail, passwordHash: participantPasswordHash, roles: ['PARTICIPANT'] } })
-      const participant = await tx.participant.upsert({
-        where: { userId: user.id },
-        update: { cohortId: created.id, masterData: row.masterData, stage: 'APPLICATION_PROFILE', progress: 10, reportStatus: 'WAITING', lastActivityAt: new Date() },
-        create: { userId: user.id, cohortId: created.id, masterData: row.masterData, stage: 'APPLICATION_PROFILE', progress: 10, lastActivityAt: new Date() },
-      })
+      const existingParticipant = await tx.participant.findUnique({ where: { userId: user.id } })
+      if (existingParticipant && !existingParticipant.archivedAt) throw httpError(409, `${user.name} already belongs to an active cohort`)
+      const participant = existingParticipant
+        ? await tx.participant.update({
+            where: { id: existingParticipant.id },
+            data: { cohortId: created.id, archivedAt: null, archivedFromCohortId: null, archivedFromCohortName: null, masterData: { ...(existingParticipant.masterData || {}), ...row.masterData }, lastActivityAt: new Date() },
+          })
+        : await tx.participant.create({
+            data: { userId: user.id, cohortId: created.id, masterData: row.masterData, stage: 'APPLICATION_PROFILE', progress: 10, lastActivityAt: new Date() },
+          })
       const buhrEmail = row.buhr.email.toLowerCase()
       let buhrPassword = buhrPasswords.get(buhrEmail)
       if (!buhrPassword) {
@@ -253,7 +258,7 @@ cohortsRouter.post('/', asyncHandler(async (req, res) => {
       addToBuhrGroup(buhrGroups, { ...row.buhr, password: buhrPassword }, { name: user.name, employeeId: user.employeeId, email: user.email, password: participantPassword })
     }
     pendingEmailIds.push(...await queueBuhrCredentialEmails(tx, created, buhrGroups, req.auth?.userId || null))
-    return tx.cohort.findUnique({ where: { id: created.id }, include: { _count: { select: { participants: true } } } })
+    return tx.cohort.findUnique({ where: { id: created.id }, include: { _count: { select: { participants: { where: { archivedAt: null } } } } } })
   })
 
   await Promise.all(pendingEmailIds.map((id) => sendEmail(id)))
@@ -270,7 +275,7 @@ cohortsRouter.patch('/:cohortId', asyncHandler(async (req, res) => {
   const cohort = await prisma.cohort.update({
     where: { id: req.params.cohortId },
     data: payload,
-    include: { _count: { select: { participants: true } } },
+    include: { _count: { select: { participants: { where: { archivedAt: null } } } } },
   })
 
   res.json({ data: toCohortDto(cohort) })
@@ -327,6 +332,27 @@ cohortsRouter.post('/employee-directory/import', asyncHandler(async (req, res) =
       withoutEmail: entries.length - withEmail,
       importedAt: now.toISOString(),
     },
+  })
+}))
+
+cohortsRouter.get('/archived-participants', asyncHandler(async (_req, res) => {
+  const participants = await prisma.participant.findMany({
+    where: { archivedAt: { not: null } },
+    orderBy: [{ archivedAt: 'desc' }, { user: { name: 'asc' } }],
+    include: { user: true, nominees: true, feedbackTasks: true, reports: true },
+  })
+
+  res.json({
+    data: participants.map((participant) => ({
+      ...toParticipantSummary(participant),
+      archivedAt: participant.archivedAt?.toISOString() || null,
+      archivedFromCohortId: participant.archivedFromCohortId,
+      archivedFromCohortName: participant.archivedFromCohortName,
+      nominations: participant.nominees.length,
+      submittedResponses: participant.feedbackTasks.filter((task) => task.status === 'SUBMITTED').length,
+      totalResponses: participant.feedbackTasks.length,
+      reportCount: participant.reports.length,
+    })),
   })
 }))
 
@@ -405,7 +431,7 @@ cohortsRouter.get('/:cohortId/participants', asyncHandler(async (req, res) => {
   if (!cohort) throw httpError(404, 'Cohort not found')
 
   const participants = await prisma.participant.findMany({
-    where: { cohortId: cohort.id },
+    where: { cohortId: cohort.id, archivedAt: null },
     orderBy: { user: { name: 'asc' } },
     include: {
       user: true,
@@ -458,7 +484,7 @@ cohortsRouter.post('/:cohortId/participants', asyncHandler(async (req, res) => {
   const existingByEmployeeId = await prisma.user.findUnique({ where: { employeeId: payload.employeeId }, include: { participant: true } })
   const existing = existingByEmail || existingByEmployeeId
   if (existingByEmail && existingByEmployeeId && existingByEmail.id !== existingByEmployeeId.id) throw httpError(409, 'Email and Ticket ID belong to different existing accounts')
-  if (existing?.participant) throw httpError(409, 'This employee already belongs to a cohort')
+  if (existing?.participant) throw httpError(409, existing.participant.archivedAt ? 'This employee is archived. Use Add from Archive to retain their records.' : 'This employee already belongs to a cohort')
 
   const participantPassword = generatePassword()
   const participantPasswordHash = await hashPassword(participantPassword)
@@ -512,7 +538,7 @@ cohortsRouter.post('/:cohortId/participants/buhr-credentials', asyncHandler(asyn
   const payload = buhrCredentialEmailSchema.parse(req.body)
   const cohort = await prisma.cohort.findUnique({
     where: { id: req.params.cohortId },
-    include: { participants: { include: { user: true } } },
+    include: { participants: { where: { archivedAt: null }, include: { user: true } } },
   })
   if (!cohort) throw httpError(404, 'Cohort not found')
 
@@ -539,9 +565,30 @@ cohortsRouter.post('/:cohortId/participants/buhr-credentials', asyncHandler(asyn
   res.status(201).json({ data: { emails: emails.length, buhrs: groups.size } })
 }))
 
+cohortsRouter.post('/:cohortId/participants/:participantId/archive', asyncHandler(async (req, res) => {
+  const participant = await prisma.participant.findFirst({
+    where: { id: req.params.participantId, cohortId: req.params.cohortId, archivedAt: null },
+    include: { user: true },
+  })
+  if (!participant) throw httpError(404, 'Participant not found in this cohort')
+
+  const cohort = await prisma.cohort.findUnique({ where: { id: req.params.cohortId }, select: { name: true } })
+  await prisma.participant.update({
+    where: { id: participant.id },
+    data: {
+      cohortId: null,
+      archivedAt: new Date(),
+      archivedFromCohortId: req.params.cohortId,
+      archivedFromCohortName: cohort?.name || null,
+    },
+  })
+
+  res.json({ data: { id: participant.id, archived: true } })
+}))
+
 cohortsRouter.delete('/:cohortId/participants/:participantId', asyncHandler(async (req, res) => {
   const participant = await prisma.participant.findFirst({
-    where: { id: req.params.participantId, cohortId: req.params.cohortId },
+    where: { id: req.params.participantId, cohortId: req.params.cohortId, archivedAt: null },
     include: { user: true },
   })
   if (!participant) throw httpError(404, 'Participant not found in this cohort')
@@ -554,4 +601,30 @@ cohortsRouter.delete('/:cohortId/participants/:participantId', asyncHandler(asyn
   })
 
   res.json({ data: { id: participant.id, deleted: true } })
+}))
+
+cohortsRouter.post('/:cohortId/participants/:participantId/restore', asyncHandler(async (req, res) => {
+  const [cohort, participant] = await Promise.all([
+    prisma.cohort.findUnique({ where: { id: req.params.cohortId } }),
+    prisma.participant.findUnique({
+      where: { id: req.params.participantId },
+      include: { user: true, nominees: true, feedbackTasks: true },
+    }),
+  ])
+  if (!cohort) throw httpError(404, 'Cohort not found')
+  if (!participant || !participant.archivedAt) throw httpError(404, 'Archived participant not found')
+
+  const restored = await prisma.$transaction(async (tx) => {
+    await tx.feedbackTask.updateMany({
+      where: { participantId: participant.id, status: { not: 'SUBMITTED' } },
+      data: { dueAt: cohort.threeSixtyCutoff },
+    })
+    return tx.participant.update({
+      where: { id: participant.id },
+      data: { cohortId: cohort.id, archivedAt: null, archivedFromCohortId: null, archivedFromCohortName: null, lastActivityAt: new Date() },
+      include: { user: true, nominees: true, feedbackTasks: true },
+    })
+  })
+
+  res.json({ data: toParticipantSummary(restored) })
 }))

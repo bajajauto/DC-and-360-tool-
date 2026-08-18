@@ -30,6 +30,7 @@ import ParticipantReports from './pages/td/ParticipantReports'
 import Placeholder from './pages/td/Placeholder'
 import { EmailOutbox, NotificationTemplates, TrackersExports } from './pages/td/TDOperations'
 import AssessorAnalysis from './pages/td/AssessorAnalysis'
+import ArchivedParticipants from './pages/td/ArchivedParticipants'
 
 // Assessor
 import AssessorLayout from './layouts/AssessorLayout'
@@ -96,6 +97,7 @@ export default function App() {
           <Route path="outbox" element={<EmailOutbox />} />
           <Route path="templates" element={<NotificationTemplates />} />
           <Route path="employee-directory" element={<EmployeeDirectoryPage />} />
+          <Route path="archived-participants" element={<ArchivedParticipants />} />
           <Route path="settings" element={<Placeholder title="Programme setup" />} />
         </Route>
 

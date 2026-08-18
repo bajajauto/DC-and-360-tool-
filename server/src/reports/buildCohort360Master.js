@@ -97,6 +97,7 @@ export async function buildCohort360MasterWorkbook(db) {
   const cohorts = await db.cohort.findMany({
     include: {
       participants: {
+        where: { archivedAt: null },
         orderBy: { user: { name: 'asc' } },
         include: {
           user: true,

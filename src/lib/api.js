@@ -91,6 +91,14 @@ export const api = {
   deleteCohortParticipant: (cohortId, participantId) =>
     apiFetch(`/api/cohorts/${cohortId}/participants/${participantId}`, { method: 'DELETE' }),
 
+  archiveCohortParticipant: (cohortId, participantId) =>
+    apiFetch(`/api/cohorts/${cohortId}/participants/${participantId}/archive`, { method: 'POST' }),
+
+  getArchivedParticipants: () => apiFetch('/api/cohorts/archived-participants'),
+
+  restoreArchivedParticipant: (cohortId, participantId) =>
+    apiFetch(`/api/cohorts/${cohortId}/participants/${participantId}/restore`, { method: 'POST' }),
+
   getParticipant: (participantId) => apiFetch(`/api/participants/${participantId}`),
 
   getParticipantWork: (participantId, type) => apiFetch(`/api/participants/${participantId}/work/${type}`),

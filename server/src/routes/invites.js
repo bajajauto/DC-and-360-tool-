@@ -30,7 +30,7 @@ invitesRouter.post('/redeem', asyncHandler(async (req, res) => {
     if (!magicLink.user || !participantId) throw httpError(400, 'Participant link is incomplete')
 
     const participant = await prisma.participant.findFirst({
-      where: { id: participantId, userId: magicLink.user.id },
+      where: { id: participantId, userId: magicLink.user.id, archivedAt: null },
       include: { cohort: true },
     })
     if (!participant || !magicLink.user.roles.includes('PARTICIPANT')) throw httpError(404, 'Participant account not found')

@@ -37,6 +37,7 @@ buhrRouter.get('/:userId/participants', asyncHandler(async (req, res) => {
   const buhr = await getBuhrUser(req.params.userId)
 
   const mappedParticipantCandidates = await prisma.participant.findMany({
+    where: { archivedAt: null },
     include: {
       user: true,
       cohort: true,
@@ -124,8 +125,8 @@ buhrRouter.get('/:userId/participants', asyncHandler(async (req, res) => {
 buhrRouter.get('/:userId/reports/:participantId/:reportType/download', asyncHandler(async (req, res) => {
   assertBuhrSelf(req)
   const buhr = await getBuhrUser(req.params.userId)
-  const participant = await prisma.participant.findUnique({
-    where: { id: req.params.participantId },
+  const participant = await prisma.participant.findFirst({
+    where: { id: req.params.participantId, archivedAt: null },
     include: {
       user: true,
       reports: true,

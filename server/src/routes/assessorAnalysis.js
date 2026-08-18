@@ -35,6 +35,7 @@ function toDto(participant) {
 
 assessorAnalysisRouter.get('/', asyncHandler(async (_req, res) => {
   const participants = await prisma.participant.findMany({
+    where: { archivedAt: null },
     orderBy: { user: { name: 'asc' } },
     include: { user: true, cohort: true, assessorReviews: { orderBy: { updatedAt: 'desc' }, take: 1 } },
   })
@@ -43,7 +44,7 @@ assessorAnalysisRouter.get('/', asyncHandler(async (_req, res) => {
 
 assessorAnalysisRouter.put('/:participantId', asyncHandler(async (req, res) => {
   const payload = uploadSchema.parse(req.body)
-  const participant = await prisma.participant.findUnique({ where: { id: req.params.participantId } })
+  const participant = await prisma.participant.findFirst({ where: { id: req.params.participantId, archivedAt: null } })
   if (!participant) throw httpError(404, 'Participant not found')
   const actor = await prisma.user.findUnique({ where: { id: req.auth.userId }, select: { name: true } })
   const existing = await prisma.assessorReview.findFirst({ where: { participantId: participant.id }, orderBy: { updatedAt: 'desc' } })
@@ -55,7 +56,7 @@ assessorAnalysisRouter.put('/:participantId', asyncHandler(async (req, res) => {
 }))
 
 assessorAnalysisRouter.get('/:participantId/download', asyncHandler(async (req, res) => {
-  const review = await prisma.assessorReview.findFirst({ where: { participantId: req.params.participantId }, orderBy: { updatedAt: 'desc' } })
+  const review = await prisma.assessorReview.findFirst({ where: { participantId: req.params.participantId, participant: { archivedAt: null } }, orderBy: { updatedAt: 'desc' } })
   const workbook = review?.evidence?.workbook
   if (!workbook?.dataUrl) throw httpError(404, 'Assessor analysis workbook not found')
   const match = workbook.dataUrl.match(/^data:([^;]+);base64,(.+)$/)

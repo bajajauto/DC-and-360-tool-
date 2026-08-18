@@ -122,23 +122,28 @@ model Cohort {
 model Participant {
   id                 String            @id @default(cuid())
   userId             String            @unique
-  cohortId           String
+  cohortId           String?
   stage              ParticipantStage  @default(APPLICATION_PROFILE)
   progress           Int               @default(0)
   reportStatus       ReportStatus      @default(WAITING)
   lastActivityAt     DateTime?
+  archivedAt         DateTime?
+  archivedFromCohortId String?
+  archivedFromCohortName String?
   preWork            Json?
   roleInterview      Json?
   photoUrl           String?
   masterData         Json?
   user               User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  cohort             Cohort            @relation(fields: [cohortId], references: [id], onDelete: Cascade)
+  cohort             Cohort?           @relation(fields: [cohortId], references: [id], onDelete: SetNull)
   nominees           Nominee[]
   feedbackTasks      FeedbackTask[]
   assessorReviews    AssessorReview[]
   reports            Report[]
   createdAt          DateTime          @default(now())
   updatedAt          DateTime          @updatedAt
+
+  @@index([cohortId, archivedAt])
 }
 
 model Nominee {

@@ -125,6 +125,7 @@ async function stageReminderAlreadyQueuedToday(db, participant) {
 // participant at T-3/T-1 whenever any pending item's deadline triggers a run.
 async function sendStageDeadlineReminders(db) {
   const participants = await db.participant.findMany({
+    where: { archivedAt: null },
     include: { user: true, cohort: true },
   })
 
@@ -165,6 +166,7 @@ async function sendStageDeadlineReminders(db) {
 // Nomination reminders at T-3 and T-1 while the list is not submitted.
 async function sendNominationReminders(db) {
   const participants = await db.participant.findMany({
+    where: { archivedAt: null },
     include: { user: true, cohort: true, nominees: true },
   })
   for (const participant of participants) {
@@ -262,7 +264,7 @@ async function sendRespondentReminders(db) {
 // Participant status runs daily while at least one response is outstanding.
 async function sendDailyStatusAndLowResponseAlerts(db) {
   const participants = await db.participant.findMany({
-    where: { stage: 'FEEDBACK_360' },
+    where: { stage: 'FEEDBACK_360', archivedAt: null },
     include: {
       user: true,
       cohort: true,
@@ -306,7 +308,7 @@ async function sendDailyStatusAndLowResponseAlerts(db) {
 // TD Admin notice once the 360 window closes (all submitted or cutoff reached) for a participant
 async function sendThreeSixtyClosedNotices(db) {
   const participants = await db.participant.findMany({
-    where: { stage: 'FEEDBACK_360' },
+    where: { stage: 'FEEDBACK_360', archivedAt: null },
     include: { feedbackTasks: true, cohort: true, user: true },
   })
 

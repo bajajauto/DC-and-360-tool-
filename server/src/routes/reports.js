@@ -47,6 +47,7 @@ async function assertReportDownloadAccess(req) {
 reportsRouter.get('/repository', asyncHandler(async (req, res) => {
   requireTd(req)
   const reports = await prisma.report.findMany({
+    where: { participant: { archivedAt: null } },
     orderBy: [{ generatedAt: 'desc' }, { updatedAt: 'desc' }],
     include: {
       participant: {
@@ -95,7 +96,7 @@ reportsRouter.get('/bulk-download', asyncHandler(async (req, res) => {
 
   const reports = await prisma.report.findMany({
     where: {
-      ...(cohortId !== 'all' ? { participant: { cohortId } } : {}),
+      participant: { archivedAt: null, ...(cohortId !== 'all' ? { cohortId } : {}) },
       ...(reportType !== 'all' ? { type: { equals: reportType, mode: 'insensitive' } } : {}),
     },
     orderBy: [{ updatedAt: 'desc' }],
@@ -167,6 +168,15 @@ reportsRouter.get('/cohort-360-master', asyncHandler(async (req, res) => {
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
   res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`)
   res.send(buffer)
+}))
+
+reportsRouter.use('/:participantId', asyncHandler(async (req, _res, next) => {
+  const participant = await prisma.participant.findFirst({
+    where: { id: req.params.participantId, archivedAt: null },
+    select: { id: true },
+  })
+  if (!participant) throw httpError(404, 'Active participant not found')
+  next()
 }))
 
 reportsRouter.post('/:participantId/360/generate', asyncHandler(async (req, res) => {

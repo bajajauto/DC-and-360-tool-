@@ -47,6 +47,7 @@ const candidateInclude = {
 
 assessorRouter.get('/candidates', asyncHandler(async (_req, res) => {
   const participants = await prisma.participant.findMany({
+    where: { archivedAt: null },
     orderBy: { user: { name: 'asc' } },
     include: candidateInclude,
   })
@@ -54,8 +55,8 @@ assessorRouter.get('/candidates', asyncHandler(async (_req, res) => {
 }))
 
 assessorRouter.get('/candidates/:participantId', asyncHandler(async (req, res) => {
-  const participant = await prisma.participant.findUnique({
-    where: { id: req.params.participantId },
+  const participant = await prisma.participant.findFirst({
+    where: { id: req.params.participantId, archivedAt: null },
     include: candidateInclude,
   })
   if (!participant) throw httpError(404, 'Participant not found')

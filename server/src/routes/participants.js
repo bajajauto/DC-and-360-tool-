@@ -176,6 +176,7 @@ function hasCutoffPassed(cutoff, now = new Date()) {
 }
 
 function assertParticipantAccess(req, participant) {
+  if (participant.archivedAt) throw httpError(410, 'This participant is currently archived')
   const auth = req.auth
   if (auth.roles.includes('td')) return
   if (participant.userId === auth.userId) return

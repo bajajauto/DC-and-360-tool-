@@ -130,6 +130,7 @@ function buildParticipantContext(participant, recipientName) {
 async function buildBuhrCredentialContext(recipient, buhrPassword) {
   const buhrEmail = recipient.email.toLowerCase()
   const participants = await prisma.participant.findMany({
+    where: { archivedAt: null },
     include: { user: true, cohort: true },
     orderBy: [{ cohort: { createdAt: 'desc' } }, { user: { name: 'asc' } }],
   })
@@ -367,7 +368,7 @@ notificationsRouter.get('/recipients', asyncHandler(async (req, res) => {
   let cohortBuhrEmails = null
   if (cohortId && intendedRole === 'BUHR') {
     const cohortParticipants = await prisma.participant.findMany({
-      where: { cohortId },
+      where: { cohortId, archivedAt: null },
       select: { masterData: true },
     })
     cohortBuhrEmails = [...new Set(cohortParticipants
@@ -379,14 +380,14 @@ notificationsRouter.get('/recipients', asyncHandler(async (req, res) => {
     where: {
       email: { not: '' },
       ...(intendedRole ? { roles: { has: intendedRole } } : {}),
-      ...(cohortId && intendedRole === 'PARTICIPANT' ? { participant: { is: { cohortId } } } : {}),
+      ...(intendedRole === 'PARTICIPANT' ? { participant: { is: { archivedAt: null, ...(cohortId ? { cohortId } : {}) } } } : {}),
       ...(cohortBuhrEmails ? { email: { in: cohortBuhrEmails } } : {}),
     },
     orderBy: [{ name: 'asc' }, { email: 'asc' }],
     select: { id: true, name: true, email: true, employeeId: true, roles: true, businessUnit: true },
   })
   const participants = template.recipient === 'Manager' ? await prisma.participant.findMany({
-    where: cohortId ? { cohortId } : {},
+    where: { archivedAt: null, ...(cohortId ? { cohortId } : {}) },
     orderBy: [{ cohort: { createdAt: 'desc' } }, { user: { name: 'asc' } }],
     select: {
       id: true,

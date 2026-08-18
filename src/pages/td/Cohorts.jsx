@@ -1,4 +1,4 @@
-import { AlertCircle, Check, ChevronRight, Download, FileText, Pencil, Plus, Search, Send, Trash2, Upload, X } from 'lucide-react'
+import { AlertCircle, Archive, Check, ChevronRight, Download, FileText, Pencil, Plus, Search, Send, Trash2, Upload, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../../lib/api'
@@ -741,7 +741,14 @@ function ManageParticipantsTab({ cohort, rows, onAdded, onDeleted }) {
   const [saving, setSaving] = useState(false)
   const [deletingId, setDeletingId] = useState(null)
   const [message, setMessage] = useState('')
+  const [archived, setArchived] = useState([])
+  const [showArchive, setShowArchive] = useState(false)
+  const [restoringId, setRestoringId] = useState(null)
   const complete = forms.length > 0 && validation?.errorRowCount === 0
+
+  useEffect(() => {
+    api.getArchivedParticipants().then((result) => setArchived(result.data || [])).catch(() => {})
+  }, [])
 
   function update(index, field, value) {
     setForms((current) => current.map((form, formIndex) => formIndex === index ? { ...form, [field]: value } : form))
@@ -793,15 +800,17 @@ function ManageParticipantsTab({ cohort, rows, onAdded, onDeleted }) {
     }
   }
 
-  async function removeParticipant(participant) {
-    const confirmed = window.confirm(`Permanently remove ${participant.name} from ${cohort.name}? Their submissions, nominations, feedback tasks and reports for this cohort will also be deleted.`)
+  async function archiveParticipant(participant) {
+    const confirmed = window.confirm(`Archive ${participant.name}? They will be removed from ${cohort.name} and all staff trackers, while their pre-work, 360 responses, reports, and respondent links remain stored.`)
     if (!confirmed) return
     setDeletingId(participant.id)
     setMessage('')
     try {
-      await api.deleteCohortParticipant(cohort.id, participant.id)
+      await api.archiveCohortParticipant(cohort.id, participant.id)
       onDeleted(participant.id)
-      setMessage(`${participant.name} was removed from ${cohort.name}.`)
+      const result = await api.getArchivedParticipants()
+      setArchived(result.data || [])
+      setMessage(`${participant.name} was archived. Their records and existing respondent links remain active.`)
     } catch (error) {
       setMessage(error.message)
     } finally {
@@ -809,11 +818,44 @@ function ManageParticipantsTab({ cohort, rows, onAdded, onDeleted }) {
     }
   }
 
+  async function deleteParticipant(participant) {
+    const confirmed = window.confirm(`Permanently remove ${participant.name} from ${cohort.name}? Their submissions, nominations, feedback tasks and reports for this cohort will also be deleted.`)
+    if (!confirmed) return
+    setDeletingId(participant.id)
+    setMessage('')
+    try {
+      await api.deleteCohortParticipant(cohort.id, participant.id)
+      onDeleted(participant.id)
+      setMessage(`${participant.name} was permanently removed from ${cohort.name}.`)
+    } catch (error) {
+      setMessage(error.message)
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
+  async function addFromArchive(participant) {
+    if (!window.confirm(`Add ${participant.name} to ${cohort.name}? Their retained pre-work and 360 records will carry over.`)) return
+    setRestoringId(participant.id)
+    setMessage('')
+    try {
+      const { data } = await api.restoreArchivedParticipant(cohort.id, participant.id)
+      onAdded(data)
+      setArchived((current) => current.filter((item) => item.id !== participant.id))
+      setMessage(`${participant.name} was added to ${cohort.name} with all retained records.`)
+    } catch (error) {
+      setMessage(error.message)
+    } finally {
+      setRestoringId(null)
+    }
+  }
+
   const participantImportPanel = (
     <div className="space-y-5">
       {message && <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">{message}</div>}
       <Card>
-        <CardHeader title="Add Participants" subtitle="Use the same completed 27-column Employee Details template used during cohort creation." />
+        <CardHeader title="Add Participants" subtitle="Upload new participants or add a participant whose records are already in the archive." action={<button type="button" onClick={() => setShowArchive((value) => !value)} className="inline-flex items-center gap-2 rounded-lg border border-[#1e5fba] px-3.5 py-2 text-xs font-semibold text-[#1e5fba] hover:bg-[#ebf2fa]"><Plus size={14}/>{showArchive ? 'Hide Archive' : `Add from Archive (${archived.length})`}</button>} />
+        {showArchive && <div className="mb-4 rounded-xl border border-[#7ba6e0] bg-[#f8fbff] p-4"><p className="mb-3 text-xs font-bold uppercase tracking-wide text-[#1e5fba]">Archived participants</p>{archived.length === 0 ? <p className="text-sm text-slate-500">No archived participants are available.</p> : <div className="space-y-2">{archived.map((participant) => <div key={participant.id} className="flex items-center justify-between gap-4 rounded-lg border border-[#d5dce5] bg-white px-3 py-2.5"><div><p className="text-sm font-semibold">{participant.name}</p><p className="text-xs text-slate-500">{participant.employeeId} · {participant.archivedFromCohortName || 'Previous cohort'} · {participant.submittedResponses}/{participant.totalResponses} responses</p></div><button type="button" onClick={() => addFromArchive(participant)} disabled={restoringId === participant.id} className="rounded-lg bg-[#1e5fba] px-3 py-2 text-xs font-semibold text-white disabled:opacity-40">{restoringId === participant.id ? 'Adding…' : 'Add to Cohort'}</button></div>)}</div>}</div>}
         <div className="rounded-xl border border-[#7ba6e0] bg-[#ebf2fa] p-4 text-sm text-[#123e77]">All participant, manager, skip manager, BU head and BUHR details will be stored. The respective BUHR account is created or updated automatically.</div>
         <label className="mt-4 flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-[#c2ccda] bg-[#f4f7fb] px-5 py-7 text-center hover:border-[#1e5fba] hover:bg-[#ebf2fa]">
           <Upload size={30} className="mb-2 text-slate-500" />
@@ -825,7 +867,7 @@ function ManageParticipantsTab({ cohort, rows, onAdded, onDeleted }) {
         {validation?.errors.length > 0 && <div className="mt-4 max-h-52 overflow-auto rounded-xl border border-red-200"><table className="w-full text-left text-xs"><thead className="sticky top-0 bg-red-50 text-red-800"><tr><th className="px-3 py-2">Row</th><th className="px-3 py-2">Ticket ID</th><th className="px-3 py-2">Column</th><th className="px-3 py-2">Issue</th></tr></thead><tbody>{validation.errors.map((error, index) => <tr key={`${error.row}-${error.field}-${index}`} className="border-t border-red-100"><td className="px-3 py-2">{error.row}</td><td className="px-3 py-2">{error.ticket}</td><td className="px-3 py-2">{error.field}</td><td className="px-3 py-2 text-red-700">{error.issue}</td></tr>)}</tbody></table></div>}
         <div className="mt-4 flex justify-end"><button onClick={addParticipants} disabled={!forms.length || validation?.errorRowCount > 0 || saving} className="inline-flex items-center gap-2 rounded-lg bg-[#1e5fba] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40"><Plus size={15}/>{saving ? 'Adding…' : `Add ${forms.length || ''} Participant${forms.length === 1 ? '' : 's'}`}</button></div>
       </Card>
-      <Card><CardHeader title={`All Participants (${rows.length})`} subtitle="This unified roster includes participants from the cohort-creation Excel and participants added later. Deleting a participant permanently removes their cohort work and access."/><div className="overflow-x-auto rounded-xl border border-[#d5dce5]"><table className="w-full min-w-[820px] text-left text-sm"><thead className="bg-[#ebf2fa]"><tr>{['Ticket ID', 'Participant', 'Email', 'Business Unit', 'Action'].map((label) => <th key={label} className="border-b px-3 py-2.5 text-[11px] font-bold uppercase text-slate-600">{label}</th>)}</tr></thead><tbody>{rows.length === 0 ? <tr><td colSpan={5} className="px-4 py-8 text-center text-sm text-slate-500">No participants have been added to this cohort yet.</td></tr> : rows.map((participant) => <tr key={participant.id}><td className="border-b px-3 py-3 text-slate-500">{participant.employeeId}</td><td className="border-b px-3 py-3"><p className="font-semibold">{participant.name}</p><p className="text-xs text-slate-500">{participant.designation}</p></td><td className="border-b px-3 py-3 text-slate-600">{participant.email}</td><td className="border-b px-3 py-3 text-slate-600">{participant.bu}</td><td className="border-b px-3 py-3 text-right"><button onClick={() => removeParticipant(participant)} disabled={deletingId === participant.id} className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-40"><Trash2 size={13}/>{deletingId === participant.id ? 'Deleting…' : 'Delete Participant'}</button></td></tr>)}</tbody></table></div></Card>
+      <Card><CardHeader title={`All Participants (${rows.length})`} subtitle="Archive retains all records for reuse; Delete permanently removes the participant and their cohort work."/><div className="overflow-x-auto rounded-xl border border-[#d5dce5]"><table className="w-full min-w-[900px] text-left text-sm"><thead className="bg-[#ebf2fa]"><tr>{['Ticket ID', 'Participant', 'Email', 'Business Unit', 'Actions'].map((label) => <th key={label} className="border-b px-3 py-2.5 text-[11px] font-bold uppercase text-slate-600">{label}</th>)}</tr></thead><tbody>{rows.length === 0 ? <tr><td colSpan={5} className="px-4 py-8 text-center text-sm text-slate-500">No participants have been added to this cohort yet.</td></tr> : rows.map((participant) => <tr key={participant.id}><td className="border-b px-3 py-3 text-slate-500">{participant.employeeId}</td><td className="border-b px-3 py-3"><p className="font-semibold">{participant.name}</p><p className="text-xs text-slate-500">{participant.designation}</p></td><td className="border-b px-3 py-3 text-slate-600">{participant.email}</td><td className="border-b px-3 py-3 text-slate-600">{participant.bu}</td><td className="border-b px-3 py-3"><div className="flex justify-end gap-2"><button onClick={() => archiveParticipant(participant)} disabled={deletingId === participant.id} className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-amber-300 px-3 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-50 disabled:opacity-40"><Archive size={13}/>{deletingId === participant.id ? 'Working…' : 'Archive'}</button><button onClick={() => deleteParticipant(participant)} disabled={deletingId === participant.id} className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-40"><Trash2 size={13}/>{deletingId === participant.id ? 'Working…' : 'Delete Participant'}</button></div></td></tr>)}</tbody></table></div></Card>
     </div>
   )
 
