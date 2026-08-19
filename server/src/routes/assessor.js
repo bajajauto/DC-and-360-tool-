@@ -16,8 +16,6 @@ function toCandidate(participant) {
   const latestReport = participant.reports[0] || null
   return {
     id: participant.id,
-    name: participant.user.name,
-    email: participant.user.email,
     employeeId: participant.user.employeeId,
     designation: participant.user.designation,
     bu: participant.user.businessUnit,
@@ -25,7 +23,11 @@ function toCandidate(participant) {
     cohort: participant.cohort.name,
     stage: participant.stage.toLowerCase().replaceAll('_', ' '),
     progress: participant.progress,
-    masterData: participant.masterData || {},
+    masterData: {
+      jobLevel: participant.masterData?.jobLevel || null,
+      positionLevel: participant.masterData?.positionLevel || null,
+      dateOfJoining: participant.masterData?.dateOfJoining || participant.masterData?.DOJ_3 || participant.masterData?.DOJ_4 || null,
+    },
     photograph: { url: participant.photoUrl || null, status: participant.photoUrl ? 'submitted' : 'not submitted' },
     roleInterview: formValue(participant.roleInterview),
     preWork: formValue(participant.preWork),
@@ -48,7 +50,7 @@ const candidateInclude = {
 assessorRouter.get('/candidates', asyncHandler(async (_req, res) => {
   const participants = await prisma.participant.findMany({
     where: { archivedAt: null },
-    orderBy: { user: { name: 'asc' } },
+    orderBy: { user: { employeeId: 'asc' } },
     include: candidateInclude,
   })
   res.json({ data: participants.map(toCandidate) })

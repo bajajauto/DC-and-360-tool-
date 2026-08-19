@@ -1,6 +1,6 @@
 import { ArrowLeft, BriefcaseBusiness, Camera, Download, FileText, MessageSquareText, User } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { Link, Navigate, useParams } from 'react-router-dom'
+import { Link, Navigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../../lib/api'
 import { download360Pdf } from '../../lib/reportDownload'
 
@@ -65,11 +65,11 @@ function PreWork({ submission }) {
 
 function ReleasedReport({ profile }) {
   const [downloadError, setDownloadError] = useState('')
-  return <section className="rounded-2xl border border-emerald-200 bg-white p-6"><div className="flex flex-wrap items-center justify-between gap-4"><div><h2 className="font-semibold text-[#172033]">Published 360° Feedback Report</h2><p className="mt-1 text-sm text-slate-500">This aggregated report has been released by Talent Development.</p></div><button type="button" onClick={() => download360Pdf(profile.id, profile.name).catch((error) => setDownloadError(error.message))} className="inline-flex items-center gap-2 rounded-lg bg-[#1e4d8c] px-4 py-2.5 text-xs font-semibold text-white"><Download size={15} />Download PDF</button></div>{downloadError && <p className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">{downloadError}</p>}</section>
+  return <section className="rounded-2xl border border-emerald-200 bg-white p-6"><div className="flex flex-wrap items-center justify-between gap-4"><div><h2 className="font-semibold text-[#172033]">Published 360° Feedback Report</h2><p className="mt-1 text-sm text-slate-500">This aggregated report has been released by Talent Development.</p></div><button type="button" onClick={() => download360Pdf(profile.id, profile.employeeId).catch((error) => setDownloadError(error.message))} className="inline-flex items-center gap-2 rounded-lg bg-[#1e4d8c] px-4 py-2.5 text-xs font-semibold text-white"><Download size={15} />Download PDF</button></div>{downloadError && <p className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">{downloadError}</p>}</section>
 }
 
 function DetailBody({ type, profile }) {
-  if (type === 'photograph') return <div className="grid gap-6 lg:grid-cols-[360px_1fr]"><section className="rounded-2xl border border-[#e2e8f0] bg-white p-6">{profile.photograph.url ? <img src={profile.photograph.url} alt={profile.name} className="aspect-square w-full rounded-xl object-cover" /> : <PersonPlaceholder size="xl" />}</section><section className="rounded-2xl border border-[#e2e8f0] bg-white p-6"><h2 className="font-semibold text-[#172033]">Identity details</h2><div className="mt-4"><InfoRow label="Participant" value={profile.name} /><InfoRow label="Employee ID" value={profile.employeeId} /><InfoRow label="Designation" value={profile.designation} /><InfoRow label="Business unit" value={profile.bu} /><InfoRow label="Photo status" value={profile.photograph.status} /></div></section></div>
+  if (type === 'photograph') return <div className="grid gap-6 lg:grid-cols-[360px_1fr]"><section className="rounded-2xl border border-[#e2e8f0] bg-white p-6">{profile.photograph.url ? <img src={profile.photograph.url} alt="Participant photograph" className="aspect-square w-full rounded-xl object-cover" /> : <PersonPlaceholder size="xl" />}</section><section className="rounded-2xl border border-[#e2e8f0] bg-white p-6"><h2 className="font-semibold text-[#172033]">Candidate details</h2><div className="mt-4"><InfoRow label="Ticket ID" value={profile.employeeId} /><InfoRow label="Designation" value={profile.designation} /><InfoRow label="Business unit" value={profile.bu} /><InfoRow label="Photo status" value={profile.photograph.status} /></div></section></div>
   if (type === 'role-interview') return <RoleInterview submission={profile.roleInterview} />
   if (type === 'pre-work') return <PreWork submission={profile.preWork} />
   if (profile.report360.status === 'released') return <ReleasedReport profile={profile} />
@@ -78,6 +78,7 @@ function DetailBody({ type, profile }) {
 
 export default function EvidenceDetail() {
   const { participantId, evidenceType } = useParams()
+  const [searchParams] = useSearchParams()
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -90,5 +91,8 @@ export default function EvidenceDetail() {
 
   if (!config) return <Navigate to="/assessor/candidates" replace />
   const Icon = config.icon
-  return <div><header className="flex h-20 items-center justify-between border-b border-[#e4e9f1] bg-white px-8"><div className="flex items-center gap-4"><Link to={`/assessor/candidates?participantId=${encodeURIComponent(participantId)}`} className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#e2e8f0] text-gray-500 hover:text-[#1e4d8c]"><ArrowLeft size={17} /></Link><div><p className="text-xs text-gray-400">{profile?.name || 'Participant'} / {config.label}</p><h1 className="text-xl font-bold text-[#172033]">{config.title}</h1></div></div><span className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-[10px] font-semibold text-blue-700"><Icon size={13} />Read-only evidence</span></header><main className="mx-auto max-w-[1180px] p-8">{loading && <p className="text-sm text-gray-500">Loading participant response…</p>}{error && <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>}{profile && <><section className="mb-6 flex items-center gap-4 rounded-2xl border border-[#e2e8f0] bg-white p-5"><PersonPlaceholder /><div><h2 className="text-lg font-bold text-[#172033]">{profile.name}</h2><p className="mt-1 text-xs text-gray-500">{profile.employeeId} · {profile.designation} · {profile.bu} · {profile.cohort}</p></div></section><DetailBody type={evidenceType} profile={profile} /></>}</main></div>
+  const cohortId = searchParams.get('cohortId')
+  const backParams = new URLSearchParams({ participantId })
+  if (cohortId) backParams.set('cohortId', cohortId)
+  return <div><header className="flex h-20 items-center justify-between border-b border-[#e4e9f1] bg-white px-8"><div className="flex items-center gap-4"><Link to={`/assessor/candidates?${backParams.toString()}`} className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#e2e8f0] text-gray-500 hover:text-[#1e4d8c]"><ArrowLeft size={17} /></Link><div><p className="text-xs text-gray-400">Ticket ID: {profile?.employeeId || '—'} / {config.label}</p><h1 className="text-xl font-bold text-[#172033]">{config.title}</h1></div></div><span className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-[10px] font-semibold text-blue-700"><Icon size={13} />Read-only evidence</span></header><main className="mx-auto max-w-[1180px] p-8">{loading && <p className="text-sm text-gray-500">Loading participant response…</p>}{error && <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>}{profile && <><section className="mb-6 flex items-center gap-4 rounded-2xl border border-[#e2e8f0] bg-white p-5"><PersonPlaceholder /><div><h2 className="text-lg font-bold text-[#172033]">Ticket ID: {profile.employeeId}</h2><p className="mt-1 text-xs text-gray-500">{profile.designation} · {profile.bu} · {profile.cohort}</p></div></section><DetailBody type={evidenceType} profile={profile} /></>}</main></div>
 }

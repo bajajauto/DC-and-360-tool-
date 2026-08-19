@@ -36,11 +36,11 @@ function EvidenceCard({ icon: Icon, title, meta, to }) {
   )
 }
 
-function PersonPlaceholder({ size = 'sm', src = null, name = 'Participant' }) {
+function PersonPlaceholder({ size = 'sm', src = null }) {
   const classes = size === 'lg' ? 'w-36 h-36 rounded-xl' : 'w-11 h-11 rounded-lg'
 
   if (src) {
-    return <img src={src} alt={`${name} photograph`} className={`${classes} shrink-0 object-cover`} />
+    return <img src={src} alt="Participant photograph" className={`${classes} shrink-0 object-cover`} />
   }
 
   return (
@@ -52,14 +52,12 @@ function PersonPlaceholder({ size = 'sm', src = null, name = 'Participant' }) {
 
 function ParticipantDetails({ participant }) {
   const details = [
-    ['Name', participant.name],
     ['Ticket No', participant.employeeId],
     ['Designation', participant.designation],
     ['Current BU', participant.bu],
     ['Level', participant.masterData?.jobLevel],
     ['Chart Level', participant.masterData?.positionLevel],
     ['Date of Joining', formatDateOfJoining(participant.masterData?.dateOfJoining || participant.masterData?.DOJ_3 || participant.masterData?.DOJ_4)],
-    ['Email', participant.email],
   ]
 
   return (
@@ -81,7 +79,7 @@ export default function CandidateProfiles() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [profiles, setProfiles] = useState([])
   const [selectedId, setSelectedId] = useState(() => searchParams.get('participantId'))
-  const [selectedCohortId, setSelectedCohortId] = useState('all')
+  const [selectedCohortId, setSelectedCohortId] = useState(() => searchParams.get('cohortId') || 'all')
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -104,7 +102,7 @@ export default function CandidateProfiles() {
     const needle = query.trim().toLowerCase()
     return profiles.filter((profile) => {
       const inCohort = selectedCohortId === 'all' || profile.cohortId === selectedCohortId
-      const matchesSearch = !needle || `${profile.name} ${profile.employeeId} ${profile.designation} ${profile.bu}`.toLowerCase().includes(needle)
+      const matchesSearch = !needle || `${profile.employeeId || ''} ${profile.designation || ''} ${profile.bu || ''}`.toLowerCase().includes(needle)
       return inCohort && matchesSearch
     })
   }, [profiles, query, selectedCohortId])
@@ -135,7 +133,7 @@ export default function CandidateProfiles() {
                   const firstProfile = profiles.find((profile) => cohortId === 'all' || profile.cohortId === cohortId)
                   setSelectedCohortId(cohortId)
                   setSelectedId(firstProfile?.id || null)
-                  setSearchParams(firstProfile ? { participantId: firstProfile.id } : {}, { replace: true })
+                  setSearchParams(firstProfile ? { participantId: firstProfile.id, ...(cohortId !== 'all' ? { cohortId } : {}) } : (cohortId !== 'all' ? { cohortId } : {}), { replace: true })
                 }}
                 className="w-full rounded-lg border border-[#dce3ed] bg-white px-3 py-2 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-100"
               >
@@ -148,7 +146,7 @@ export default function CandidateProfiles() {
               <input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search candidates"
+                placeholder="Search by Ticket ID"
                 className="w-full border border-[#dce3ed] rounded-lg py-2 pl-9 pr-3 text-xs focus:outline-none focus:ring-2 focus:ring-blue-100"
               />
             </div>
@@ -164,15 +162,15 @@ export default function CandidateProfiles() {
                   key={profile.id}
                   onClick={() => {
                     setSelectedId(profile.id)
-                    setSearchParams({ participantId: profile.id }, { replace: true })
+                    setSearchParams({ participantId: profile.id, ...(selectedCohortId !== 'all' ? { cohortId: selectedCohortId } : {}) }, { replace: true })
                   }}
                   className={`w-full text-left px-5 py-4 border-b border-[#eef2f6] transition-colors ${active ? 'bg-blue-50' : 'hover:bg-[#f8fafc]'}`}
                 >
                   <div className="flex items-center gap-3">
                     <PersonPlaceholder />
                     <div className="min-w-0 flex-1">
-                      <p className={`text-sm font-semibold truncate ${active ? 'text-[#1e4d8c]' : 'text-[#172033]'}`}>{profile.name}</p>
-                      <p className="text-[11px] text-gray-400 truncate">{profile.employeeId} · {profile.designation}</p>
+                      <p className={`text-sm font-semibold truncate ${active ? 'text-[#1e4d8c]' : 'text-[#172033]'}`}>Ticket ID: {profile.employeeId}</p>
+                      <p className="text-[11px] text-gray-400 truncate">{profile.designation}</p>
                     </div>
                   </div>
                   <div className="mt-3 flex items-center justify-between">
@@ -189,14 +187,12 @@ export default function CandidateProfiles() {
           <main className="space-y-6">
             <section className="bg-white border border-[#e2e8f0] rounded-2xl p-6">
               <div className="flex flex-col lg:flex-row gap-6">
-                <PersonPlaceholder size="lg" src={selected.photograph.url} name={selected.name} />
+                <PersonPlaceholder size="lg" src={selected.photograph.url} />
                 <div className="flex-1 min-w-0">
                   <div className="flex flex-wrap items-start justify-between gap-4">
                     <div>
-                      <h2 className="text-2xl font-bold text-[#172033]">{selected.name}</h2>
+                      <h2 className="text-2xl font-bold text-[#172033]">Ticket ID: {selected.employeeId}</h2>
                       <p className="text-sm mt-1.5">
-                        <span className="font-semibold text-[#2563a5]">{selected.employeeId}</span>
-                        <span className="mx-2 text-gray-300">·</span>
                         <span className="font-medium text-violet-700">{selected.designation}</span>
                         <span className="mx-2 text-gray-300">·</span>
                         <span className="font-medium text-cyan-700">{selected.bu}</span>
@@ -210,10 +206,10 @@ export default function CandidateProfiles() {
             <ParticipantDetails participant={selected} />
 
             <div className="grid lg:grid-cols-2 gap-5">
-              <EvidenceCard icon={Camera} title="Participant Photograph" meta="Identity evidence" to={`/assessor/candidates/${selected.id}/photograph`} />
-              <EvidenceCard icon={MessageSquareText} title="Role Interview" meta={selected.roleInterview.status} to={`/assessor/candidates/${selected.id}/role-interview`} />
-              <EvidenceCard icon={FileText} title="360° Feedback Report" meta={selected.report360.status} to={`/assessor/candidates/${selected.id}/360-report`} />
-              <EvidenceCard icon={BriefcaseBusiness} title="Self Reflection" meta={selected.preWork.status} to={`/assessor/candidates/${selected.id}/pre-work`} />
+              <EvidenceCard icon={Camera} title="Participant Photograph" meta="Identity evidence" to={`/assessor/candidates/${selected.id}/photograph${selectedCohortId !== 'all' ? `?cohortId=${encodeURIComponent(selectedCohortId)}` : ''}`} />
+              <EvidenceCard icon={MessageSquareText} title="Role Interview" meta={selected.roleInterview.status} to={`/assessor/candidates/${selected.id}/role-interview${selectedCohortId !== 'all' ? `?cohortId=${encodeURIComponent(selectedCohortId)}` : ''}`} />
+              <EvidenceCard icon={FileText} title="360° Feedback Report" meta={selected.report360.status} to={`/assessor/candidates/${selected.id}/360-report${selectedCohortId !== 'all' ? `?cohortId=${encodeURIComponent(selectedCohortId)}` : ''}`} />
+              <EvidenceCard icon={BriefcaseBusiness} title="Self Reflection" meta={selected.preWork.status} to={`/assessor/candidates/${selected.id}/pre-work${selectedCohortId !== 'all' ? `?cohortId=${encodeURIComponent(selectedCohortId)}` : ''}`} />
             </div>
 
           </main>
