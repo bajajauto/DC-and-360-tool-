@@ -167,7 +167,7 @@ export default function CandidateProfiles() {
                   className={`w-full text-left px-5 py-4 border-b border-[#eef2f6] transition-colors ${active ? 'bg-blue-50' : 'hover:bg-[#f8fafc]'}`}
                 >
                   <div className="flex items-center gap-3">
-                    <PersonPlaceholder />
+                    <PersonPlaceholder src={profile.photograph.url} />
                     <div className="min-w-0 flex-1">
                       <p className={`text-sm font-semibold truncate ${active ? 'text-[#1e4d8c]' : 'text-[#172033]'}`}>Ticket ID: {profile.employeeId}</p>
                       <p className="text-[11px] text-gray-400 truncate">{profile.designation}</p>
