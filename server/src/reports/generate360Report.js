@@ -90,10 +90,6 @@ function participantNameSlug(participant) {
   return (participant.user.name || 'participant').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
 }
 
-function formatMonth(date = new Date()) {
-  return date.toLocaleString('en-IN', { month: 'long', year: 'numeric' })
-}
-
 // Rule 2: suppressed cells are blank, never 0 or a dash.
 function formatScore(value) {
   if (value === null || value === undefined || Number.isNaN(value)) return ''
@@ -184,7 +180,9 @@ function collectSectionComments(tasks, sectionId, key) {
     if (typeof value === 'string' && value.trim()) comments.push(value.trim())
   }
   if (!comments.length) return ''
-  return [...new Set(comments)].join(' ')
+  // Keep each respondent's feedback visually distinct in the HTML preview,
+  // generated PDF, and PowerPoint output.
+  return [...new Set(comments)].join('\n')
 }
 
 function collectSelfReflection(tasks, sectionId) {
@@ -219,7 +217,7 @@ function buildReportTokens(participant) {
   const tokens = {
     ticket_id: participant.user.employeeId || '',
     cohort: participant.cohort?.name || '',
-    report_month: formatMonth(),
+    report_month: '',
     participant_name: participant.user.name || '',
     mix_self_nom: '1',
     mix_self_resp: String(respondedCounts.self || 0),
