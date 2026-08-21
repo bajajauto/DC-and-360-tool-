@@ -272,10 +272,27 @@ cohortsRouter.patch('/:cohortId', asyncHandler(async (req, res) => {
   if (!existing) throw httpError(404, 'Cohort not found')
   assertCohortDateOrder({ ...existing, ...payload })
 
-  const cohort = await prisma.cohort.update({
-    where: { id: req.params.cohortId },
-    data: payload,
-    include: { _count: { select: { participants: { where: { archivedAt: null } } } } },
+  const cutoffWasUpdated = Object.prototype.hasOwnProperty.call(payload, 'threeSixtyCutoff')
+  const cohort = await prisma.$transaction(async (tx) => {
+    const updated = await tx.cohort.update({
+      where: { id: req.params.cohortId },
+      data: payload,
+      include: { _count: { select: { participants: { where: { archivedAt: null } } } } },
+    })
+
+    // Feedback tasks copy the cohort cutoff into dueAt when invitations are
+    // created. Keep unfinished tasks in sync when TD later changes that cutoff.
+    if (cutoffWasUpdated) {
+      await tx.feedbackTask.updateMany({
+        where: {
+          participant: { cohortId: req.params.cohortId, archivedAt: null },
+          status: { not: 'SUBMITTED' },
+        },
+        data: { dueAt: updated.threeSixtyCutoff },
+      })
+    }
+
+    return updated
   })
 
   res.json({ data: toCohortDto(cohort) })

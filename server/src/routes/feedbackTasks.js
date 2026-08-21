@@ -26,7 +26,7 @@ async function findTask(id) {
   const task = await prisma.feedbackTask.findUnique({
     where: { id },
     include: {
-      participant: { include: { user: true } },
+      participant: { include: { user: true, cohort: true } },
       nominee: true,
       responses: true,
     },
@@ -34,6 +34,10 @@ async function findTask(id) {
 
   if (!task) throw httpError(404, 'Feedback task not found')
   return task
+}
+
+function effectiveDeadline(task) {
+  return task.participant?.cohort?.threeSixtyCutoff || task.dueAt
 }
 
 feedbackTasksRouter.get('/:taskId', asyncHandler(async (req, res) => {
@@ -46,7 +50,7 @@ feedbackTasksRouter.get('/:taskId', asyncHandler(async (req, res) => {
       participantName: task.participant.user.name,
       relationship: task.relationship,
       status: task.status.toLowerCase(),
-      dueAt: task.dueAt?.toISOString() || null,
+      dueAt: effectiveDeadline(task)?.toISOString() || null,
       response: task.responses[0] || null,
     },
   })
@@ -56,7 +60,7 @@ feedbackTasksRouter.put('/:taskId/draft', asyncHandler(async (req, res) => {
   const task = await findTask(req.params.taskId)
   assertTaskAccess(req, task)
   if (task.status === 'SUBMITTED') throw httpError(409, 'Feedback has already been submitted and can no longer be saved as a draft.')
-  if (hasDeadlinePassed(task.dueAt)) throw httpError(409, 'The 360 feedback deadline has passed. This response can no longer be edited.')
+  if (hasDeadlinePassed(effectiveDeadline(task))) throw httpError(409, 'The 360 feedback deadline has passed. This response can no longer be edited.')
   const payload = responseSchema.parse(req.body)
 
   const response = await prisma.$transaction(async (tx) => {
@@ -100,7 +104,7 @@ feedbackTasksRouter.post('/:taskId/submit', asyncHandler(async (req, res) => {
     res.json({ data: { id: existingTask.id, status: 'submitted', submittedAt: existingTask.submittedAt?.toISOString() || null, report: null } })
     return
   }
-  if (hasDeadlinePassed(existingTask.dueAt)) throw httpError(409, 'The 360 feedback deadline has passed. This response can no longer be submitted.')
+  if (hasDeadlinePassed(effectiveDeadline(existingTask))) throw httpError(409, 'The 360 feedback deadline has passed. This response can no longer be submitted.')
   const payload = responseSchema.parse(req.body)
 
   const task = await prisma.$transaction(async (tx) => {
