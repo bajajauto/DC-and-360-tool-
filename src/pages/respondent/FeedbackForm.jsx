@@ -304,6 +304,8 @@ export default function FeedbackForm({ returnTo = '/respondent/dashboard', taskI
   const [sectionSsc, setSectionSsc] = useState({})
   const [ssc, setSsc] = useState({ start: '', continue: '', stop: '' })
   const [saveStatus, setSaveStatus] = useState('idle')
+  const [submitting, setSubmitting] = useState(false)
+  const [actionError, setActionError] = useState('')
   const [submitted, setSubmitted] = useState(task?.status === 'submitted')
   const [draftLoaded, setDraftLoaded] = useState(false)
   const [currentStep, setCurrentStep] = useState(0)
@@ -414,7 +416,7 @@ export default function FeedbackForm({ returnTo = '/respondent/dashboard', taskI
   }, [setSurveyNavigation])
 
   useEffect(() => {
-    if (!taskId || submitted || !draftLoaded) return
+    if (!taskId || submitted || submitting || !draftLoaded) return
 
     setSaveStatus('saving')
     const timeoutId = window.setTimeout(() => {
@@ -424,12 +426,12 @@ export default function FeedbackForm({ returnTo = '/respondent/dashboard', taskI
             setSaveStatus('saved')
             updateRespondentTaskStatus(taskId, 'saved')
           })
-          .catch(() => setSaveStatus('idle'))
+          .catch((error) => { setSaveStatus('idle'); setActionError(error.message || 'Your draft could not be saved. Check your connection and try Save Draft again.') })
       })
     }, 800)
 
     return () => window.clearTimeout(timeoutId)
-  }, [draftPayload, submitted, taskId, draftLoaded, updateRespondentTaskStatus])
+  }, [draftPayload, submitted, submitting, taskId, draftLoaded, updateRespondentTaskStatus])
 
   const handleRate = useCallback((behaviourId, value) => {
     setSectionValidationMessage('')
@@ -445,6 +447,7 @@ export default function FeedbackForm({ returnTo = '/respondent/dashboard', taskI
   }, [])
 
   function handleSaveDraft() {
+    setActionError('')
     setSaveStatus('saving')
     import('../../lib/api').then(({ api }) => {
       api.saveFeedbackDraft(taskId, draftPayload)
@@ -452,12 +455,14 @@ export default function FeedbackForm({ returnTo = '/respondent/dashboard', taskI
           setSaveStatus('saved')
           updateRespondentTaskStatus(taskId, 'saved')
         })
-        .catch(() => setSaveStatus('idle'))
+        .catch((error) => { setSaveStatus('idle'); setActionError(error.message || 'Your draft could not be saved. Please try again.') })
     })
   }
 
   function handleSubmit() {
-    if (!canSubmit) return
+    if (!canSubmit || submitting) return
+    setSubmitting(true)
+    setActionError('')
     import('../../lib/api').then(({ api }) => {
       api.submitFeedback(taskId, draftPayload)
         .then(() => {
@@ -466,7 +471,8 @@ export default function FeedbackForm({ returnTo = '/respondent/dashboard', taskI
           if (user?.participantId) refreshParticipantData(user.participantId)
           setSubmitted(true)
         })
-        .catch(() => {})
+        .catch((error) => setActionError(error.message || 'Your feedback could not be submitted. Please try again.'))
+        .finally(() => setSubmitting(false))
     })
   }
 
@@ -555,6 +561,7 @@ export default function FeedbackForm({ returnTo = '/respondent/dashboard', taskI
             {sectionValidationMessage}
           </div>
         )}
+        {actionError && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{actionError}</div>}
 
         {currentStep === 0 ? (
           <SurveyInstructions surveyVariant={surveyVariant} totalRatings={totalRatings} onShowWelcome={() => setShowWelcome(true)} />
@@ -592,7 +599,7 @@ export default function FeedbackForm({ returnTo = '/respondent/dashboard', taskI
             ) : (
               <>
                 <button onClick={handleSaveDraft} className="rounded-lg border border-[#c2ccda] px-4 py-2 text-sm font-medium text-[#1a1f2e] hover:bg-gray-50">Save Draft</button>
-                <button onClick={handleSubmit} disabled={!canSubmit} className={`rounded-lg px-5 py-2 text-sm font-medium ${canSubmit ? 'bg-[#1e5fba] text-white hover:bg-[#174a92]' : 'cursor-not-allowed bg-gray-100 text-gray-400'}`}>Submit Feedback</button>
+                <button onClick={handleSubmit} disabled={!canSubmit || submitting} className={`rounded-lg px-5 py-2 text-sm font-medium ${canSubmit && !submitting ? 'bg-[#1e5fba] text-white hover:bg-[#174a92]' : 'cursor-not-allowed bg-gray-100 text-gray-400'}`}>{submitting ? 'Submitting…' : 'Submit Feedback'}</button>
               </>
             )}
           </div>

@@ -55,14 +55,18 @@ feedbackTasksRouter.get('/:taskId', asyncHandler(async (req, res) => {
 feedbackTasksRouter.put('/:taskId/draft', asyncHandler(async (req, res) => {
   const task = await findTask(req.params.taskId)
   assertTaskAccess(req, task)
+  if (task.status === 'SUBMITTED') throw httpError(409, 'Feedback has already been submitted and can no longer be saved as a draft.')
   if (hasDeadlinePassed(task.dueAt)) throw httpError(409, 'The 360 feedback deadline has passed. This response can no longer be edited.')
   const payload = responseSchema.parse(req.body)
 
   const response = await prisma.$transaction(async (tx) => {
-    await tx.feedbackTask.update({
-      where: { id: req.params.taskId },
+    const updated = await tx.feedbackTask.updateMany({
+      where: { id: req.params.taskId, status: { not: 'SUBMITTED' } },
       data: { status: 'SAVED' },
     })
+    // A submit request may have committed while this draft request was waiting
+    // for the row lock. Never allow that late autosave to revert SUBMITTED.
+    if (!updated.count) throw httpError(409, 'Feedback has already been submitted and can no longer be saved as a draft.')
 
     return tx.feedbackResponse.upsert({
       where: {
@@ -92,6 +96,10 @@ feedbackTasksRouter.put('/:taskId/draft', asyncHandler(async (req, res) => {
 feedbackTasksRouter.post('/:taskId/submit', asyncHandler(async (req, res) => {
   const existingTask = await findTask(req.params.taskId)
   assertTaskAccess(req, existingTask)
+  if (existingTask.status === 'SUBMITTED') {
+    res.json({ data: { id: existingTask.id, status: 'submitted', submittedAt: existingTask.submittedAt?.toISOString() || null, report: null } })
+    return
+  }
   if (hasDeadlinePassed(existingTask.dueAt)) throw httpError(409, 'The 360 feedback deadline has passed. This response can no longer be submitted.')
   const payload = responseSchema.parse(req.body)
 
@@ -136,10 +144,26 @@ feedbackTasksRouter.post('/:taskId/submit', asyncHandler(async (req, res) => {
     })
   })
 
+  const allSubmitted = task.participant.feedbackTasks.every((item) => item.status === 'SUBMITTED')
+  if (allSubmitted) {
+    try {
+      await prisma.participant.update({
+        where: { id: task.participantId },
+        data: { reportStatus: 'READY', progress: 92, lastActivityAt: new Date() },
+      })
+    } catch (error) {
+      // The response itself is already committed. A tracker/progress failure
+      // must not tell the respondent that their submission was lost.
+      console.error('Feedback submitted, but participant progress could not be updated', error)
+    }
+  }
+
+  res.json({ data: { id: task.id, status: task.status.toLowerCase(), submittedAt: task.submittedAt?.toISOString() || null, report: null } })
+
   const respondentEmail = task.nominee?.email || task.respondent?.email
   const respondentName = task.nominee?.name || task.respondent?.name
   if (respondentEmail) {
-    await queueEmail({
+    queueEmail({
       dedupeKey: `respondent-thank-you:${task.id}`,
       templateId: 'respondent-thank-you',
       toEmail: respondentEmail,
@@ -150,27 +174,6 @@ feedbackTasksRouter.post('/:taskId/submit', asyncHandler(async (req, res) => {
       },
       entity: 'FeedbackTask',
       entityId: task.id,
-    })
+    }).catch((error) => console.error('Feedback submitted, but the thank-you email could not be queued', error))
   }
-
-  const allSubmitted = task.participant.feedbackTasks.every((item) => item.status === 'SUBMITTED')
-  if (allSubmitted) {
-    await prisma.participant.update({
-      where: { id: task.participantId },
-      data: {
-        reportStatus: 'READY',
-        progress: 92,
-        lastActivityAt: new Date(),
-      },
-    })
-  }
-
-  res.json({
-    data: {
-      id: task.id,
-      status: task.status.toLowerCase(),
-      submittedAt: task.submittedAt?.toISOString() || null,
-      report: null,
-    },
-  })
 }))
