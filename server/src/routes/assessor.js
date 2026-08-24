@@ -51,10 +51,14 @@ const candidateInclude = {
 assessorRouter.get('/candidates', asyncHandler(async (_req, res) => {
   const participants = await prisma.participant.findMany({
     where: { archivedAt: null },
-    orderBy: { user: { employeeId: 'asc' } },
     include: candidateInclude,
   })
-  res.json({ data: participants.map(toCandidate) })
+  const candidates = participants.map(toCandidate).sort((left, right) => {
+    if (!left.nickname) return right.nickname ? 1 : 0
+    if (!right.nickname) return -1
+    return left.nickname.localeCompare(right.nickname, undefined, { numeric: true, sensitivity: 'base' })
+  })
+  res.json({ data: candidates })
 }))
 
 assessorRouter.get('/candidates/:participantId', asyncHandler(async (req, res) => {
