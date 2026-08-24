@@ -46,87 +46,13 @@ function AnswerCard({ label, value }) {
   return <article className="rounded-xl border border-[#e2e8f0] bg-white p-5"><p className="text-sm font-semibold leading-6 text-[#172033]">{label}</p><div className="mt-3 whitespace-pre-wrap rounded-lg bg-[#f8fafc] p-4 text-sm leading-6 text-gray-700">{String(value || '').trim() || 'No response provided.'}</div></article>
 }
 
-async function downloadRoleInterviewPdf(profile) {
-  const { jsPDF } = await import('jspdf')
-  const pdf = new jsPDF({ unit: 'pt', format: 'a4' })
-  const answers = profile.roleInterview.answers || {}
-  const margin = 48
-  const pageWidth = pdf.internal.pageSize.getWidth()
-  const pageHeight = pdf.internal.pageSize.getHeight()
-  const contentWidth = pageWidth - (margin * 2)
-  let y = margin
-
-  function ensureSpace(height) {
-    if (y + height <= pageHeight - margin) return
-    pdf.addPage()
-    y = margin
-  }
-
-  function addText(text, { size = 10, bold = false, color = [55, 65, 81], gap = 8 } = {}) {
-    pdf.setFont('helvetica', bold ? 'bold' : 'normal')
-    pdf.setFontSize(size)
-    pdf.setTextColor(...color)
-    const lines = pdf.splitTextToSize(String(text || ''), contentWidth)
-    const lineHeight = size * 1.45
-    ensureSpace((lines.length * lineHeight) + gap)
-    pdf.text(lines, margin, y)
-    y += (lines.length * lineHeight) + gap
-  }
-
-  pdf.setFillColor(30, 77, 140)
-  pdf.rect(0, 0, pageWidth, 112, 'F')
-  pdf.setTextColor(255, 255, 255)
-  pdf.setFont('helvetica', 'bold')
-  pdf.setFontSize(21)
-  pdf.text('Role Interview', margin, 48)
-  pdf.setFontSize(13)
-  pdf.text(profile.nickname || 'Nickname not set', margin, 75)
-  pdf.setFont('helvetica', 'normal')
-  pdf.setFontSize(9)
-  pdf.text(`Ticket ID: ${profile.employeeId || '-'} | ${profile.designation || '-'} | ${profile.bu || '-'} | ${profile.cohort || '-'}`, margin, 96)
-  y = 140
-
-  const submittedOn = profile.roleInterview.submittedAt ? new Date(profile.roleInterview.submittedAt).toLocaleString('en-GB') : 'Not submitted'
-  addText(`Submission status: ${profile.roleInterview.status || 'draft'} | Submitted on: ${submittedOn}`, { size: 9, color: [75, 85, 99], gap: 18 })
-
-  const transitions = [1, 2, 3].map((number) => ({
-    number,
-    values: [answers[`transition${number}_role`], answers[`transition${number}_roleDescription`] || answers[`transition${number}_designation`], answers[`transition${number}_bu`], answers[`transition${number}_duration`]],
-  })).filter((transition) => transition.values.some(Boolean))
-
-  if (transitions.length) {
-    addText('Last 3 career transitions', { size: 13, bold: true, color: [23, 32, 51], gap: 10 })
-    transitions.forEach((transition) => addText(`${transition.number}. Role: ${transition.values[0] || '-'} | Role Description: ${transition.values[1] || '-'} | BU: ${transition.values[2] || '-'} | Duration: ${transition.values[3] || '-'}`, { size: 9, gap: 10 }))
-    y += 6
-  }
-
-  Object.entries(roleLabels).forEach(([key, label], index) => {
-    addText(`${index + 1}. ${label}`, { size: 11, bold: true, color: [23, 32, 51], gap: 5 })
-    addText(String(answers[key] || '').trim() || 'No response provided.', { size: 10, gap: 16 })
-  })
-
-  const filePart = String(profile.nickname || profile.employeeId || 'participant').replace(/[^A-Za-z0-9_-]+/g, '-')
-  pdf.save(`${filePart}-role-interview.pdf`)
-}
-
-function RoleInterview({ profile }) {
-  const submission = profile.roleInterview
-  const [downloadState, setDownloadState] = useState({ loading: false, error: '' })
+function RoleInterview({ submission }) {
   const answers = submission.answers || {}
   const transitions = [1, 2, 3].map((number) => ({
     number,
     values: [answers[`transition${number}_role`], answers[`transition${number}_roleDescription`] || answers[`transition${number}_designation`], answers[`transition${number}_bu`], answers[`transition${number}_duration`]],
   })).filter((transition) => transition.values.some(Boolean))
-  async function download() {
-    setDownloadState({ loading: true, error: '' })
-    try {
-      await downloadRoleInterviewPdf(profile)
-      setDownloadState({ loading: false, error: '' })
-    } catch (error) {
-      setDownloadState({ loading: false, error: error.message || 'Unable to create the PDF.' })
-    }
-  }
-  return <div><div className="mb-5 flex justify-end"><button type="button" onClick={download} disabled={downloadState.loading} className="inline-flex items-center gap-2 rounded-lg bg-[#1e4d8c] px-4 py-2.5 text-xs font-semibold text-white disabled:opacity-60"><Download size={15} />{downloadState.loading ? 'Preparing…' : 'Download PDF'}</button></div>{downloadState.error && <p className="mb-5 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">{downloadState.error}</p>}<SubmissionHeader submission={submission} />{transitions.length > 0 && <section className="mb-5 rounded-2xl border border-[#e2e8f0] bg-white p-6"><h2 className="mb-4 font-semibold text-[#172033]">Last 3 career transitions</h2><div className="space-y-3">{transitions.map((transition) => <div key={transition.number} className="grid gap-3 rounded-xl bg-[#f8fafc] p-4 sm:grid-cols-4">{['Role', 'Role Description', 'BU', 'Duration'].map((label, index) => <div key={label}><p className="text-[11px] text-gray-400">{label}</p><p className="mt-1 text-sm font-semibold text-[#374151]">{transition.values[index] || '—'}</p></div>)}</div>)}</div></section>}<div className="space-y-4">{Object.entries(roleLabels).map(([key, label]) => <AnswerCard key={key} label={label} value={answers[key]} />)}</div></div>
+  return <div><SubmissionHeader submission={submission} />{transitions.length > 0 && <section className="mb-5 rounded-2xl border border-[#e2e8f0] bg-white p-6"><h2 className="mb-4 font-semibold text-[#172033]">Last 3 career transitions</h2><div className="space-y-3">{transitions.map((transition) => <div key={transition.number} className="grid gap-3 rounded-xl bg-[#f8fafc] p-4 sm:grid-cols-4">{['Role', 'Role Description', 'BU', 'Duration'].map((label, index) => <div key={label}><p className="text-[11px] text-gray-400">{label}</p><p className="mt-1 text-sm font-semibold text-[#374151]">{transition.values[index] || '—'}</p></div>)}</div>)}</div></section>}<div className="space-y-4">{Object.entries(roleLabels).map(([key, label]) => <AnswerCard key={key} label={label} value={answers[key]} />)}</div></div>
 }
 
 function PreWork({ submission }) {
@@ -144,7 +70,7 @@ function ReleasedReport({ profile }) {
 
 function DetailBody({ type, profile }) {
   if (type === 'photograph') return <div className="grid gap-6 lg:grid-cols-[360px_1fr]"><section className="rounded-2xl border border-[#e2e8f0] bg-white p-6">{profile.photograph.url ? <img src={profile.photograph.url} alt="Participant photograph" className="aspect-square w-full rounded-xl object-cover" /> : <PersonPlaceholder size="xl" />}</section><section className="rounded-2xl border border-[#e2e8f0] bg-white p-6"><h2 className="font-semibold text-[#172033]">Candidate details</h2><div className="mt-4"><InfoRow label="Ticket ID" value={profile.employeeId} /><InfoRow label="Designation" value={profile.designation} /><InfoRow label="Business unit" value={profile.bu} /><InfoRow label="Photo status" value={profile.photograph.status} /></div></section></div>
-  if (type === 'role-interview') return <RoleInterview profile={profile} />
+  if (type === 'role-interview') return <RoleInterview submission={profile.roleInterview} />
   if (type === 'pre-work') return <PreWork submission={profile.preWork} />
   if (profile.report360.status === 'released') return <ReleasedReport profile={profile} />
   return <section className="rounded-2xl border border-[#e2e8f0] bg-white p-6"><div className="grid gap-4 md:grid-cols-3"><InfoRow label="Report status" value={profile.report360.status} /><InfoRow label="Responses submitted" value={`${profile.report360.submittedResponses}/${profile.report360.totalResponses}`} /><InfoRow label="Generated on" value={profile.report360.generatedAt ? new Date(profile.report360.generatedAt).toLocaleString('en-GB') : 'Not generated'} /></div><p className="mt-6 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">The aggregated 360° Feedback Report becomes available after all required responses are complete and TD generates the report.</p></section>
