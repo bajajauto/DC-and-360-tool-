@@ -62,15 +62,56 @@ async function downloadRoleInterviewPdf(profile) {
     y = margin
   }
 
+  function wrapText(value) {
+    const normalized = String(value || '')
+      .replace(/[\u00a0\u2000-\u200b\u202f\u205f\u3000]/g, ' ')
+      .replace(/[^\S\r\n]+/g, ' ')
+      .trim()
+    const lines = []
+    for (const paragraph of normalized.split(/\r?\n/)) {
+      if (!paragraph.trim()) {
+        lines.push('')
+        continue
+      }
+      let line = ''
+      for (const word of paragraph.trim().split(' ')) {
+        const candidate = line ? `${line} ${word}` : word
+        if (pdf.getTextWidth(candidate) <= contentWidth) {
+          line = candidate
+          continue
+        }
+        if (line) lines.push(line)
+        if (pdf.getTextWidth(word) <= contentWidth) {
+          line = word
+          continue
+        }
+        let chunk = ''
+        for (const character of word) {
+          if (chunk && pdf.getTextWidth(chunk + character) > contentWidth) {
+            lines.push(chunk)
+            chunk = character
+          } else {
+            chunk += character
+          }
+        }
+        line = chunk
+      }
+      if (line) lines.push(line)
+    }
+    return lines.length ? lines : ['']
+  }
+
   function addText(text, { size = 10, bold = false, color = [55, 65, 81], gap = 8 } = {}) {
     pdf.setFont('helvetica', bold ? 'bold' : 'normal')
     pdf.setFontSize(size)
     pdf.setTextColor(...color)
-    const lines = pdf.splitTextToSize(String(text || ''), contentWidth)
     const lineHeight = size * 1.45
-    ensureSpace((lines.length * lineHeight) + gap)
-    pdf.text(lines, margin, y)
-    y += (lines.length * lineHeight) + gap
+    for (const line of wrapText(text)) {
+      ensureSpace(lineHeight)
+      if (line) pdf.text(line, margin, y, { maxWidth: contentWidth })
+      y += lineHeight
+    }
+    y += gap
   }
 
   pdf.setFillColor(30, 77, 140)
