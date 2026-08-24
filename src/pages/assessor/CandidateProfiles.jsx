@@ -168,8 +168,16 @@ export default function CandidateProfiles() {
           <div className="p-5 border-b border-[#e8edf4]">
             <h2 className="font-semibold text-[#172033]">Participants</h2>
             <p className="text-xs text-gray-400 mt-1">Select a candidate to view submitted evidence.</p>
-            <label className="mt-4 block">
-              <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-wide text-slate-500">Filter by cohort</span>
+            <div className="mt-4 rounded-xl border-2 border-[#8fb5e5] bg-[#edf5ff] p-3.5 shadow-sm">
+              <div className="mb-2.5 flex items-center justify-between gap-2">
+                <div>
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-[#174f94]">Cohort filter</p>
+                  <p className="mt-0.5 text-[10px] text-[#52739c]">Choose which participant group to review</p>
+                </div>
+                <span className="rounded-full bg-[#1e5fba] px-2 py-1 text-[9px] font-bold uppercase text-white">Active</span>
+              </div>
+              <label className="block">
+              <span className="sr-only">Filter by cohort</span>
               <select
                 value={selectedCohortId}
                 onChange={(event) => {
@@ -179,15 +187,16 @@ export default function CandidateProfiles() {
                   setSelectedId(firstProfile?.id || null)
                   setSearchParams(firstProfile ? { participantId: firstProfile.id, ...(cohortId !== 'all' ? { cohortId } : {}) } : (cohortId !== 'all' ? { cohortId } : {}), { replace: true })
                 }}
-                className="w-full rounded-lg border border-[#dce3ed] bg-white px-3 py-2 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                className="w-full rounded-lg border-2 border-[#6e9bd2] bg-white px-3 py-2.5 text-sm font-bold text-[#173f72] shadow-sm focus:outline-none focus:ring-2 focus:ring-[#aac8ec]"
               >
                 <option value="all">All cohorts</option>
                 {cohorts.map((cohort) => <option key={cohort.id} value={cohort.id}>{cohort.name}</option>)}
               </select>
-            </label>
-            <button type="button" onClick={downloadCohortRoleInterviews} disabled={selectedCohortId === 'all' || bulkDownload.loading} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[#1e4d8c] bg-white px-3 py-2.5 text-xs font-semibold text-[#1e4d8c] hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"><Download size={14} />{bulkDownload.loading ? 'Preparing cohort ZIP…' : 'Download cohort Role Interviews'}</button>
-            {selectedCohortId === 'all' && <p className="mt-1.5 text-[10px] text-slate-400">Select one cohort to enable the ZIP download.</p>}
-            {bulkDownload.error && <p className="mt-2 rounded-lg border border-red-200 bg-red-50 p-2 text-[10px] leading-tight text-red-700">{bulkDownload.error}</p>}
+              </label>
+              <button type="button" onClick={downloadCohortRoleInterviews} disabled={selectedCohortId === 'all' || bulkDownload.loading} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[#1e4d8c] bg-white px-3 py-2.5 text-xs font-semibold text-[#1e4d8c] hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"><Download size={14} />{bulkDownload.loading ? 'Preparing cohort ZIP…' : 'Download cohort Role Interviews'}</button>
+              {selectedCohortId === 'all' && <p className="mt-1.5 text-[10px] text-[#52739c]">Select one cohort to enable the ZIP download.</p>}
+              {bulkDownload.error && <p className="mt-2 rounded-lg border border-red-200 bg-red-50 p-2 text-[10px] leading-tight text-red-700">{bulkDownload.error}</p>}
+            </div>
             <div className="relative mt-4">
               <Search size={15} className="absolute left-3 top-2.5 text-gray-400" />
               <input
