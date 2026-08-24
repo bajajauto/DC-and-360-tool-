@@ -542,7 +542,51 @@ function CohortFormModal({ mode, initialCohort, onClose, onSubmit }) {
   )
 }
 
-function ParticipantsTab({ rows, generated, onManage }) {
+function NicknameEditor({ cohortId, participant, onUpdated }) {
+  const [value, setValue] = useState(participant.nickname || '')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const unchanged = value === (participant.nickname || '')
+
+  async function save() {
+    if (!/^[A-Z0-9]+$/.test(value)) {
+      setError('Use capital letters and numbers only')
+      return
+    }
+    setSaving(true)
+    setError('')
+    try {
+      const { data } = await api.updateParticipantNickname(cohortId, participant.id, value)
+      setValue(data.nickname)
+      onUpdated(participant.id, { nickname: data.nickname })
+    } catch (saveError) {
+      setError(saveError.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="min-w-32">
+      <div className="flex gap-1.5">
+        <input
+          value={value}
+          onChange={(event) => { setValue(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '')); setError('') }}
+          onKeyDown={(event) => { if (event.key === 'Enter' && value && !unchanged) save() }}
+          placeholder="e.g. P1"
+          aria-label={`Nickname for ${participant.name}`}
+          className="w-20 rounded-md border border-[#c2ccda] bg-white px-2 py-1.5 text-xs font-semibold uppercase focus:outline-none focus:ring-2 focus:ring-[#d6e4f7]"
+        />
+        <button type="button" onClick={save} disabled={!value || unchanged || saving} className="rounded-md border border-[#1e5fba] px-2 py-1.5 text-[10px] font-semibold text-[#1e5fba] disabled:opacity-40">
+          {saving ? 'Saving…' : 'Save'}
+        </button>
+      </div>
+      {error && <p className="mt-1 max-w-40 text-[10px] leading-tight text-red-600">{error}</p>}
+    </div>
+  )
+}
+
+function ParticipantsTab({ rows, generated, onManage, cohortId, onUpdated }) {
   return (
     <Card>
       <CardHeader
@@ -554,7 +598,7 @@ function ParticipantsTab({ rows, generated, onManage }) {
         <table className="w-full border-collapse bg-white text-left text-[13px]">
           <thead className="bg-[#ebf2fa]">
             <tr>
-              {['Ticket ID', 'Name', 'BU', 'Nominations', 'Self Reflection', 'Photo', '360 Responses', '360° Feedback Report Status', 'DC Report Status', ''].map((label) => (
+              {['Nickname', 'Ticket ID', 'Name', 'BU', 'Nominations', 'Self Reflection', 'Photo', '360 Responses', '360° Feedback Report Status', 'DC Report Status', ''].map((label) => (
                 <th key={label} className="border-b border-[#d5dce5] px-3 py-2.5 text-[11px] font-bold uppercase tracking-wide text-slate-600">{label}</th>
               ))}
             </tr>
@@ -575,6 +619,7 @@ function ParticipantsTab({ rows, generated, onManage }) {
               const dcReportLabel = dcReport?.status === 'released' ? 'Released' : dcReportGenerated ? 'Generated' : 'Not generated'
               return (
                 <tr key={participant.id} className="hover:bg-[#f4f7fb]">
+                  <td className="border-b border-[#d5dce5] px-3 py-3"><NicknameEditor cohortId={cohortId} participant={participant} onUpdated={onUpdated} /></td>
                   <td className="border-b border-[#d5dce5] px-3 py-3 text-slate-500">{participant.employeeId}</td>
                   <td className="border-b border-[#d5dce5] px-3 py-3">
                     <Link to={`/td/participants/${participant.id}`} className="font-semibold text-[#0f172a] hover:text-[#1e5fba]">{participant.name}</Link>
@@ -733,7 +778,7 @@ export function EmployeeDirectoryPage() {
   )
 }
 
-function ManageParticipantsTab({ cohort, rows, onAdded, onDeleted, onUpdated }) {
+function ManageParticipantsTab({ cohort, rows, onAdded, onDeleted }) {
   const emptyRow = () => ({ name: '', employeeId: '', email: '', designation: '', businessUnit: '' })
   const [forms, setForms] = useState([])
   const [fileName, setFileName] = useState('')
@@ -744,8 +789,6 @@ function ManageParticipantsTab({ cohort, rows, onAdded, onDeleted, onUpdated }) 
   const [archived, setArchived] = useState([])
   const [showArchive, setShowArchive] = useState(false)
   const [restoringId, setRestoringId] = useState(null)
-  const [nicknameDrafts, setNicknameDrafts] = useState({})
-  const [savingNicknameId, setSavingNicknameId] = useState(null)
   const complete = forms.length > 0 && validation?.errorRowCount === 0
 
   useEffect(() => {
@@ -852,26 +895,6 @@ function ManageParticipantsTab({ cohort, rows, onAdded, onDeleted, onUpdated }) 
     }
   }
 
-  async function saveNickname(participant) {
-    const nickname = (nicknameDrafts[participant.id] ?? participant.nickname ?? '').trim()
-    if (!/^[A-Z0-9]+$/.test(nickname)) {
-      setMessage('Nicknames may contain only capital letters and numbers.')
-      return
-    }
-    setSavingNicknameId(participant.id)
-    setMessage('')
-    try {
-      const { data } = await api.updateParticipantNickname(cohort.id, participant.id, nickname)
-      onUpdated(participant.id, { nickname: data.nickname })
-      setNicknameDrafts((current) => ({ ...current, [participant.id]: data.nickname }))
-      setMessage(`Nickname ${data.nickname} saved for ${participant.name}.`)
-    } catch (error) {
-      setMessage(error.message)
-    } finally {
-      setSavingNicknameId(null)
-    }
-  }
-
   const participantImportPanel = (
     <div className="space-y-5">
       {message && <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">{message}</div>}
@@ -889,7 +912,7 @@ function ManageParticipantsTab({ cohort, rows, onAdded, onDeleted, onUpdated }) 
         {validation?.errors.length > 0 && <div className="mt-4 max-h-52 overflow-auto rounded-xl border border-red-200"><table className="w-full text-left text-xs"><thead className="sticky top-0 bg-red-50 text-red-800"><tr><th className="px-3 py-2">Row</th><th className="px-3 py-2">Ticket ID</th><th className="px-3 py-2">Column</th><th className="px-3 py-2">Issue</th></tr></thead><tbody>{validation.errors.map((error, index) => <tr key={`${error.row}-${error.field}-${index}`} className="border-t border-red-100"><td className="px-3 py-2">{error.row}</td><td className="px-3 py-2">{error.ticket}</td><td className="px-3 py-2">{error.field}</td><td className="px-3 py-2 text-red-700">{error.issue}</td></tr>)}</tbody></table></div>}
         <div className="mt-4 flex justify-end"><button onClick={addParticipants} disabled={!forms.length || validation?.errorRowCount > 0 || saving} className="inline-flex items-center gap-2 rounded-lg bg-[#1e5fba] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40"><Plus size={15}/>{saving ? 'Adding…' : `Add ${forms.length || ''} Participant${forms.length === 1 ? '' : 's'}`}</button></div>
       </Card>
-      <Card><CardHeader title={`All Participants (${rows.length})`} subtitle="Set unique assessor nicknames using capital letters and numbers only. Archive retains records; Delete permanently removes them."/><div className="overflow-x-auto rounded-xl border border-[#d5dce5]"><table className="w-full min-w-[1050px] text-left text-sm"><thead className="bg-[#ebf2fa]"><tr>{['Nickname', 'Ticket ID', 'Participant', 'Email', 'Business Unit', 'Actions'].map((label) => <th key={label} className="border-b px-3 py-2.5 text-[11px] font-bold uppercase text-slate-600">{label}</th>)}</tr></thead><tbody>{rows.length === 0 ? <tr><td colSpan={6} className="px-4 py-8 text-center text-sm text-slate-500">No participants have been added to this cohort yet.</td></tr> : rows.map((participant) => { const draft = nicknameDrafts[participant.id] ?? participant.nickname ?? ''; const unchanged = draft === (participant.nickname ?? ''); return <tr key={participant.id}><td className="border-b px-3 py-3"><div className="flex min-w-48 gap-2"><input value={draft} onChange={(event) => setNicknameDrafts((current) => ({ ...current, [participant.id]: event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '') }))} placeholder="e.g. P1" aria-label={`Nickname for ${participant.name}`} className="w-24 rounded-lg border border-[#c2ccda] px-2.5 py-2 text-xs font-semibold uppercase focus:outline-none focus:ring-2 focus:ring-[#d6e4f7]"/><button type="button" onClick={() => saveNickname(participant)} disabled={!draft || unchanged || savingNicknameId === participant.id} className="rounded-lg border border-[#1e5fba] px-3 py-2 text-xs font-semibold text-[#1e5fba] disabled:opacity-40">{savingNicknameId === participant.id ? 'Saving…' : 'Save'}</button></div></td><td className="border-b px-3 py-3 text-slate-500">{participant.employeeId}</td><td className="border-b px-3 py-3"><p className="font-semibold">{participant.name}</p><p className="text-xs text-slate-500">{participant.designation}</p></td><td className="border-b px-3 py-3 text-slate-600">{participant.email}</td><td className="border-b px-3 py-3 text-slate-600">{participant.bu}</td><td className="border-b px-3 py-3"><div className="flex justify-end gap-2"><button title="Remove from this cohort and staff views, but retain pre-work, 360 responses, reports, and respondent links for a future cohort." aria-label={`Archive ${participant.name}. Retains all records for future use.`} onClick={() => archiveParticipant(participant)} disabled={deletingId === participant.id} className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-amber-300 px-3 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-50 disabled:opacity-40"><Archive size={13}/>{deletingId === participant.id ? 'Working…' : 'Archive'}</button><button title="Permanently delete this participant, their submissions, nominations, feedback tasks, reports, and participant access. This cannot be undone." aria-label={`Permanently delete ${participant.name} and all cohort records.`} onClick={() => deleteParticipant(participant)} disabled={deletingId === participant.id} className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-40"><Trash2 size={13}/>{deletingId === participant.id ? 'Working…' : 'Delete Participant'}</button></div></td></tr> })}</tbody></table></div></Card>
+      <Card><CardHeader title={`All Participants (${rows.length})`} subtitle="Archive retains all records for reuse; Delete permanently removes the participant and their cohort work."/><div className="overflow-x-auto rounded-xl border border-[#d5dce5]"><table className="w-full min-w-[900px] text-left text-sm"><thead className="bg-[#ebf2fa]"><tr>{['Ticket ID', 'Participant', 'Email', 'Business Unit', 'Actions'].map((label) => <th key={label} className="border-b px-3 py-2.5 text-[11px] font-bold uppercase text-slate-600">{label}</th>)}</tr></thead><tbody>{rows.length === 0 ? <tr><td colSpan={5} className="px-4 py-8 text-center text-sm text-slate-500">No participants have been added to this cohort yet.</td></tr> : rows.map((participant) => <tr key={participant.id}><td className="border-b px-3 py-3 text-slate-500">{participant.employeeId}</td><td className="border-b px-3 py-3"><p className="font-semibold">{participant.name}</p><p className="text-xs text-slate-500">{participant.designation}</p></td><td className="border-b px-3 py-3 text-slate-600">{participant.email}</td><td className="border-b px-3 py-3 text-slate-600">{participant.bu}</td><td className="border-b px-3 py-3"><div className="flex justify-end gap-2"><button title="Remove from this cohort and staff views, but retain pre-work, 360 responses, reports, and respondent links for a future cohort." aria-label={`Archive ${participant.name}. Retains all records for future use.`} onClick={() => archiveParticipant(participant)} disabled={deletingId === participant.id} className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-amber-300 px-3 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-50 disabled:opacity-40"><Archive size={13}/>{deletingId === participant.id ? 'Working…' : 'Archive'}</button><button title="Permanently delete this participant, their submissions, nominations, feedback tasks, reports, and participant access. This cannot be undone." aria-label={`Permanently delete ${participant.name} and all cohort records.`} onClick={() => deleteParticipant(participant)} disabled={deletingId === participant.id} className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-40"><Trash2 size={13}/>{deletingId === participant.id ? 'Working…' : 'Delete Participant'}</button></div></td></tr>)}</tbody></table></div></Card>
     </div>
   )
 
@@ -1298,8 +1321,8 @@ export default function Cohorts({ view = 'dashboard' }) {
           </div>
 
           {loadingParticipants && <Card><p className="text-sm text-slate-500">Loading participants...</p></Card>}
-          {!loadingParticipants && activeTab === 'participants' && <ParticipantsTab rows={filteredRows} generated={generated} onManage={() => setActiveTab('manage')} />}
-          {activeTab === 'manage' && <ManageParticipantsTab cohort={cohort} rows={allInCohort} onAdded={(participant) => { setAllParticipants((current) => [...current, participant].sort((a, b) => a.name.localeCompare(b.name))); setCohorts((current) => current.map((item) => item.id === cohort.id ? { ...item, participantCount: (item.participantCount || 0) + 1 } : item)) }} onDeleted={(participantId) => { setAllParticipants((current) => current.filter((participant) => participant.id !== participantId)); setCohorts((current) => current.map((item) => item.id === cohort.id ? { ...item, participantCount: Math.max(0, (item.participantCount || 0) - 1) } : item)) }} onUpdated={(participantId, changes) => setAllParticipants((current) => current.map((participant) => participant.id === participantId ? { ...participant, ...changes } : participant))} />}
+          {!loadingParticipants && activeTab === 'participants' && <ParticipantsTab rows={filteredRows} generated={generated} onManage={() => setActiveTab('manage')} cohortId={cohort.id} onUpdated={(participantId, changes) => setAllParticipants((current) => current.map((participant) => participant.id === participantId ? { ...participant, ...changes } : participant))} />}
+          {activeTab === 'manage' && <ManageParticipantsTab cohort={cohort} rows={allInCohort} onAdded={(participant) => { setAllParticipants((current) => [...current, participant].sort((a, b) => a.name.localeCompare(b.name))); setCohorts((current) => current.map((item) => item.id === cohort.id ? { ...item, participantCount: (item.participantCount || 0) + 1 } : item)) }} onDeleted={(participantId) => { setAllParticipants((current) => current.filter((participant) => participant.id !== participantId)); setCohorts((current) => current.map((item) => item.id === cohort.id ? { ...item, participantCount: Math.max(0, (item.participantCount || 0) - 1) } : item)) }} />}
           {activeTab === 'threesixty' && <ThreeSixtyTab cohort={cohort} rows={allInCohort} />}
           {activeTab === 'assessors' && <AssessorTab rows={allInCohort} />}
           {activeTab === 'reports' && <ReportsTab rows={allInCohort} generated={generated} onGenerate={() => setGenerated(true)} onVisibilityChanged={(participantId, reportId, updatedReport) => setAllParticipants((current) => current.map((participant) => participant.id !== participantId ? participant : { ...participant, reportStatus: updatedReport.type === '360' ? updatedReport.status : participant.reportStatus, reports: (participant.reports || []).map((report) => report.id === reportId ? { ...report, status: updatedReport.status, releasedAt: updatedReport.releasedAt } : report) }))} />}
