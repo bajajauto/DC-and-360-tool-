@@ -49,16 +49,22 @@ const candidateInclude = {
 }
 
 assessorRouter.get('/candidates', asyncHandler(async (_req, res) => {
-  const participants = await prisma.participant.findMany({
-    where: { archivedAt: null, nickname: { not: null } },
-    include: candidateInclude,
-  })
+  const [participants, cohorts] = await Promise.all([
+    prisma.participant.findMany({
+      where: { archivedAt: null, nickname: { not: null } },
+      include: candidateInclude,
+    }),
+    prisma.cohort.findMany({
+      orderBy: [{ eventStart: 'desc' }, { name: 'asc' }],
+      select: { id: true, name: true },
+    }),
+  ])
   const candidates = participants.map(toCandidate).sort((left, right) => {
     if (!left.nickname) return right.nickname ? 1 : 0
     if (!right.nickname) return -1
     return left.nickname.localeCompare(right.nickname, undefined, { numeric: true, sensitivity: 'base' })
   })
-  res.json({ data: candidates })
+  res.json({ data: candidates, meta: { cohorts } })
 }))
 
 assessorRouter.get('/candidates/:participantId', asyncHandler(async (req, res) => {

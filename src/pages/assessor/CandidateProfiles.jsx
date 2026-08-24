@@ -97,6 +97,7 @@ function ParticipantDetails({ participant }) {
 export default function CandidateProfiles() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [profiles, setProfiles] = useState([])
+  const [availableCohorts, setAvailableCohorts] = useState([])
   const [selectedId, setSelectedId] = useState(() => searchParams.get('participantId'))
   const [selectedCohortId, setSelectedCohortId] = useState(() => searchParams.get('cohortId') || 'all')
   const [query, setQuery] = useState('')
@@ -109,14 +110,16 @@ export default function CandidateProfiles() {
       .then((candidateResult) => {
         const data = candidateResult.data || []
         setProfiles(data)
+        setAvailableCohorts(candidateResult.meta?.cohorts || [])
         setSelectedId((current) => data.some((profile) => profile.id === current) ? current : data[0]?.id || null)
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false))
   }, [])
 
-  const cohorts = useMemo(() => [...new Map(profiles.map((profile) => [profile.cohortId, { id: profile.cohortId, name: profile.cohort }])).values()]
-    .sort((a, b) => a.name.localeCompare(b.name)), [profiles])
+  const cohorts = useMemo(() => availableCohorts.length
+    ? availableCohorts
+    : [...new Map(profiles.map((profile) => [profile.cohortId, { id: profile.cohortId, name: profile.cohort }])).values()].sort((a, b) => a.name.localeCompare(b.name)), [availableCohorts, profiles])
 
   const filteredProfiles = useMemo(() => {
     const needle = query.trim().toLowerCase()
@@ -132,6 +135,10 @@ export default function CandidateProfiles() {
   async function downloadCohortRoleInterviews() {
     if (selectedCohortId === 'all') return
     const cohortProfiles = profiles.filter((profile) => profile.cohortId === selectedCohortId)
+    if (!cohortProfiles.length) {
+      setBulkDownload({ loading: false, error: 'This cohort has no participants with nicknames available to assessors.' })
+      return
+    }
     const missingNicknames = cohortProfiles.filter((profile) => !profile.nickname)
     if (missingNicknames.length) {
       setBulkDownload({ loading: false, error: `${missingNicknames.length} participant${missingNicknames.length === 1 ? ' is' : 's are'} missing a nickname. TD must assign all nicknames before the cohort ZIP can be created.` })
@@ -160,21 +167,22 @@ export default function CandidateProfiles() {
           <p className="text-xs text-gray-400 mb-1">Assessor / Candidate Profiles</p>
           <h1 className="text-xl font-bold text-[#172033]">Candidate evidence review</h1>
         </div>
+        <button type="button" onClick={downloadCohortRoleInterviews} disabled={selectedCohortId === 'all' || bulkDownload.loading} className="inline-flex items-center gap-2 rounded-lg bg-[#1e4d8c] px-4 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-[#173f72] disabled:cursor-not-allowed disabled:opacity-50"><Download size={15} />{bulkDownload.loading ? 'Preparing cohort ZIP…' : 'Download cohort Role Interviews'}</button>
       </header>
 
       <div className="p-8 max-w-[1500px] mx-auto grid xl:grid-cols-[340px_1fr] gap-6">
         {error && <div className="xl:col-span-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+        {bulkDownload.error && <div className="xl:col-span-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{bulkDownload.error}</div>}
         <aside className="bg-white border border-[#e2e8f0] rounded-2xl overflow-hidden self-start">
           <div className="p-5 border-b border-[#e8edf4]">
             <h2 className="font-semibold text-[#172033]">Participants</h2>
             <p className="text-xs text-gray-400 mt-1">Select a candidate to view submitted evidence.</p>
-            <div className="mt-4 rounded-xl border-2 border-[#8fb5e5] bg-[#edf5ff] p-3.5 shadow-sm">
-              <div className="mb-2.5 flex items-center justify-between gap-2">
+            <div className="mt-4">
+              <div className="mb-2">
                 <div>
                   <p className="text-[11px] font-bold uppercase tracking-wider text-[#174f94]">Cohort filter</p>
                   <p className="mt-0.5 text-[10px] text-[#52739c]">Choose which participant group to review</p>
                 </div>
-                <span className="rounded-full bg-[#1e5fba] px-2 py-1 text-[9px] font-bold uppercase text-white">Active</span>
               </div>
               <label className="block">
               <span className="sr-only">Filter by cohort</span>
@@ -187,15 +195,13 @@ export default function CandidateProfiles() {
                   setSelectedId(firstProfile?.id || null)
                   setSearchParams(firstProfile ? { participantId: firstProfile.id, ...(cohortId !== 'all' ? { cohortId } : {}) } : (cohortId !== 'all' ? { cohortId } : {}), { replace: true })
                 }}
-                className="w-full rounded-lg border-2 border-[#6e9bd2] bg-white px-3 py-2.5 text-sm font-bold text-[#173f72] shadow-sm focus:outline-none focus:ring-2 focus:ring-[#aac8ec]"
+                className="w-full rounded-lg border-2 border-[#6e9bd2] bg-[#e7f1ff] px-3 py-2.5 text-sm font-bold text-[#173f72] shadow-sm focus:outline-none focus:ring-2 focus:ring-[#aac8ec]"
               >
                 <option value="all">All cohorts</option>
                 {cohorts.map((cohort) => <option key={cohort.id} value={cohort.id}>{cohort.name}</option>)}
               </select>
               </label>
-              <button type="button" onClick={downloadCohortRoleInterviews} disabled={selectedCohortId === 'all' || bulkDownload.loading} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[#1e4d8c] bg-white px-3 py-2.5 text-xs font-semibold text-[#1e4d8c] hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"><Download size={14} />{bulkDownload.loading ? 'Preparing cohort ZIP…' : 'Download cohort Role Interviews'}</button>
               {selectedCohortId === 'all' && <p className="mt-1.5 text-[10px] text-[#52739c]">Select one cohort to enable the ZIP download.</p>}
-              {bulkDownload.error && <p className="mt-2 rounded-lg border border-red-200 bg-red-50 p-2 text-[10px] leading-tight text-red-700">{bulkDownload.error}</p>}
             </div>
             <div className="relative mt-4">
               <Search size={15} className="absolute left-3 top-2.5 text-gray-400" />
