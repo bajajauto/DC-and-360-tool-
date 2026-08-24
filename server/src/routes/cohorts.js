@@ -7,6 +7,7 @@ import { deriveTaskStatus, taskCompletionPercent, toParticipantSummary } from '.
 import { generatePassword, hashPassword } from '../utils/passwords.js'
 import { createQueuedEmail, sendEmail } from '../notifications/service.js'
 import { createBuhrMagicLink, createParticipantMagicLink } from '../utils/magicLinks.js'
+import { hasDeadlinePassed } from '../utils/deadlines.js'
 
 export const cohortsRouter = Router()
 
@@ -466,6 +467,7 @@ cohortsRouter.get('/:cohortId/participants', asyncHandler(async (req, res) => {
   res.json({
     data: participants.map((participant) => {
       const summary = toParticipantSummary(participant)
+      const cutoffPassed = hasDeadlinePassed(cohort.threeSixtyCutoff)
       const nomineesSubmitted = participant.nominees.length > 0 && participant.nominees.every((nominee) => nominee.status === 'SUBMITTED')
       const allResponsesComplete = summary.selfFeedback.status === 'submitted'
         && summary.totalResponses > 0
@@ -479,6 +481,9 @@ cohortsRouter.get('/:cohortId/participants', asyncHandler(async (req, res) => {
       })
       return {
         ...summary,
+        reportStatus: !['generated', 'released'].includes(summary.reportStatus) && cutoffPassed && participant.feedbackTasks.length > 0
+          ? 'ready'
+          : summary.reportStatus,
         nominationsSubmitted: nomineesSubmitted,
         reports: participant.reports.map((report) => ({
           id: report.id,
