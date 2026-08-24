@@ -121,6 +121,7 @@ model Cohort {
 
 model Participant {
   id                 String            @id @default(cuid())
+  nickname           String?           @unique
   userId             String            @unique
   cohortId           String?
   stage              ParticipantStage  @default(APPLICATION_PROFILE)

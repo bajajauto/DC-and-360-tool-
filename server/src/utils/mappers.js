@@ -25,6 +25,7 @@ export function toParticipantSummary(participant) {
 
   return {
     id: participant.id,
+    nickname: participant.nickname,
     name: participant.user.name,
     initials: participant.user.name.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase(),
     email: participant.user.email,

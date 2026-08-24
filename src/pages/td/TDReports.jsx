@@ -111,7 +111,7 @@ export default function TDReports() {
     setDownloadingArchive(true)
 
     try {
-      await downloadReportArchive(selectedCohortId, selectedReportType)
+      await downloadReportArchive(generatedReports)
     } catch (err) {
       setDownloadError(err.message || 'Unable to download the report ZIP file.')
     } finally {

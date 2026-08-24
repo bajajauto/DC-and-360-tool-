@@ -28,7 +28,19 @@ export async function get360ReportPreviewUrl(participantId) {
   return URL.createObjectURL(new Blob([html], { type: 'text/html' }))
 }
 
-export async function download360PreviewPdf(iframe, participantName = 'participant') {
+export async function getDcReportPreviewUrl(participantId) {
+  const token = getToken()
+  const response = await fetch(`${API_BASE}/api/reports/${participantId}/dc/preview`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  })
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}))
+    throw new Error(body?.error?.message || 'Unable to load the DC report preview.')
+  }
+  return URL.createObjectURL(new Blob([await response.text()], { type: 'text/html' }))
+}
+
+export async function download360PreviewPdf(iframe, participantName = 'participant', save = true) {
   const previewDocument = iframe?.contentDocument
   if (!previewDocument) throw new Error('The report preview is not ready yet.')
 
@@ -62,7 +74,36 @@ export async function download360PreviewPdf(iframe, participantName = 'participa
     pdf.addImage(pageImage, 'PNG', 0, 0, 10.6875, 7.9583, undefined, 'FAST')
   }
 
-  pdf.save(`${participantName.replace(/\s+/g, '-')}-360-report.pdf`)
+  const fileName = `${participantName.replace(/\s+/g, '-')}-360-report.pdf`
+  if (save) pdf.save(fileName)
+  return { data: pdf.output('arraybuffer'), fileName }
+}
+
+export async function downloadDcPreviewPdf(iframe, participantName = 'participant', save = true) {
+  const previewDocument = iframe?.contentDocument
+  if (!previewDocument) throw new Error('The DC report preview is not ready yet.')
+  await previewDocument.fonts?.ready
+  await Promise.all([...previewDocument.images].map((img) => img.complete ? Promise.resolve() : new Promise((resolve) => {
+    img.addEventListener('load', resolve, { once: true })
+    img.addEventListener('error', resolve, { once: true })
+  })))
+  const pages = [...previewDocument.querySelectorAll('.page')]
+  if (!pages.length) throw new Error('The DC report preview contains no printable pages.')
+  const [{ getFontEmbedCSS, toPng }, { jsPDF }] = await Promise.all([import('html-to-image'), import('jspdf')])
+  const first = pages[0]
+  const width = first.offsetWidth || 1123
+  const height = first.offsetHeight || 794
+  const landscape = width >= height
+  const pdf = new jsPDF({ orientation: landscape ? 'landscape' : 'portrait', unit: 'px', format: [width, height], compress: true })
+  const fontEmbedCSS = await getFontEmbedCSS(first)
+  for (let index = 0; index < pages.length; index += 1) {
+    const image = await toPng(pages[index], { pixelRatio: 2, cacheBust: true, fontEmbedCSS, style: { margin: '0', boxShadow: 'none' } })
+    if (index > 0) pdf.addPage([width, height], landscape ? 'landscape' : 'portrait')
+    pdf.addImage(image, 'PNG', 0, 0, width, height, undefined, 'FAST')
+  }
+  const fileName = `${participantName.replace(/\s+/g, '-')}-dc-report.pdf`
+  if (save) pdf.save(fileName)
+  return { data: pdf.output('arraybuffer'), fileName }
 }
 
 export async function download360Pdf(participantId, participantName = 'participant') {
@@ -200,29 +241,58 @@ export async function downloadCohort360Master() {
   window.URL.revokeObjectURL(url)
 }
 
-export async function downloadReportArchive(cohortId = 'all', reportType = 'all') {
-  const token = getToken()
-  const query = new URLSearchParams({ cohortId, reportType })
-  let response
+function crc32(bytes) {
+  let crc = 0xffffffff
+  for (const byte of bytes) {
+    crc ^= byte
+    for (let bit = 0; bit < 8; bit += 1) crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0)
+  }
+  return (crc ^ 0xffffffff) >>> 0
+}
 
+function createStoredZip(entries) {
+  const encoder = new TextEncoder(), local = [], central = []
+  let offset = 0
+  for (const entry of entries) {
+    const name = encoder.encode(entry.name), data = new Uint8Array(entry.data), checksum = crc32(data)
+    const header = new Uint8Array(30 + name.length), view = new DataView(header.buffer)
+    view.setUint32(0, 0x04034b50, true); view.setUint16(4, 20, true); view.setUint16(6, 0x0800, true)
+    view.setUint32(14, checksum, true); view.setUint32(18, data.length, true); view.setUint32(22, data.length, true); view.setUint16(26, name.length, true); header.set(name, 30)
+    local.push(header, data)
+    const directory = new Uint8Array(46 + name.length), directoryView = new DataView(directory.buffer)
+    directoryView.setUint32(0, 0x02014b50, true); directoryView.setUint16(4, 20, true); directoryView.setUint16(6, 20, true); directoryView.setUint16(8, 0x0800, true)
+    directoryView.setUint32(16, checksum, true); directoryView.setUint32(20, data.length, true); directoryView.setUint32(24, data.length, true); directoryView.setUint16(28, name.length, true); directoryView.setUint32(42, offset, true); directory.set(name, 46)
+    central.push(directory); offset += header.length + data.length
+  }
+  const centralSize = central.reduce((sum, value) => sum + value.length, 0), end = new Uint8Array(22), endView = new DataView(end.buffer)
+  endView.setUint32(0, 0x06054b50, true); endView.setUint16(8, entries.length, true); endView.setUint16(10, entries.length, true); endView.setUint32(12, centralSize, true); endView.setUint32(16, offset, true)
+  return new Blob([...local, ...central, end], { type: 'application/zip' })
+}
+
+async function renderReportForArchive(report) {
+  const previewUrl = report.reportType === 'dc' ? await getDcReportPreviewUrl(report.id) : await get360ReportPreviewUrl(report.id)
+  const iframe = document.createElement('iframe')
+  iframe.src = previewUrl
+  iframe.style.cssText = `position:fixed;left:-10000px;width:${report.reportType === 'dc' ? 1123 : 1080}px;height:${report.reportType === 'dc' ? 794 : 800}px;border:0`
+  document.body.appendChild(iframe)
   try {
-    response = await fetch(`${API_BASE}/api/reports/bulk-download?${query}`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    })
-  } catch {
-    throw new Error('Backend API is not responding. Please start the backend server and try again.')
-  }
+    await new Promise((resolve, reject) => { iframe.onload = resolve; iframe.onerror = () => reject(new Error(`Unable to render ${report.name}'s report.`)) })
+    const result = report.reportType === 'dc' ? await downloadDcPreviewPdf(iframe, report.name, false) : await download360PreviewPdf(iframe, report.name, false)
+    const cohort = String(report.cohortName || 'Unassigned cohort').replace(/[<>:"/\\|?*]/g, '-')
+    const employee = String(report.employeeId || report.id).replace(/[<>:"/\\|?*]/g, '-')
+    return { data: result.data, name: `${cohort}/${employee} - ${result.fileName}` }
+  } finally { iframe.remove(); URL.revokeObjectURL(previewUrl) }
+}
 
-  if (!response.ok) {
-    const body = await response.json().catch(() => ({}))
-    throw new Error(body?.error?.message || 'Unable to download the report ZIP file.')
-  }
-
-  const blob = await response.blob()
+export async function downloadReportArchive(reports = []) {
+  if (!reports.length) throw new Error('No reports are available for this download.')
+  const entries = []
+  for (const report of reports) entries.push(await renderReportForArchive(report))
+  const blob = createStoredZip(entries)
   const url = window.URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
-  link.download = getFileName(response, 'reports.zip')
+  link.download = 'reports-pdf.zip'
   document.body.appendChild(link)
   link.click()
   link.remove()

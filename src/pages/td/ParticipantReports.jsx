@@ -2,7 +2,7 @@ import { ArrowLeft, Download, Eye, FileText } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { api } from '../../lib/api'
-import { download360Pdf } from '../../lib/reportDownload'
+import { download360Pdf, downloadDcPreviewPdf, getDcReportPreviewUrl } from '../../lib/reportDownload'
 
 const reportDefinitions = [
   { type: '360', title: '360° Feedback Report', description: 'Feedback collected from the participant’s nominated respondents.', tone: 'border-blue-200 bg-blue-50 text-blue-700' },
@@ -24,6 +24,18 @@ export default function ParticipantReports() {
 
   const participant = reports[0]
   const reportsByType = useMemo(() => new Map(reports.map((report) => [report.reportType, report])), [reports])
+
+  async function downloadDc() {
+    const url = await getDcReportPreviewUrl(participant.id)
+    const iframe = document.createElement('iframe')
+    iframe.src = url
+    iframe.style.cssText = 'position:fixed;left:-10000px;width:1123px;height:794px;border:0'
+    document.body.appendChild(iframe)
+    try {
+      await new Promise((resolve, reject) => { iframe.onload = resolve; iframe.onerror = reject })
+      await downloadDcPreviewPdf(iframe, participant.name)
+    } finally { iframe.remove(); URL.revokeObjectURL(url) }
+  }
 
   return (
     <div className="p-8">
@@ -53,6 +65,10 @@ export default function ParticipantReports() {
                   {definition.type === '360' && report && <>
                     <Link to={`/td/reports/${participant.id}`} className="inline-flex items-center gap-2 rounded-lg bg-[#1e4d8c] px-4 py-2 text-xs font-semibold text-white hover:bg-[#173f72]"><Eye size={14} />Preview</Link>
                     <button onClick={() => download360Pdf(participant.id, participant.name)} className="inline-flex items-center gap-2 rounded-lg border border-[#dce3ed] px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"><Download size={14} />Download PDF</button>
+                  </>}
+                  {definition.type === 'dc' && report && <>
+                    <Link to={`/td/reports/${participant.id}/dc`} className="inline-flex items-center gap-2 rounded-lg bg-[#1e4d8c] px-4 py-2 text-xs font-semibold text-white hover:bg-[#173f72]"><Eye size={14} />Preview</Link>
+                    <button onClick={downloadDc} className="inline-flex items-center gap-2 rounded-lg border border-[#dce3ed] px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"><Download size={14} />Download PDF</button>
                   </>}
                   {!report && <span className="text-xs font-medium text-amber-700">Awaiting report generation</span>}
                 </div>

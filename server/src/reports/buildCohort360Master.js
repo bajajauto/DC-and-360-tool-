@@ -46,11 +46,72 @@ function respondentCodes(tasks) {
   return codes
 }
 
-function inclusivePercentile(value, values) {
+export function inclusivePercentile(value, values) {
   if (values.length === 1) return 50
   const lowerCount = values.filter((item) => item < value).length
   const tiedCount = values.filter((item) => item === value).length
   return ((lowerCount + (tiedCount - 1) / 2) / (values.length - 1)) * 100
+}
+
+export async function build360PercentileWorkbenchRows(db) {
+  const cohorts = await db.cohort.findMany({
+    include: {
+      participants: {
+        where: { archivedAt: null },
+        orderBy: { user: { name: 'asc' } },
+        include: {
+          user: true,
+          feedbackTasks: {
+            where: { status: 'SUBMITTED' },
+            orderBy: { createdAt: 'asc' },
+            include: { responses: true },
+          },
+        },
+      },
+    },
+    orderBy: [{ eventStart: 'asc' }, { createdAt: 'asc' }],
+  })
+
+  const scores = []
+  for (const cohort of cohorts) {
+    for (const participant of cohort.participants) {
+      const buckets = new Map(COMPETENCIES.map((item) => [item.id, []]))
+      for (const task of participant.feedbackTasks) {
+        if (relationshipGroup(task.relationship) === 'self') continue
+        const response = task.responses?.[0]
+        if (!response) continue
+        for (const section of getSurveySections(task.relationship)) {
+          for (const competency of section.competencies) {
+            for (const behaviour of competency.behaviours) {
+              const rating = response.ratings?.[behaviour.id]
+              if (typeof rating === 'number') buckets.get(competency.id)?.push(rating)
+            }
+          }
+        }
+      }
+      for (const competency of COMPETENCIES) {
+        const ratings = buckets.get(competency.id)
+        scores.push({
+          cohort: cohort.name,
+          name: participant.user.name,
+          ticket: participant.user.employeeId || '',
+          competency: competency.code,
+          others: ratings.length ? ratings.reduce((sum, value) => sum + value, 0) / ratings.length : null,
+        })
+      }
+    }
+  }
+
+  const rows = []
+  for (const competency of COMPETENCIES) {
+    const competencyRows = scores.filter((row) => row.competency === competency.code)
+    const values = competencyRows.filter((row) => row.others != null).map((row) => row.others)
+    for (const row of competencyRows) {
+      const percentile = row.others == null ? null : inclusivePercentile(row.others, values)
+      rows.push({ ...row, percentile, band: percentile == null ? '' : percentile <= 25 ? 'Low' : percentile <= 75 ? 'Medium' : 'High' })
+    }
+  }
+  return { cohorts, rows }
 }
 
 function sheet(rows, widths) {
@@ -151,19 +212,16 @@ export async function buildCohort360MasterWorkbook(db) {
     }
   }
 
-  const percentileRows = []
-  for (const competency of COMPETENCIES) {
-    const competencyRows = scores.filter((row) => row.competency === competency.code)
-    const values = competencyRows.filter((row) => row.others != null).map((row) => row.others)
-    for (const row of competencyRows) {
-      if (row.others == null) {
-        percentileRows.push([row.cohort, row.name, row.ticket, competency.code, '', '', ''])
-        continue
-      }
-      const percentile = inclusivePercentile(row.others, values)
-      percentileRows.push([row.cohort, row.name, row.ticket, competency.code, row.others, percentile, percentile <= 25 ? 'Low' : percentile <= 75 ? 'Medium' : 'High'])
-    }
-  }
+  const { rows: workbenchData } = await build360PercentileWorkbenchRows(db)
+  const percentileRows = workbenchData.map((row) => [
+    row.cohort,
+    row.name,
+    row.ticket,
+    row.competency,
+    row.others ?? '',
+    row.percentile ?? '',
+    row.band,
+  ])
 
   const workbenchRows = [['Cohort', 'Participant Name', 'Ticket ID', 'Competency', 'Others Score (non-Self only)', 'Percentile (0-100)', 'Band', '', 'Band Rules', 'Definition'], ...percentileRows]
   const notes = [

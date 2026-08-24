@@ -64,6 +64,10 @@ function assertCohortDateOrder(cohort) {
 
 const addParticipantSchema = participantImportSchema
 
+const participantNicknameSchema = z.object({
+  nickname: z.string().trim().regex(/^[A-Z0-9]+$/, 'Nickname may contain only capital letters and numbers'),
+})
+
 const employeeDirectoryImportSchema = z.object({
   fileName: z.string().trim().min(1).max(255),
   entries: z.array(z.object({
@@ -601,6 +605,27 @@ cohortsRouter.post('/:cohortId/participants/:participantId/archive', asyncHandle
   })
 
   res.json({ data: { id: participant.id, archived: true } })
+}))
+
+cohortsRouter.patch('/:cohortId/participants/:participantId/nickname', asyncHandler(async (req, res) => {
+  const { nickname } = participantNicknameSchema.parse(req.body)
+  const participant = await prisma.participant.findFirst({
+    where: { id: req.params.participantId, cohortId: req.params.cohortId, archivedAt: null },
+    select: { id: true },
+  })
+  if (!participant) throw httpError(404, 'Participant not found in this cohort')
+
+  const duplicate = await prisma.participant.findUnique({ where: { nickname }, select: { id: true } })
+  if (duplicate && duplicate.id !== participant.id) throw httpError(409, 'This nickname is already assigned to another participant')
+
+  let updated
+  try {
+    updated = await prisma.participant.update({ where: { id: participant.id }, data: { nickname }, select: { id: true, nickname: true } })
+  } catch (error) {
+    if (error?.code === 'P2002') throw httpError(409, 'This nickname is already assigned to another participant')
+    throw error
+  }
+  res.json({ data: updated })
 }))
 
 cohortsRouter.delete('/:cohortId/participants/:participantId', asyncHandler(async (req, res) => {

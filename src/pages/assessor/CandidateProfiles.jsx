@@ -52,6 +52,7 @@ function PersonPlaceholder({ size = 'sm', src = null }) {
 
 function ParticipantDetails({ participant }) {
   const details = [
+    ['Nickname', participant.nickname],
     ['Ticket No', participant.employeeId],
     ['Designation', participant.designation],
     ['Current BU', participant.bu],
@@ -102,7 +103,7 @@ export default function CandidateProfiles() {
     const needle = query.trim().toLowerCase()
     return profiles.filter((profile) => {
       const inCohort = selectedCohortId === 'all' || profile.cohortId === selectedCohortId
-      const matchesSearch = !needle || `${profile.employeeId || ''} ${profile.designation || ''} ${profile.bu || ''}`.toLowerCase().includes(needle)
+      const matchesSearch = !needle || `${profile.nickname || ''} ${profile.employeeId || ''} ${profile.designation || ''} ${profile.bu || ''}`.toLowerCase().includes(needle)
       return inCohort && matchesSearch
     })
   }, [profiles, query, selectedCohortId])
@@ -146,7 +147,7 @@ export default function CandidateProfiles() {
               <input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search by Ticket ID"
+                placeholder="Search by nickname or Ticket ID"
                 className="w-full border border-[#dce3ed] rounded-lg py-2 pl-9 pr-3 text-xs focus:outline-none focus:ring-2 focus:ring-blue-100"
               />
             </div>
@@ -169,8 +170,8 @@ export default function CandidateProfiles() {
                   <div className="flex items-center gap-3">
                     <PersonPlaceholder src={profile.photograph.url} />
                     <div className="min-w-0 flex-1">
-                      <p className={`text-sm font-semibold truncate ${active ? 'text-[#1e4d8c]' : 'text-[#172033]'}`}>Ticket ID: {profile.employeeId}</p>
-                      <p className="text-[11px] text-gray-400 truncate">{profile.designation}</p>
+                      <p className={`text-sm font-semibold truncate ${active ? 'text-[#1e4d8c]' : 'text-[#172033]'}`}>{profile.nickname || 'Nickname not set'}</p>
+                      <p className="text-[11px] text-gray-400 truncate">Ticket ID: {profile.employeeId}</p>
                     </div>
                   </div>
                   <div className="mt-3 flex items-center justify-between">
@@ -191,7 +192,8 @@ export default function CandidateProfiles() {
                 <div className="flex-1 min-w-0">
                   <div className="flex flex-wrap items-start justify-between gap-4">
                     <div>
-                      <h2 className="text-2xl font-bold text-[#172033]">Ticket ID: {selected.employeeId}</h2>
+                      <h2 className="text-2xl font-bold text-[#172033]">{selected.nickname || 'Nickname not set'}</h2>
+                      <p className="mt-1 text-xs font-semibold text-slate-500">Ticket ID: {selected.employeeId}</p>
                       <p className="text-sm mt-1.5">
                         <span className="font-medium text-violet-700">{selected.designation}</span>
                         <span className="mx-2 text-gray-300">·</span>

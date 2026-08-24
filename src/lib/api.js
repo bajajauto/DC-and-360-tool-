@@ -91,6 +91,9 @@ export const api = {
   deleteCohortParticipant: (cohortId, participantId) =>
     apiFetch(`/api/cohorts/${cohortId}/participants/${participantId}`, { method: 'DELETE' }),
 
+  updateParticipantNickname: (cohortId, participantId, nickname) =>
+    apiFetch(`/api/cohorts/${cohortId}/participants/${participantId}/nickname`, { method: 'PATCH', body: JSON.stringify({ nickname }) }),
+
   archiveCohortParticipant: (cohortId, participantId) =>
     apiFetch(`/api/cohorts/${cohortId}/participants/${participantId}/archive`, { method: 'POST' }),
 
@@ -168,6 +171,9 @@ export const api = {
 
   generate360Report: (participantId) =>
     apiFetch(`/api/reports/${participantId}/360/generate`, { method: 'POST' }),
+
+  generateDcReport: (participantId) =>
+    apiFetch(`/api/reports/${participantId}/dc/generate`, { method: 'POST' }),
 
   getReportRepository: () => apiFetch('/api/reports/repository'),
 

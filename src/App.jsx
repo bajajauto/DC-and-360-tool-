@@ -25,6 +25,7 @@ import TDLayout from './layouts/TDLayout'
 import Cohorts, { EmployeeDirectoryPage } from './pages/td/Cohorts'
 import ParticipantDetail from './pages/td/ParticipantDetail'
 import ReportPreview from './pages/td/ReportPreview'
+import DcReportPreview from './pages/td/DcReportPreview'
 import TDReports from './pages/td/TDReports'
 import ParticipantReports from './pages/td/ParticipantReports'
 import Placeholder from './pages/td/Placeholder'
@@ -91,6 +92,7 @@ export default function App() {
           <Route path="participants/:participantId" element={<ParticipantDetail />} />
           <Route path="reports" element={<TDReports />} />
           <Route path="reports/participant/:participantId" element={<ParticipantReports />} />
+          <Route path="reports/:participantId/dc" element={<DcReportPreview />} />
           <Route path="reports/:participantId" element={<ReportPreview />} />
           <Route path="exports" element={<TrackersExports />} />
           <Route path="assessor-analysis" element={<AssessorAnalysis />} />

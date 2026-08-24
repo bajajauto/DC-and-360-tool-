@@ -5,6 +5,7 @@ import { prisma } from '../db.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
 import { httpError } from '../utils/httpError.js'
 import { generate360ReportForParticipant, get360ReportPreviewHtml, getOrGenerate360Report } from '../reports/generate360Report.js'
+import { generateDcReportForParticipant, getDcReportPreviewHtml } from '../reports/generateDcReport.js'
 import { build360ResponseDataWorkbook } from '../reports/build360ResponseData.js'
 import { buildCohort360MasterWorkbook } from '../reports/buildCohort360Master.js'
 import { queueEmail } from '../notifications/service.js'
@@ -41,6 +42,17 @@ async function assertReportDownloadAccess(req) {
   if (participant.userId !== req.auth.userId && !isAssessor) {
     throw httpError(403, 'You do not have access to this report')
   }
+  if (!participant.reports.length) throw httpError(403, 'This report has not been released by Talent Development')
+}
+
+async function assertDcReportAccess(req) {
+  if (req.auth.roles.includes('td')) return
+  const participant = await prisma.participant.findUnique({
+    where: { id: req.params.participantId },
+    select: { userId: true, reports: { where: { type: 'dc', status: 'RELEASED' }, take: 1, select: { id: true } } },
+  })
+  if (!participant) throw httpError(404, 'Participant not found')
+  if (participant.userId !== req.auth.userId && !req.auth.roles.includes('assessor')) throw httpError(403, 'You do not have access to this report')
   if (!participant.reports.length) throw httpError(403, 'This report has not been released by Talent Development')
 }
 
@@ -219,6 +231,24 @@ reportsRouter.get('/:participantId/360/response-data', asyncHandler(async (req, 
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
   res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`)
   res.send(buffer)
+}))
+
+reportsRouter.post('/:participantId/dc/generate', asyncHandler(async (req, res) => {
+  requireTd(req)
+  const generated = await generateDcReportForParticipant(prisma, req.params.participantId)
+  res.json({ data: {
+    id: generated.report.id,
+    type: generated.report.type,
+    status: generated.report.status.toLowerCase(),
+    generatedAt: generated.report.generatedAt?.toISOString() || null,
+    previewUrl: `/api/reports/${req.params.participantId}/dc/preview`,
+  } })
+}))
+
+reportsRouter.get('/:participantId/dc/preview', asyncHandler(async (req, res) => {
+  await assertDcReportAccess(req)
+  const html = await getDcReportPreviewHtml(prisma, req.params.participantId)
+  res.type('html').send(html)
 }))
 
 reportsRouter.put('/:participantId/:reportType/visibility', asyncHandler(async (req, res) => {

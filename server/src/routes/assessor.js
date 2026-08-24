@@ -16,6 +16,7 @@ function toCandidate(participant) {
   const latestReport = participant.reports[0] || null
   return {
     id: participant.id,
+    nickname: participant.nickname,
     employeeId: participant.user.employeeId,
     designation: participant.user.designation,
     bu: participant.user.businessUnit,
