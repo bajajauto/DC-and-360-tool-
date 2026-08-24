@@ -1,8 +1,9 @@
-import { ArrowRight, BriefcaseBusiness, Camera, FileText, MessageSquareText, Search, User } from 'lucide-react'
+import { ArrowRight, BriefcaseBusiness, Camera, Download, FileText, MessageSquareText, Search, User } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { api } from '../../lib/api'
 import { formatDateOfJoining } from '../../lib/dateFormatting'
+import { downloadRoleInterviewPdf } from './EvidenceDetail'
 
 function StatusPill({ children, tone = 'gray' }) {
   const tones = {
@@ -16,9 +17,21 @@ function StatusPill({ children, tone = 'gray' }) {
   return <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-semibold ${tones[tone]}`}>{children}</span>
 }
 
-function EvidenceCard({ icon: Icon, title, meta, to }) {
+function EvidenceCard({ icon: Icon, title, meta, to, onDownload }) {
+  const [downloadState, setDownloadState] = useState({ loading: false, error: '' })
+
+  async function download() {
+    setDownloadState({ loading: true, error: '' })
+    try {
+      await onDownload()
+      setDownloadState({ loading: false, error: '' })
+    } catch (error) {
+      setDownloadState({ loading: false, error: error.message || 'Unable to create the PDF.' })
+    }
+  }
+
   return (
-    <Link to={to} className="group bg-white border border-[#e2e8f0] rounded-xl p-5 min-h-32 flex flex-col justify-between hover:border-blue-200 hover:bg-blue-50/40 transition-colors">
+    <div className="group flex min-h-32 flex-col justify-between rounded-xl border border-[#e2e8f0] bg-white p-5 transition-colors hover:border-blue-200 hover:bg-blue-50/40">
       <div className="flex items-start gap-3">
         <span className="w-10 h-10 rounded-lg bg-[#edf4fb] text-[#1e4d8c] flex items-center justify-center shrink-0 group-hover:bg-white">
           <Icon size={18} />
@@ -28,11 +41,15 @@ function EvidenceCard({ icon: Icon, title, meta, to }) {
           <p className="text-[11px] text-gray-400 mt-0.5">{meta}</p>
         </div>
       </div>
-      <span className="mt-5 inline-flex items-center gap-2 text-xs font-semibold text-[#1e4d8c]">
-        Open
-        <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
-      </span>
-    </Link>
+      {downloadState.error && <p className="mt-3 text-[10px] leading-tight text-red-600">{downloadState.error}</p>}
+      <div className={`mt-5 flex items-center ${onDownload ? 'justify-between' : 'justify-end'}`}>
+        {onDownload && <button type="button" onClick={download} disabled={downloadState.loading} className="inline-flex items-center gap-1.5 rounded-lg border border-[#1e4d8c] px-3 py-2 text-xs font-semibold text-[#1e4d8c] hover:bg-white disabled:opacity-60"><Download size={14} />{downloadState.loading ? 'Preparing…' : 'Download PDF'}</button>}
+        <Link to={to} className="inline-flex items-center gap-2 text-xs font-semibold text-[#1e4d8c]">
+          Open
+          <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
+        </Link>
+      </div>
+    </div>
   )
 }
 
@@ -209,7 +226,7 @@ export default function CandidateProfiles() {
 
             <div className="grid lg:grid-cols-2 gap-5">
               <EvidenceCard icon={Camera} title="Participant Photograph" meta="Identity evidence" to={`/assessor/candidates/${selected.id}/photograph${selectedCohortId !== 'all' ? `?cohortId=${encodeURIComponent(selectedCohortId)}` : ''}`} />
-              <EvidenceCard icon={MessageSquareText} title="Role Interview" meta={selected.roleInterview.status} to={`/assessor/candidates/${selected.id}/role-interview${selectedCohortId !== 'all' ? `?cohortId=${encodeURIComponent(selectedCohortId)}` : ''}`} />
+              <EvidenceCard icon={MessageSquareText} title="Role Interview" meta={selected.roleInterview.status} to={`/assessor/candidates/${selected.id}/role-interview${selectedCohortId !== 'all' ? `?cohortId=${encodeURIComponent(selectedCohortId)}` : ''}`} onDownload={() => downloadRoleInterviewPdf(selected)} />
               <EvidenceCard icon={FileText} title="360° Feedback Report" meta={selected.report360.status} to={`/assessor/candidates/${selected.id}/360-report${selectedCohortId !== 'all' ? `?cohortId=${encodeURIComponent(selectedCohortId)}` : ''}`} />
               <EvidenceCard icon={BriefcaseBusiness} title="Self Reflection" meta={selected.preWork.status} to={`/assessor/candidates/${selected.id}/pre-work${selectedCohortId !== 'all' ? `?cohortId=${encodeURIComponent(selectedCohortId)}` : ''}`} />
             </div>

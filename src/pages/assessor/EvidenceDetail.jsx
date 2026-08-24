@@ -46,7 +46,7 @@ function AnswerCard({ label, value }) {
   return <article className="rounded-xl border border-[#e2e8f0] bg-white p-5"><p className="text-sm font-semibold leading-6 text-[#172033]">{label}</p><div className="mt-3 whitespace-pre-wrap rounded-lg bg-[#f8fafc] p-4 text-sm leading-6 text-gray-700">{String(value || '').trim() || 'No response provided.'}</div></article>
 }
 
-async function downloadRoleInterviewPdf(profile) {
+export async function downloadRoleInterviewPdf(profile) {
   const { jsPDF } = await import('jspdf')
   const pdf = new jsPDF({ unit: 'pt', format: 'a4' })
   const answers = profile.roleInterview.answers || {}
