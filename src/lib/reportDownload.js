@@ -269,6 +269,18 @@ function createStoredZip(entries) {
   return new Blob([...local, ...central, end], { type: 'application/zip' })
 }
 
+export function downloadZip(entries, fileName) {
+  const blob = createStoredZip(entries)
+  const url = window.URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = fileName
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  window.URL.revokeObjectURL(url)
+}
+
 async function renderReportForArchive(report) {
   const previewUrl = report.reportType === 'dc' ? await getDcReportPreviewUrl(report.id) : await get360ReportPreviewUrl(report.id)
   const iframe = document.createElement('iframe')

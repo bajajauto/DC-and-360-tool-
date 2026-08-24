@@ -46,7 +46,7 @@ function AnswerCard({ label, value }) {
   return <article className="rounded-xl border border-[#e2e8f0] bg-white p-5"><p className="text-sm font-semibold leading-6 text-[#172033]">{label}</p><div className="mt-3 whitespace-pre-wrap rounded-lg bg-[#f8fafc] p-4 text-sm leading-6 text-gray-700">{String(value || '').trim() || 'No response provided.'}</div></article>
 }
 
-export async function downloadRoleInterviewPdf(profile) {
+export async function downloadRoleInterviewPdf(profile, save = true) {
   const { jsPDF } = await import('jspdf')
   const pdf = new jsPDF({ unit: 'pt', format: 'a4' })
   const answers = profile.roleInterview.answers || {}
@@ -147,7 +147,9 @@ export async function downloadRoleInterviewPdf(profile) {
   })
 
   const filePart = String(profile.nickname || profile.employeeId || 'participant').replace(/[^A-Za-z0-9_-]+/g, '-')
-  pdf.save(`${filePart}-role-interview.pdf`)
+  const fileName = `${filePart}-role-interview.pdf`
+  if (save) pdf.save(fileName)
+  return { data: pdf.output('arraybuffer'), fileName }
 }
 
 function RoleInterview({ profile }) {

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { api } from '../../lib/api'
 import { formatDateOfJoining } from '../../lib/dateFormatting'
+import { downloadZip } from '../../lib/reportDownload'
 import { downloadRoleInterviewPdf } from './EvidenceDetail'
 
 function StatusPill({ children, tone = 'gray' }) {
@@ -101,6 +102,7 @@ export default function CandidateProfiles() {
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [bulkDownload, setBulkDownload] = useState({ loading: false, error: '' })
 
   useEffect(() => {
     api.getAssessorCandidates()
@@ -126,6 +128,30 @@ export default function CandidateProfiles() {
   }, [profiles, query, selectedCohortId])
 
   const selected = filteredProfiles.find((profile) => profile.id === selectedId) ?? filteredProfiles[0] ?? null
+
+  async function downloadCohortRoleInterviews() {
+    if (selectedCohortId === 'all') return
+    const cohortProfiles = profiles.filter((profile) => profile.cohortId === selectedCohortId)
+    const missingNicknames = cohortProfiles.filter((profile) => !profile.nickname)
+    if (missingNicknames.length) {
+      setBulkDownload({ loading: false, error: `${missingNicknames.length} participant${missingNicknames.length === 1 ? ' is' : 's are'} missing a nickname. TD must assign all nicknames before the cohort ZIP can be created.` })
+      return
+    }
+    setBulkDownload({ loading: true, error: '' })
+    try {
+      const entries = []
+      for (const profile of cohortProfiles) {
+        const result = await downloadRoleInterviewPdf(profile, false)
+        entries.push({ name: `${profile.nickname}.pdf`, data: result.data })
+      }
+      const cohortName = cohorts.find((cohort) => cohort.id === selectedCohortId)?.name || 'cohort'
+      const safeCohortName = cohortName.replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'cohort'
+      downloadZip(entries, `${safeCohortName}_roleinterviews.zip`)
+      setBulkDownload({ loading: false, error: '' })
+    } catch (downloadError) {
+      setBulkDownload({ loading: false, error: downloadError.message || 'Unable to create the cohort ZIP.' })
+    }
+  }
 
   return (
     <div>
@@ -159,6 +185,9 @@ export default function CandidateProfiles() {
                 {cohorts.map((cohort) => <option key={cohort.id} value={cohort.id}>{cohort.name}</option>)}
               </select>
             </label>
+            <button type="button" onClick={downloadCohortRoleInterviews} disabled={selectedCohortId === 'all' || bulkDownload.loading} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[#1e4d8c] bg-white px-3 py-2.5 text-xs font-semibold text-[#1e4d8c] hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"><Download size={14} />{bulkDownload.loading ? 'Preparing cohort ZIP…' : 'Download cohort Role Interviews'}</button>
+            {selectedCohortId === 'all' && <p className="mt-1.5 text-[10px] text-slate-400">Select one cohort to enable the ZIP download.</p>}
+            {bulkDownload.error && <p className="mt-2 rounded-lg border border-red-200 bg-red-50 p-2 text-[10px] leading-tight text-red-700">{bulkDownload.error}</p>}
             <div className="relative mt-4">
               <Search size={15} className="absolute left-3 top-2.5 text-gray-400" />
               <input
