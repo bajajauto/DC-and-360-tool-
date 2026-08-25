@@ -22,8 +22,6 @@ invitesRouter.post('/redeem', asyncHandler(async (req, res) => {
   })
 
   if (!magicLink) throw httpError(404, 'Invite link not found')
-  if (magicLink.expiresAt <= new Date()) throw httpError(410, 'Invite link has expired')
-  const ttlSeconds = Math.max(60, Math.floor((magicLink.expiresAt.getTime() - Date.now()) / 1000))
 
   if (magicLink.role === 'PARTICIPANT') {
     const participantId = magicLink.payload?.participantId
@@ -41,10 +39,7 @@ invitesRouter.post('/redeem', asyncHandler(async (req, res) => {
     })
 
     const roles = magicLink.user.roles.map((role) => role.toLowerCase())
-    const authToken = signToken(
-      { sub: magicLink.user.id, roles, typ: 'user', participantId: participant.id },
-      { expiresInSeconds: ttlSeconds },
-    )
+    const authToken = signToken({ sub: magicLink.user.id, roles, typ: 'user', participantId: participant.id })
 
     return res.json({
       data: {
@@ -59,10 +54,13 @@ invitesRouter.post('/redeem', asyncHandler(async (req, res) => {
         roles,
         participantId: participant.id,
         cohort: participant.cohort?.name || null,
-        expiresAt: magicLink.expiresAt.toISOString(),
+        expiresAt: null,
       },
     })
   }
+
+  if (magicLink.expiresAt <= new Date()) throw httpError(410, 'Invite link has expired')
+  const ttlSeconds = Math.max(60, Math.floor((magicLink.expiresAt.getTime() - Date.now()) / 1000))
 
   if (magicLink.role === 'BUHR') {
     if (!magicLink.user || !magicLink.user.roles.includes('BUHR')) throw httpError(404, 'BUHR account not found')

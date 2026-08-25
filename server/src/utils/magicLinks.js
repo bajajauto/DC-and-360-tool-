@@ -1,6 +1,7 @@
 import crypto from 'node:crypto'
 
 const DEFAULT_TTL_DAYS = 14
+const NON_EXPIRING_LINK_DATE = new Date('9999-12-31T23:59:59.999Z')
 
 export function generateMagicToken() {
   return crypto.randomBytes(32).toString('base64url')
@@ -29,7 +30,7 @@ export async function createParticipantMagicLink(db, { userId, email, participan
       email: normalizeEmail(email),
       role: 'PARTICIPANT',
       tokenHash: hashMagicToken(token),
-      expiresAt: getMagicLinkExpiry(),
+      expiresAt: NON_EXPIRING_LINK_DATE,
       payload: { participantId },
     },
   })
