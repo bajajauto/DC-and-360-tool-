@@ -106,11 +106,11 @@ export async function downloadDcPreviewPdf(iframe, participantName = 'participan
   return { data: pdf.output('arraybuffer'), fileName }
 }
 
-export async function download360Pdf(participantId, participantName = 'participant') {
-  const previewUrl = await get360ReportPreviewUrl(participantId)
+async function renderPdfInHiddenIframe(getPreviewUrl, renderPreviewPdf, title, participantId, participantName, save) {
+  const previewUrl = await getPreviewUrl(participantId)
   const iframe = document.createElement('iframe')
   iframe.src = previewUrl
-  iframe.title = '360° Feedback Report PDF renderer'
+  iframe.title = title
   iframe.style.position = 'fixed'
   iframe.style.left = '-10000px'
   iframe.style.width = '1080px'
@@ -130,11 +130,19 @@ export async function download360Pdf(participantId, participantName = 'participa
         reject(new Error('Unable to load the report preview.'))
       }, { once: true })
     })
-    await download360PreviewPdf(iframe, participantName)
+    return await renderPreviewPdf(iframe, participantName, save)
   } finally {
     iframe.remove()
     URL.revokeObjectURL(previewUrl)
   }
+}
+
+export async function download360Pdf(participantId, participantName = 'participant', save = true) {
+  return renderPdfInHiddenIframe(get360ReportPreviewUrl, download360PreviewPdf, '360° Feedback Report PDF renderer', participantId, participantName, save)
+}
+
+export async function downloadDcPdf(participantId, participantName = 'participant', save = true) {
+  return renderPdfInHiddenIframe(getDcReportPreviewUrl, downloadDcPreviewPdf, 'Development Centre Report PDF renderer', participantId, participantName, save)
 }
 
 function assertPptxReport(response) {
@@ -281,33 +289,29 @@ export function downloadZip(entries, fileName) {
   window.URL.revokeObjectURL(url)
 }
 
-export async function downloadReportArchive(cohortId = 'all', reportType = 'all') {
-  const token = getToken()
-  const params = new URLSearchParams({ cohortId, reportType })
-  let response
+// `reports` is a flat list of { participantId, participantName, reportType }
+// (one entry per report to include). Each is rendered the exact same way as
+// its individual-download button — the same preview HTML through the same
+// PDF conversion — so the archive can never drift from what "Download" gives
+// you one at a time, unlike the old server-side ZIP of stored PPTX/DC files.
+export async function downloadReportArchive(reports, zipFileName = 'reports.zip') {
+  if (!reports.length) throw new Error('No generated reports are available for the selected filters')
 
-  try {
-    response = await fetch(`${API_BASE}/api/reports/bulk-download?${params}`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    })
-  } catch {
-    throw new Error('Backend API is not responding. Please start the backend server and try again.')
+  const entries = []
+  const failures = []
+  for (const report of reports) {
+    try {
+      const render = report.reportType === 'dc' ? downloadDcPdf : download360Pdf
+      const { data, fileName } = await render(report.participantId, report.participantName, false)
+      entries.push({ name: fileName, data })
+    } catch {
+      failures.push(`${report.participantName} (${report.reportType === 'dc' ? 'DC' : '360°'})`)
+    }
   }
 
-  if (!response.ok) {
-    const body = await response.json().catch(() => ({}))
-    throw new Error(body?.error?.message || 'Unable to download the report ZIP file.')
-  }
-
-  const blob = await response.blob()
-  const url = window.URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = getFileName(response, `${reportType}-reports.zip`)
-  document.body.appendChild(link)
-  link.click()
-  link.remove()
-  window.setTimeout(() => window.URL.revokeObjectURL(url), 1000)
+  if (!entries.length) throw new Error('None of the selected reports could be rendered.')
+  downloadZip(entries, zipFileName)
+  if (failures.length) throw new Error(`Downloaded ${entries.length} of ${reports.length} reports — could not render: ${failures.join(', ')}`)
 }
 
 export async function downloadBuhr360Pptx(userId, participantId, participantName = 'participant') {
