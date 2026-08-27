@@ -111,12 +111,7 @@ export default function TDReports() {
     setDownloadingArchive(true)
 
     try {
-      // generatedReports is already one row per report (with a singular
-      // reportType) regardless of the all/dc/360 filter — the .reportTypes
-      // array grouping only exists in filteredReports, for display.
-      const entries = generatedReports.map((report) => ({ participantId: report.id, participantName: report.name, reportType: report.reportType }))
-      const cohortLabel = selectedCohortId === 'all' ? 'all-cohorts' : (getCohort(cohorts, { cohortId: selectedCohortId })?.name || 'cohort').replace(/\s+/g, '-')
-      await downloadReportArchive(entries, `${selectedReportType}-reports-${cohortLabel}.zip`)
+      await downloadReportArchive(selectedCohortId, selectedReportType)
     } catch (err) {
       setDownloadError(err.message || 'Unable to download the report ZIP file.')
     } finally {
