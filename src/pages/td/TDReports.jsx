@@ -18,6 +18,7 @@ export default function TDReports() {
   const [error, setError] = useState('')
   const [downloadError, setDownloadError] = useState('')
   const [downloadingArchive, setDownloadingArchive] = useState(false)
+  const [archiveProgress, setArchiveProgress] = useState(null)
   const [releaseError, setReleaseError] = useState('')
 
   useEffect(() => {
@@ -109,15 +110,17 @@ export default function TDReports() {
   async function handleDownloadArchive() {
     setDownloadError('')
     setDownloadingArchive(true)
+    setArchiveProgress({ completed: 0, total: generatedReports.length })
 
     try {
       const entries = generatedReports.map((report) => ({ participantId: report.id, participantName: report.name, reportType: report.reportType }))
       const cohortLabel = selectedCohortId === 'all' ? 'all-cohorts' : (getCohort(cohorts, { cohortId: selectedCohortId })?.name || 'cohort').replace(/\s+/g, '-')
-      await downloadReportArchive(entries, `${selectedReportType}-reports-${cohortLabel}.zip`)
+      await downloadReportArchive(entries, `${selectedReportType}-reports-${cohortLabel}.zip`, setArchiveProgress)
     } catch (err) {
       setDownloadError(err.message || 'Unable to download the report ZIP file.')
     } finally {
       setDownloadingArchive(false)
+      setArchiveProgress(null)
     }
   }
 
@@ -230,7 +233,7 @@ export default function TDReports() {
                 title="Downloads every available report matching the selected cohort and report type"
               >
                 <Download size={14} />
-                {downloadingArchive ? 'Preparing ZIP…' : 'Download ZIP'}
+                {downloadingArchive ? `Preparing ${archiveProgress?.completed || 0}/${archiveProgress?.total || generatedReports.length}…` : 'Download ZIP'}
               </button>
             </div>
           </div>

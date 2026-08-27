@@ -7,6 +7,26 @@ function getFileName(response, fallback) {
   return match?.[1] || fallback
 }
 
+function withTimeout(promise, timeoutMs, message) {
+  return new Promise((resolve, reject) => {
+    const timeout = window.setTimeout(() => reject(new Error(message)), timeoutMs)
+    Promise.resolve(promise).then(
+      (value) => { window.clearTimeout(timeout); resolve(value) },
+      (error) => { window.clearTimeout(timeout); reject(error) },
+    )
+  })
+}
+
+async function waitForPreviewAssets(previewDocument) {
+  const images = [...previewDocument.images].map((img) => img.complete
+    ? Promise.resolve()
+    : new Promise((resolve) => {
+        img.addEventListener('load', resolve, { once: true })
+        img.addEventListener('error', resolve, { once: true })
+      }))
+  await withTimeout(Promise.all([previewDocument.fonts?.ready, ...images]), 15000, 'The report assets took too long to load.')
+}
+
 async function fetchReport(participantId, signal) {
   const token = getToken()
   return fetch(`${API_BASE}/api/reports/${participantId}/360/download`, {
@@ -44,13 +64,7 @@ export async function download360PreviewPdf(iframe, participantName = 'participa
   const previewDocument = iframe?.contentDocument
   if (!previewDocument) throw new Error('The report preview is not ready yet.')
 
-  await previewDocument.fonts?.ready
-  await Promise.all([...previewDocument.images].map((img) => img.complete
-    ? Promise.resolve()
-    : new Promise((resolve) => {
-        img.addEventListener('load', resolve, { once: true })
-        img.addEventListener('error', resolve, { once: true })
-      })))
+  await waitForPreviewAssets(previewDocument)
 
   const pages = [...previewDocument.querySelectorAll('.page')]
   if (!pages.length) throw new Error('The report preview contains no printable pages.')
@@ -63,13 +77,13 @@ export async function download360PreviewPdf(iframe, participantName = 'participa
   const fontEmbedCSS = await getFontEmbedCSS(pages[0])
 
   for (let index = 0; index < pages.length; index += 1) {
-    const pageImage = await toPng(pages[index], {
+    const pageImage = await withTimeout(toPng(pages[index], {
       pixelRatio: 2,
       backgroundColor: '#FFFAE2',
       cacheBust: true,
       fontEmbedCSS,
       style: { margin: '0', boxShadow: 'none' },
-    })
+    }), 30000, `Page ${index + 1} took too long to render.`)
     if (index > 0) pdf.addPage([10.6875, 7.9583], 'landscape')
     pdf.addImage(pageImage, 'PNG', 0, 0, 10.6875, 7.9583, undefined, 'FAST')
   }
@@ -82,11 +96,7 @@ export async function download360PreviewPdf(iframe, participantName = 'participa
 export async function downloadDcPreviewPdf(iframe, participantName = 'participant', save = true) {
   const previewDocument = iframe?.contentDocument
   if (!previewDocument) throw new Error('The DC report preview is not ready yet.')
-  await previewDocument.fonts?.ready
-  await Promise.all([...previewDocument.images].map((img) => img.complete ? Promise.resolve() : new Promise((resolve) => {
-    img.addEventListener('load', resolve, { once: true })
-    img.addEventListener('error', resolve, { once: true })
-  })))
+  await waitForPreviewAssets(previewDocument)
   const pages = [...previewDocument.querySelectorAll('.page')]
   if (!pages.length) throw new Error('The DC report preview contains no printable pages.')
   const [{ getFontEmbedCSS, toPng }, { jsPDF }] = await Promise.all([import('html-to-image'), import('jspdf')])
@@ -97,7 +107,7 @@ export async function downloadDcPreviewPdf(iframe, participantName = 'participan
   const pdf = new jsPDF({ orientation: landscape ? 'landscape' : 'portrait', unit: 'px', format: [width, height], compress: true })
   const fontEmbedCSS = await getFontEmbedCSS(first)
   for (let index = 0; index < pages.length; index += 1) {
-    const image = await toPng(pages[index], { pixelRatio: 1.25, cacheBust: true, fontEmbedCSS, style: { margin: '0', boxShadow: 'none' } })
+    const image = await withTimeout(toPng(pages[index], { pixelRatio: 1.25, cacheBust: true, fontEmbedCSS, style: { margin: '0', boxShadow: 'none' } }), 30000, `Page ${index + 1} took too long to render.`)
     if (index > 0) pdf.addPage([width, height], landscape ? 'landscape' : 'portrait')
     pdf.addImage(image, 'PNG', 0, 0, width, height, undefined, 'FAST')
   }
@@ -118,7 +128,6 @@ async function renderPdfInHiddenIframe(getPreviewUrl, renderPreviewPdf, title, p
   iframe.style.border = '0'
 
   try {
-    document.body.appendChild(iframe)
     await new Promise((resolve, reject) => {
       const timeout = window.setTimeout(() => reject(new Error('The report preview took too long to load.')), 30000)
       iframe.addEventListener('load', () => {
@@ -129,6 +138,7 @@ async function renderPdfInHiddenIframe(getPreviewUrl, renderPreviewPdf, title, p
         window.clearTimeout(timeout)
         reject(new Error('Unable to load the report preview.'))
       }, { once: true })
+      document.body.appendChild(iframe)
     })
     return await renderPreviewPdf(iframe, participantName, save)
   } finally {
@@ -286,15 +296,17 @@ export function downloadZip(entries, fileName) {
   document.body.appendChild(link)
   link.click()
   link.remove()
-  window.URL.revokeObjectURL(url)
+  window.setTimeout(() => window.URL.revokeObjectURL(url), 1000)
 }
 
-export async function downloadReportArchive(reports, zipFileName = 'reports.zip') {
+export async function downloadReportArchive(reports, zipFileName = 'reports.zip', onProgress = () => {}) {
   if (!reports.length) throw new Error('No generated reports are available for the selected filters')
 
   const entries = []
   const failures = []
-  for (const report of reports) {
+  for (let index = 0; index < reports.length; index += 1) {
+    const report = reports[index]
+    onProgress({ completed: index, total: reports.length, participantName: report.participantName })
     try {
       const render = report.reportType === 'dc' ? downloadDcPdf : download360Pdf
       const { data, fileName } = await render(report.participantId, report.participantName, false)
@@ -302,6 +314,7 @@ export async function downloadReportArchive(reports, zipFileName = 'reports.zip'
     } catch {
       failures.push(`${report.participantName} (${report.reportType === 'dc' ? 'DC' : '360°'})`)
     }
+    onProgress({ completed: index + 1, total: reports.length, participantName: report.participantName })
   }
 
   if (!entries.length) throw new Error('None of the selected reports could be rendered.')
