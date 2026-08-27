@@ -64,7 +64,7 @@ export async function download360PreviewPdf(iframe, participantName = 'participa
 
   for (let index = 0; index < pages.length; index += 1) {
     const pageImage = await toPng(pages[index], {
-      pixelRatio: 1.25,
+      pixelRatio: 2,
       backgroundColor: '#FFFAE2',
       cacheBust: true,
       fontEmbedCSS,
