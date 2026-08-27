@@ -109,35 +109,40 @@ reportsRouter.get('/bulk-download', asyncHandler(async (req, res) => {
   const reports = await prisma.report.findMany({
     where: {
       participant: { archivedAt: null, ...(cohortId !== 'all' ? { cohortId } : {}) },
+      status: { in: ['GENERATED', 'RELEASED'] },
       ...(reportType !== 'all' ? { type: { equals: reportType, mode: 'insensitive' } } : {}),
     },
     orderBy: [{ updatedAt: 'desc' }],
     include: {
-      participant: {
-        include: {
-          user: true,
-          cohort: true,
-          feedbackTasks: { select: { status: true } },
-        },
-      },
+      participant: { select: {
+        id: true,
+        user: { select: { name: true, employeeId: true } },
+        cohort: { select: { name: true } },
+      } },
     },
   })
 
-  const visibleReports = reports.filter(isVisibleInRepository)
-  if (!visibleReports.length) throw httpError(404, 'No reports are available for the selected filters')
+  if (!reports.length) throw httpError(404, 'No generated reports are available for the selected filters')
 
   const entries = []
   const unavailable = []
-  for (const report of visibleReports) {
-    if (!report.fileUrl) {
-      unavailable.push(`${report.participant.user.name} — ${report.type.toUpperCase()} report has no stored file`)
-      continue
-    }
-
+  for (const report of reports) {
     try {
-      const data = await fs.readFile(report.fileUrl)
+      let fileUrl = report.fileUrl
+      try {
+        if (!fileUrl) throw Object.assign(new Error('Report has no stored file'), { code: 'ENOENT' })
+        await fs.access(fileUrl)
+      } catch (error) {
+        if (error.code !== 'ENOENT') throw error
+        const generated = report.type.toLowerCase() === '360'
+          ? await generate360ReportForParticipant(prisma, report.participantId)
+          : await generateDcReportForParticipant(prisma, report.participantId)
+        fileUrl = generated.outputPath
+      }
+
+      const data = await fs.readFile(fileUrl)
       const cohortFolder = safeFilePart(report.participant.cohort.name, 'Unassigned cohort')
-      const extension = path.extname(report.fileUrl) || (report.type.toLowerCase() === '360' ? '.pptx' : '.pdf')
+      const extension = path.extname(fileUrl) || (report.type.toLowerCase() === '360' ? '.pptx' : '.html')
       const employee = safeFilePart(report.participant.user.employeeId, report.participant.id)
       const participant = safeFilePart(report.participant.user.name, 'Participant')
       const type = report.type.toLowerCase() === '360' ? '360-feedback' : 'dc'
@@ -146,8 +151,8 @@ reportsRouter.get('/bulk-download', asyncHandler(async (req, res) => {
         data,
         modifiedAt: report.generatedAt || report.updatedAt,
       })
-    } catch {
-      unavailable.push(`${report.participant.user.name} — ${report.type.toUpperCase()} report file is missing`)
+    } catch (error) {
+      unavailable.push(`${report.participant.user.name} — ${report.type.toUpperCase()} report could not be prepared: ${error.message}`)
     }
   }
 
@@ -163,13 +168,14 @@ reportsRouter.get('/bulk-download', asyncHandler(async (req, res) => {
 
   const cohortLabel = cohortId === 'all'
     ? 'all-cohorts'
-    : safeFilePart(visibleReports[0]?.participant.cohort.name, 'cohort').replace(/\s+/g, '-')
+    : safeFilePart(reports[0]?.participant.cohort.name, 'cohort').replace(/\s+/g, '-')
   const typeLabel = reportType === 'all' ? 'allreports' : `${reportType}reports`
   const fileName = `${cohortLabel}_${typeLabel}.zip`
   const zip = createZip(entries)
 
   res.setHeader('Content-Type', 'application/zip')
   res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`)
+  res.setHeader('Cache-Control', 'no-store')
   res.setHeader('Content-Length', zip.length)
   res.send(zip)
 }))

@@ -122,8 +122,9 @@ export async function generateDcReportForParticipant(db, participantId) {
   await fs.mkdir(reportsDirectory, { recursive: true })
   await fs.writeFile(outputPath, html)
   const existing = await db.report.findFirst({ where: { participantId, type: 'dc' }, orderBy: { updatedAt: 'desc' } })
+  const status = existing?.status === 'RELEASED' ? 'RELEASED' : 'GENERATED'
   const report = existing
-    ? await db.report.update({ where: { id: existing.id }, data: { status: 'GENERATED', fileUrl: outputPath, generatedAt: new Date(), releasedAt: null } })
-    : await db.report.create({ data: { participantId, type: 'dc', status: 'GENERATED', fileUrl: outputPath, generatedAt: new Date() } })
+    ? await db.report.update({ where: { id: existing.id }, data: { status, fileUrl: outputPath, generatedAt: new Date() } })
+    : await db.report.create({ data: { participantId, type: 'dc', status, fileUrl: outputPath, generatedAt: new Date() } })
   return { report, outputPath, fileName }
 }
