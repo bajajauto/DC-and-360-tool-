@@ -586,7 +586,7 @@ function NicknameEditor({ cohortId, participant, onUpdated }) {
   )
 }
 
-function ParticipantsTab({ rows, generated, onManage, cohortId, onUpdated }) {
+function ParticipantsTab({ rows, onManage, cohortId, onUpdated }) {
   return (
     <Card>
       <CardHeader
@@ -1007,7 +1007,7 @@ function AssessorTab({ rows }) {
   )
 }
 
-function ReportsTab({ rows, generated, onGenerate, onVisibilityChanged }) {
+function ReportsTab({ rows, generating, onGenerate, onVisibilityChanged }) {
   const [visibilityAction, setVisibilityAction] = useState('')
   const [visibilityError, setVisibilityError] = useState('')
 
@@ -1034,7 +1034,7 @@ function ReportsTab({ rows, generated, onGenerate, onVisibilityChanged }) {
 
   return (
     <Card>
-      <CardHeader title="Report Status" subtitle="Generate, review and release 360 and DC reports separately." action={<button onClick={onGenerate} className="inline-flex items-center gap-2 rounded-lg bg-[#1e5fba] px-3 py-2 text-xs font-semibold text-white hover:bg-[#0e3f87]"><FileText size={14} />Generate ready reports</button>} />
+      <CardHeader title="Report Status" subtitle="Generate, review and release 360 and DC reports separately." action={<button type="button" onClick={onGenerate} disabled={generating} className="inline-flex items-center gap-2 rounded-lg bg-[#1e5fba] px-3 py-2 text-xs font-semibold text-white hover:bg-[#0e3f87] disabled:cursor-not-allowed disabled:bg-slate-400"><FileText size={14} />{generating ? 'Generating reportsâ€¦' : 'Generate ready reports'}</button>} />
       {visibilityError && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{visibilityError}</div>}
       <div className="overflow-hidden rounded-xl border border-[#d5dce5]">
         <table className="w-full border-collapse bg-white text-left text-[13px]">
@@ -1072,7 +1072,8 @@ export default function Cohorts({ view = 'dashboard' }) {
   const [allParticipants, setAllParticipants] = useState([])
   const [query, setQuery] = useState('')
   const [activeTab, setActiveTab] = useState('participants')
-  const [generated, setGenerated] = useState(false)
+  const [generationResult, setGenerationResult] = useState(null)
+  const [generatingReports, setGeneratingReports] = useState(false)
   const [loadingCohorts, setLoadingCohorts] = useState(true)
   const [loadingParticipants, setLoadingParticipants] = useState(false)
   const [error, setError] = useState('')
@@ -1168,7 +1169,46 @@ export default function Cohorts({ view = 'dashboard' }) {
     return allInCohort.filter((participant) => `${participant.nickname || ''} ${participant.name} ${participant.employeeId} ${participant.bu} ${participant.designation}`.toLowerCase().includes(normalized))
   }, [allInCohort, query])
 
-  const ready = allInCohort.filter((participant) => participant.reportStatus === 'ready').length
+  async function handleGenerateReadyReports() {
+    if (generatingReports) return
+    setGeneratingReports(true)
+    setGenerationResult(null)
+    setError('')
+
+    const jobs = []
+    allInCohort.forEach((participant) => {
+      const report360 = participant.reports?.find((report) => report.type === '360')
+      const dcReport = participant.reports?.find((report) => report.type === 'dc')
+      if (participant.reportStatus === 'ready' && !['generated', 'released'].includes(report360?.status)) {
+        jobs.push({ participant, type: '360' })
+      }
+      if (participant.assessorTemplateUploaded && !['generated', 'released'].includes(dcReport?.status)) {
+        jobs.push({ participant, type: 'dc' })
+      }
+    })
+
+    let generatedCount = 0
+    const failures = []
+    for (const job of jobs) {
+      try {
+        if (job.type === '360') await api.generate360Report(job.participant.id)
+        else await api.generateDcReport(job.participant.id)
+        generatedCount += 1
+      } catch (err) {
+        failures.push(`${job.participant.name} (${job.type.toUpperCase()}): ${err.message || 'Generation failed'}`)
+      }
+    }
+
+    try {
+      const result = await api.getCohortParticipants(cohortId)
+      setAllParticipants(result.data || [])
+    } catch (err) {
+      failures.push(`Unable to refresh report statuses: ${err.message}`)
+    } finally {
+      setGenerationResult({ generatedCount, attemptedCount: jobs.length, failures })
+      setGeneratingReports(false)
+    }
+  }
 
   if (loadingCohorts) {
     return (
@@ -1217,10 +1257,15 @@ export default function Cohorts({ view = 'dashboard' }) {
           </div>
         )}
 
-        {generated && (
-          <div className="mb-5 flex items-center gap-3 rounded-xl border border-[#bfdcc8] bg-[#e8f5ee] px-4 py-3 text-sm text-[#155e2e]">
+        {generationResult && (
+          <div className={`mb-5 flex items-start gap-3 rounded-xl border px-4 py-3 text-sm ${generationResult.failures.length ? 'border-amber-300 bg-amber-50 text-amber-800' : 'border-[#bfdcc8] bg-[#e8f5ee] text-[#155e2e]'}`}>
             <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#15803d] text-white"><Check size={14} /></span>
-            <span><strong>{ready} reports prepared.</strong> They are now available for TD review before release.</span>
+            <span>
+              <strong>{generationResult.generatedCount} of {generationResult.attemptedCount} ready reports generated.</strong>
+              {generationResult.attemptedCount === 0 && ' There are no new eligible reports to generate.'}
+              {generationResult.generatedCount > 0 && ' They are now available for TD review before release.'}
+              {generationResult.failures.length > 0 && <span className="mt-1 block text-xs">{generationResult.failures.join(' | ')}</span>}
+            </span>
           </div>
         )}
 
@@ -1321,11 +1366,11 @@ export default function Cohorts({ view = 'dashboard' }) {
           </div>
 
           {loadingParticipants && <Card><p className="text-sm text-slate-500">Loading participants...</p></Card>}
-          {!loadingParticipants && activeTab === 'participants' && <ParticipantsTab rows={filteredRows} generated={generated} onManage={() => setActiveTab('manage')} cohortId={cohort.id} onUpdated={(participantId, changes) => setAllParticipants((current) => current.map((participant) => participant.id === participantId ? { ...participant, ...changes } : participant))} />}
+          {!loadingParticipants && activeTab === 'participants' && <ParticipantsTab rows={filteredRows} onManage={() => setActiveTab('manage')} cohortId={cohort.id} onUpdated={(participantId, changes) => setAllParticipants((current) => current.map((participant) => participant.id === participantId ? { ...participant, ...changes } : participant))} />}
           {activeTab === 'manage' && <ManageParticipantsTab cohort={cohort} rows={allInCohort} onAdded={(participant) => { setAllParticipants((current) => [...current, participant].sort((a, b) => a.name.localeCompare(b.name))); setCohorts((current) => current.map((item) => item.id === cohort.id ? { ...item, participantCount: (item.participantCount || 0) + 1 } : item)) }} onDeleted={(participantId) => { setAllParticipants((current) => current.filter((participant) => participant.id !== participantId)); setCohorts((current) => current.map((item) => item.id === cohort.id ? { ...item, participantCount: Math.max(0, (item.participantCount || 0) - 1) } : item)) }} />}
           {activeTab === 'threesixty' && <ThreeSixtyTab cohort={cohort} rows={allInCohort} />}
           {activeTab === 'assessors' && <AssessorTab rows={allInCohort} />}
-          {activeTab === 'reports' && <ReportsTab rows={allInCohort} generated={generated} onGenerate={() => setGenerated(true)} onVisibilityChanged={(participantId, reportId, updatedReport) => setAllParticipants((current) => current.map((participant) => participant.id !== participantId ? participant : { ...participant, reportStatus: updatedReport.type === '360' ? updatedReport.status : participant.reportStatus, reports: (participant.reports || []).map((report) => report.id === reportId ? { ...report, status: updatedReport.status, releasedAt: updatedReport.releasedAt } : report) }))} />}
+          {activeTab === 'reports' && <ReportsTab rows={allInCohort} generating={generatingReports} onGenerate={handleGenerateReadyReports} onVisibilityChanged={(participantId, reportId, updatedReport) => setAllParticipants((current) => current.map((participant) => participant.id !== participantId ? participant : { ...participant, reportStatus: updatedReport.type === '360' ? updatedReport.status : participant.reportStatus, reports: (participant.reports || []).map((report) => report.id === reportId ? { ...report, status: updatedReport.status, releasedAt: updatedReport.releasedAt } : report) }))} />}
         </div>}
       </div>
     </div>

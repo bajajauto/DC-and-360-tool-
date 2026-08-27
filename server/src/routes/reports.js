@@ -164,8 +164,8 @@ reportsRouter.get('/bulk-download', asyncHandler(async (req, res) => {
   const cohortLabel = cohortId === 'all'
     ? 'all-cohorts'
     : safeFilePart(visibleReports[0]?.participant.cohort.name, 'cohort').replace(/\s+/g, '-')
-  const typeLabel = reportType === 'all' ? 'all-reports' : `${reportType}-reports`
-  const fileName = `${cohortLabel}-${typeLabel}.zip`
+  const typeLabel = reportType === 'all' ? 'allreports' : `${reportType}reports`
+  const fileName = `${cohortLabel}_${typeLabel}.zip`
   const zip = createZip(entries)
 
   res.setHeader('Content-Type', 'application/zip')
@@ -209,11 +209,9 @@ reportsRouter.post('/:participantId/360/generate', asyncHandler(async (req, res)
 
 reportsRouter.get('/:participantId/360/download', asyncHandler(async (req, res) => {
   await assertReportDownloadAccess(req)
-  // TD downloads should always reflect the current response data and generator
-  // template. Participant/assessor downloads retain the explicitly released file.
-  const generated = req.auth.roles.includes('td')
-    ? await generate360ReportForParticipant(prisma, req.params.participantId)
-    : await getOrGenerate360Report(prisma, req.params.participantId)
+  // Generation is an explicit action. Downloads should serve the stored report
+  // instead of rebuilding a large PowerPoint on every click.
+  const generated = await getOrGenerate360Report(prisma, req.params.participantId)
 
   res.download(generated.outputPath, generated.fileName || path.basename(generated.outputPath))
 }))

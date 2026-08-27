@@ -64,7 +64,7 @@ export async function download360PreviewPdf(iframe, participantName = 'participa
 
   for (let index = 0; index < pages.length; index += 1) {
     const pageImage = await toPng(pages[index], {
-      pixelRatio: 2,
+      pixelRatio: 1.25,
       backgroundColor: '#FFFAE2',
       cacheBust: true,
       fontEmbedCSS,
@@ -97,7 +97,7 @@ export async function downloadDcPreviewPdf(iframe, participantName = 'participan
   const pdf = new jsPDF({ orientation: landscape ? 'landscape' : 'portrait', unit: 'px', format: [width, height], compress: true })
   const fontEmbedCSS = await getFontEmbedCSS(first)
   for (let index = 0; index < pages.length; index += 1) {
-    const image = await toPng(pages[index], { pixelRatio: 2, cacheBust: true, fontEmbedCSS, style: { margin: '0', boxShadow: 'none' } })
+    const image = await toPng(pages[index], { pixelRatio: 1.25, cacheBust: true, fontEmbedCSS, style: { margin: '0', boxShadow: 'none' } })
     if (index > 0) pdf.addPage([width, height], landscape ? 'landscape' : 'portrait')
     pdf.addImage(image, 'PNG', 0, 0, width, height, undefined, 'FAST')
   }
@@ -281,34 +281,33 @@ export function downloadZip(entries, fileName) {
   window.URL.revokeObjectURL(url)
 }
 
-async function renderReportForArchive(report) {
-  const previewUrl = report.reportType === 'dc' ? await getDcReportPreviewUrl(report.id) : await get360ReportPreviewUrl(report.id)
-  const iframe = document.createElement('iframe')
-  iframe.src = previewUrl
-  iframe.style.cssText = `position:fixed;left:-10000px;width:${report.reportType === 'dc' ? 1123 : 1080}px;height:${report.reportType === 'dc' ? 794 : 800}px;border:0`
-  document.body.appendChild(iframe)
-  try {
-    await new Promise((resolve, reject) => { iframe.onload = resolve; iframe.onerror = () => reject(new Error(`Unable to render ${report.name}'s report.`)) })
-    const result = report.reportType === 'dc' ? await downloadDcPreviewPdf(iframe, report.name, false) : await download360PreviewPdf(iframe, report.name, false)
-    const cohort = String(report.cohortName || 'Unassigned cohort').replace(/[<>:"/\\|?*]/g, '-')
-    const employee = String(report.employeeId || report.id).replace(/[<>:"/\\|?*]/g, '-')
-    return { data: result.data, name: `${cohort}/${employee} - ${result.fileName}` }
-  } finally { iframe.remove(); URL.revokeObjectURL(previewUrl) }
-}
+export async function downloadReportArchive(cohortId = 'all', reportType = 'all') {
+  const token = getToken()
+  const params = new URLSearchParams({ cohortId, reportType })
+  let response
 
-export async function downloadReportArchive(reports = []) {
-  if (!reports.length) throw new Error('No reports are available for this download.')
-  const entries = []
-  for (const report of reports) entries.push(await renderReportForArchive(report))
-  const blob = createStoredZip(entries)
+  try {
+    response = await fetch(`${API_BASE}/api/reports/bulk-download?${params}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+  } catch {
+    throw new Error('Backend API is not responding. Please start the backend server and try again.')
+  }
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}))
+    throw new Error(body?.error?.message || 'Unable to download the report ZIP file.')
+  }
+
+  const blob = await response.blob()
   const url = window.URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
-  link.download = 'reports-pdf.zip'
+  link.download = getFileName(response, `${reportType}-reports.zip`)
   document.body.appendChild(link)
   link.click()
   link.remove()
-  window.URL.revokeObjectURL(url)
+  window.setTimeout(() => window.URL.revokeObjectURL(url), 1000)
 }
 
 export async function downloadBuhr360Pptx(userId, participantId, participantName = 'participant') {

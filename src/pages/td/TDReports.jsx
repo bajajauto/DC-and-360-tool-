@@ -111,7 +111,7 @@ export default function TDReports() {
     setDownloadingArchive(true)
 
     try {
-      await downloadReportArchive(generatedReports)
+      await downloadReportArchive(selectedCohortId, selectedReportType)
     } catch (err) {
       setDownloadError(err.message || 'Unable to download the report ZIP file.')
     } finally {
@@ -299,7 +299,7 @@ export default function TDReports() {
                             <Eye size={14} />
                             Preview
                           </Link>}
-                          {selectedReportType !== 'all' && participant.reportType === '360' && <button type="button" onClick={() => handleDownload(participant)} className="w-8 h-8 rounded-lg border border-[#dce3ed] flex items-center justify-center text-gray-500 hover:bg-gray-50" aria-label={`Download ${participant.name} report as PDF`}>
+                          {selectedReportType !== 'all' && participant.reportType === '360' && <button type="button" onClick={() => handleDownload(participant)} className="w-8 h-8 rounded-lg border border-[#dce3ed] flex items-center justify-center text-gray-500 hover:bg-gray-50" aria-label={`Download ${participant.name} report as PDF`} title="Download 360 report (PDF)">
                             <Download size={14} />
                           </button>}
                           {selectedReportType !== 'all' && participant.reportType === '360' && <button type="button" onClick={() => handleDownloadResponseData(participant)} className="w-8 h-8 rounded-lg border border-[#dce3ed] flex items-center justify-center text-gray-500 hover:bg-gray-50" aria-label={`Download ${participant.name} response data`} title="Download 360 response data (Excel)">
