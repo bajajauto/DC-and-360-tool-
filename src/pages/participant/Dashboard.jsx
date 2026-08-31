@@ -22,6 +22,27 @@ function formatDeadline(cohort, key) {
   return value ? new Date(value).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'TBD'
 }
 
+function hasDeadlinePassed(cohort, key) {
+  const value = key && cohort?.[key]
+  if (!value) return false
+
+  const deadline = new Date(value)
+  if (Number.isNaN(deadline.getTime())) return false
+
+  // Cohort deadlines are date-only values represented at midnight UTC. They
+  // remain open through 23:59:59 in India, matching the server-side rule.
+  const endOfDeadlineDayIst = Date.UTC(
+    deadline.getUTCFullYear(),
+    deadline.getUTCMonth(),
+    deadline.getUTCDate(),
+    18,
+    29,
+    59,
+    999,
+  )
+  return Date.now() > endOfDeadlineDayIst
+}
+
 const TASK_STATUS_KEY_BY_LABEL = {
   'Role Interview': 'role',
   Photograph: 'photo',
@@ -37,6 +58,7 @@ function StatusBadge({ status }) {
     saved: { label: 'Saved', className: 'bg-blue-100 text-blue-700' },
     pending: { label: 'Pending', className: 'bg-gray-100 text-gray-500' },
     locked: { label: 'Locked', className: 'bg-gray-100 text-gray-400' },
+    closed: { label: 'Closed', className: 'bg-gray-100 text-gray-500' },
   }
   const { label, className } = map[status] ?? map.pending
   return <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${className}`}>{label}</span>
@@ -59,7 +81,7 @@ function StepIcon({ status, step }) {
       </div>
     )
   }
-  if (status === 'locked') {
+  if (status === 'locked' || status === 'closed') {
     return (
       <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center shrink-0">
         <svg className="w-3.5 h-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -100,13 +122,18 @@ export default function Dashboard() {
   const cohort = participantData?.cohort
   const journeySteps = baseJourneySteps.map((step) => {
     const withDeadline = { ...step, deadline: formatDeadline(cohort, step.deadlineKey) }
-    if (step.label === '360 Nominees') return { ...withDeadline, status: nomineeStatus }
-    if (step.label === 'Self 360 Survey') return { ...withDeadline, status: selfSurveyStatus }
+    let status
+    if (step.label === '360 Nominees') status = nomineeStatus
+    else if (step.label === 'Self 360 Survey') status = selfSurveyStatus
     const taskKey = TASK_STATUS_KEY_BY_LABEL[step.label]
-    return taskKey && taskStatus?.[taskKey] ? { ...withDeadline, status: taskStatus[taskKey] } : withDeadline
+    if (!status && taskKey && taskStatus?.[taskKey]) status = taskStatus[taskKey]
+    status ||= withDeadline.status
+
+    if (status !== 'completed' && hasDeadlinePassed(cohort, step.deadlineKey)) status = 'closed'
+    return { ...withDeadline, status }
   })
   const visiblePendingTasks = []
-  if (taskStatus?.prework && taskStatus.prework !== 'completed') {
+  if (taskStatus?.prework && taskStatus.prework !== 'completed' && !hasDeadlinePassed(cohort, 'preWorkDeadline')) {
     visiblePendingTasks.push({
       title: 'Complete Self Reflection form',
       description: `${preWorkAnsweredCount} of 9 self-reflection questions answered`,
@@ -115,7 +142,7 @@ export default function Dashboard() {
       urgency: 'medium',
     })
   }
-  if (nomineeStatus !== 'completed') {
+  if (nomineeStatus !== 'completed' && !hasDeadlinePassed(cohort, 'nominationDeadline')) {
     visiblePendingTasks.push(nomineeStatus === 'saved' ? {
       title: 'Review saved 360 nominees',
       description: `${nominees.length} nominees saved. Final submit will send magic links.`,
@@ -130,7 +157,7 @@ export default function Dashboard() {
       urgency: 'high',
     })
   }
-  if (nomineeStatus === 'completed' && selfSurveyStatus !== 'completed') {
+  if (nomineeStatus === 'completed' && selfSurveyStatus !== 'completed' && !hasDeadlinePassed(cohort, 'threeSixtyCutoff')) {
     visiblePendingTasks.push({
       title: 'Complete your Self 360 Survey',
       description: 'Your self-rating is a required part of the 360 feedback process.',
@@ -175,7 +202,7 @@ export default function Dashboard() {
                 </div>
                 <div className="flex-1 min-w-0 py-0.5">
                   <div className="flex items-center justify-between gap-2">
-                    <p className={`text-sm font-medium ${step.status === 'locked' ? 'text-gray-400' : 'text-[#1a1f2e]'}`}>
+                    <p className={`text-sm font-medium ${step.status === 'locked' || step.status === 'closed' ? 'text-gray-400' : 'text-[#1a1f2e]'}`}>
                       {step.label}
                     </p>
                     <StatusBadge status={step.status} />
@@ -186,6 +213,9 @@ export default function Dashboard() {
                   <Link to={step.to} className="shrink-0 text-xs text-[#1e4d8c] font-medium hover:underline">Open →</Link>
                 )}
                 {step.status === 'completed' && (
+                  <Link to={step.to} className="shrink-0 text-xs text-gray-400 hover:text-gray-600">View</Link>
+                )}
+                {step.status === 'closed' && step.label === '360 Feedback' && (
                   <Link to={step.to} className="shrink-0 text-xs text-gray-400 hover:text-gray-600">View</Link>
                 )}
               </div>
