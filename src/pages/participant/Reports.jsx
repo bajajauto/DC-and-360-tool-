@@ -16,7 +16,7 @@ const reports = [
   {
     id: 'dc',
     title: 'DC Report',
-    subtitle: 'EX-to-LX Cohort · Jul 2025',
+    subtitle: 'Current cohort',
     status: 'pending',
     releasedOn: null,
     description: 'Your full Development Centre report including assessor observations, integrated 360 findings, and a focus area.',
@@ -26,16 +26,29 @@ const reports = [
   },
 ]
 
+function formatCohortSubtitle(cohort) {
+  if (!cohort) return 'Current cohort'
+
+  const eventStart = cohort.eventStart ? new Date(cohort.eventStart) : null
+  const eventMonth = eventStart && !Number.isNaN(eventStart.getTime())
+    ? eventStart.toLocaleDateString('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' })
+    : null
+
+  return [cohort.name, eventMonth].filter(Boolean).join(' · ') || 'Current cohort'
+}
+
 export default function Reports() {
   const navigate = useNavigate()
   const { participantData } = useUser()
   const report360Released = participantData?.reportStatus === 'released'
-  const displayReports = reports.map((report) => report.id === '360' ? {
+  const displayReports = reports.map((report) => ({
     ...report,
-    subtitle: participantData?.cohort?.name || 'Current cohort',
-    status: report360Released ? 'available' : 'pending',
-    releasedOn: report360Released ? 'Released by Talent Development' : null,
-  } : report)
+    subtitle: formatCohortSubtitle(participantData?.cohort),
+    ...(report.id === '360' ? {
+      status: report360Released ? 'available' : 'pending',
+      releasedOn: report360Released ? 'Released by Talent Development' : null,
+    } : {}),
+  }))
   return (
     <div className="p-6">
       <div className="flex items-center gap-2 text-xs text-gray-400 mb-5">
