@@ -46,7 +46,7 @@ export async function createBuhrMagicLink(db, { userId, email }) {
       email: normalizeEmail(email),
       role: 'BUHR',
       tokenHash: hashMagicToken(token),
-      expiresAt: getMagicLinkExpiry(),
+      expiresAt: NON_EXPIRING_LINK_DATE,
       payload: {},
     },
   })
