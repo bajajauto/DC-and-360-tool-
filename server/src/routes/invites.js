@@ -5,6 +5,7 @@ import { asyncHandler } from '../middleware/asyncHandler.js'
 import { httpError } from '../utils/httpError.js'
 import { hashMagicToken } from '../utils/magicLinks.js'
 import { signToken } from '../utils/jwt.js'
+import { assertBajajAutoEmail } from '../utils/emailAccess.js'
 
 export const invitesRouter = Router()
 
@@ -32,6 +33,7 @@ invitesRouter.post('/redeem', asyncHandler(async (req, res) => {
       include: { cohort: true },
     })
     if (!participant || !magicLink.user.roles.includes('PARTICIPANT')) throw httpError(404, 'Participant account not found')
+    assertBajajAutoEmail(magicLink.user.email)
 
     await prisma.magicLink.update({
       where: { id: magicLink.id },
@@ -39,7 +41,7 @@ invitesRouter.post('/redeem', asyncHandler(async (req, res) => {
     })
 
     const roles = magicLink.user.roles.map((role) => role.toLowerCase())
-    const authToken = signToken({ sub: magicLink.user.id, roles, typ: 'user', participantId: participant.id })
+    const authToken = signToken({ sub: magicLink.user.id, email: magicLink.user.email.trim().toLowerCase(), roles, typ: 'user', participantId: participant.id })
 
     return res.json({
       data: {
@@ -61,6 +63,7 @@ invitesRouter.post('/redeem', asyncHandler(async (req, res) => {
 
   if (magicLink.role === 'BUHR') {
     if (!magicLink.user || !magicLink.user.roles.includes('BUHR')) throw httpError(404, 'BUHR account not found')
+    assertBajajAutoEmail(magicLink.user.email)
 
     await prisma.magicLink.update({
       where: { id: magicLink.id },
@@ -68,7 +71,7 @@ invitesRouter.post('/redeem', asyncHandler(async (req, res) => {
     })
 
     const roles = magicLink.user.roles.map((role) => role.toLowerCase())
-    const authToken = signToken({ sub: magicLink.user.id, roles, typ: 'user' })
+    const authToken = signToken({ sub: magicLink.user.id, email: magicLink.user.email.trim().toLowerCase(), roles, typ: 'user' })
 
     return res.json({
       data: {
@@ -113,12 +116,14 @@ invitesRouter.post('/redeem', asyncHandler(async (req, res) => {
 
   const respondentName = task.respondent?.name || task.nominee?.name || magicLink.payload?.name || '360 Respondent'
   const respondentEmail = task.respondent?.email || task.nominee?.email || magicLink.email
+  assertBajajAutoEmail(respondentEmail)
 
   // Scoped token: this respondent (internal or external) may only act on this
   // one feedback task. Expiry tracks the magic link's own lifetime.
   const authToken = signToken(
     {
       sub: task.respondent?.id || null,
+      email: respondentEmail.trim().toLowerCase(),
       roles: ['respondent'],
       typ: 'respondent',
       taskId: task.id,

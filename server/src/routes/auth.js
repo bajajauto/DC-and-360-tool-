@@ -5,6 +5,7 @@ import { asyncHandler } from '../middleware/asyncHandler.js'
 import { httpError } from '../utils/httpError.js'
 import { verifyPassword } from '../utils/passwords.js'
 import { signToken } from '../utils/jwt.js'
+import { hasBajajAutoEmail } from '../utils/emailAccess.js'
 import { getRelationshipLabel, getRequiredQuestionTotal } from '../../../src/data/surveyConfig.js'
 
 export const authRouter = Router()
@@ -54,7 +55,7 @@ authRouter.post('/login', asyncHandler(async (req, res) => {
     },
   })
 
-  if (!user) throw httpError(401, 'Invalid employee ID/email or password')
+  if (!user || !hasBajajAutoEmail(user.email)) throw httpError(401, 'Invalid employee ID/email or password')
   const validPassword = await verifyPassword(payload.password, user.passwordHash)
   if (!validPassword) throw httpError(401, 'Invalid employee ID/email or password')
   if (!user.roles.length) throw httpError(403, 'This account no longer has access to the application')
@@ -62,6 +63,7 @@ authRouter.post('/login', asyncHandler(async (req, res) => {
   const roles = user.roles.map(roleToClient)
   const token = signToken({
     sub: user.id,
+    email: user.email.trim().toLowerCase(),
     roles,
     typ: 'user',
     participantId: user.participant?.id || null,

@@ -1,5 +1,6 @@
 import { verifyToken } from '../utils/jwt.js'
 import { httpError } from '../utils/httpError.js'
+import { hasBajajAutoEmail } from '../utils/emailAccess.js'
 
 // Attaches req.auth = { userId, roles, typ, taskId, participantId } for a valid
 // Bearer token, or rejects with 401. Synchronous throws are caught by Express 4
@@ -16,8 +17,15 @@ export function requireAuth(req, _res, next) {
     throw httpError(401, 'Your session has expired or is invalid. Please sign in again.')
   }
 
+  // Email is embedded in every newly issued signed token. Rejecting tokens
+  // without it also ends sessions created before the corporate-domain policy.
+  if (!hasBajajAutoEmail(payload.email)) {
+    throw httpError(403, 'Access is restricted to Bajaj Auto email addresses')
+  }
+
   req.auth = {
     userId: payload.sub || null,
+    email: payload.email,
     roles: Array.isArray(payload.roles) ? payload.roles : [],
     typ: payload.typ || 'user',
     taskId: payload.taskId || null,
