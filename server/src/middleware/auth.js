@@ -23,10 +23,15 @@ export function requireAuth(req, _res, next) {
     throw httpError(403, 'Access is restricted to Bajaj Auto email addresses')
   }
 
+  const roles = Array.isArray(payload.roles) ? payload.roles : []
+  if (roles.some((role) => String(role).toLowerCase() === 'assessor')) {
+    throw httpError(403, 'Assessor access is disabled')
+  }
+
   req.auth = {
     userId: payload.sub || null,
     email: payload.email,
-    roles: Array.isArray(payload.roles) ? payload.roles : [],
+    roles,
     typ: payload.typ || 'user',
     taskId: payload.taskId || null,
     participantId: payload.participantId || null,
