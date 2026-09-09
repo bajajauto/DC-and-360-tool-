@@ -7,7 +7,7 @@ import ParticipantSubmissionSuccess from '../../components/ParticipantSubmission
 const REL_LABELS = {
   'reporting-manager': 'Reporting Manager',
   'skip-manager': 'Skip / BU Head',
-  peer: 'Peers / Internal Customers / External Stakeholders',
+  peer: 'Peers / Internal Customers',
   'direct-report': 'Direct Reports',
 }
 
@@ -32,7 +32,7 @@ const NOMINATION_CATEGORIES = [
   ['Reporting Manager', 'Your immediate reporting manager.', '1 or more', '1'],
   ['Skip / BU Head', 'Your skip-level manager or relevant BU Head.', '1 or more', '1'],
   ['Direct Reports', 'Team members (on-roll or off-roll) reporting directly to you, if applicable.', 'Either 0 or 2 or more', 'Minimum 2 (if nominated)'],
-  ['Peers / Internal Customers / External Stakeholders', 'Peers, internal customers, cross-functional partners, and external stakeholders who regularly interact with you.', '4 or more', '2'],
+  ['Peers / Internal Customers', 'Peers, internal customers, and cross-functional partners within Bajaj Auto who regularly interact with you.', '4 or more', '2'],
 ]
 
 function RequirementsTable({ compact = false }) {
@@ -98,8 +98,8 @@ function NominationInstructions({ nominationDeadline, feedbackCutoff, onAccept }
             <li><strong>Relevance over comfort.</strong> Include people who will give you a candid and balanced view, including those you find challenging to work with.</li>
             <li><strong>Range of perspectives.</strong> Cover different parts of your working world so your report reflects how you operate across the organisation.</li>
             <li><strong>Sufficient exposure.</strong> Nominate people who have worked with you closely enough, and recently enough, to comment meaningfully.</li>
-            <li><strong>External stakeholders count.</strong> Vendors, dealers, partners and customers outside Bajaj Auto can be nominated.</li>
-            <li><strong>Position-level restriction.</strong> Employees at MX, CX, DX, L0 or L1 cannot be nominated as Peers / Internal Customers / External Stakeholders or Direct Reports. They may be included only when they are your applicable Reporting Manager, Skip Manager or BU Head.</li>
+            <li><strong>Internal respondents only.</strong> External stakeholders cannot be nominated.</li>
+            <li><strong>Position-level restriction.</strong> Employees at MX, CX, DX, L0 or L1 cannot be nominated as Peers / Internal Customers or Direct Reports. They may be included only when they are your applicable Reporting Manager, Skip Manager or BU Head.</li>
           </ul></div>
           <div className="border-t pt-6"><h2 className="text-base font-bold text-[#1e4d8c]">Respondent categories and minimums</h2><p className="mt-2">The minimum response threshold protects individual respondent confidentiality.</p><div className="mt-4"><RequirementsTable /></div>
             <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-900"><strong>Please read the last column carefully.</strong> It shows the minimum responses required from each category to generate the 360° Feedback Report. A value of 0 means responses from that category are not required for report generation.</div>
@@ -409,6 +409,13 @@ export default function Nominees360() {
 
   async function addExternalNominee(relationship, index) {
     const draft = externalDrafts[relationship][index]
+    if (draft.isExternal || !draft.email.trim().toLowerCase().endsWith('@bajajauto.co.in')) {
+      setExternalDrafts((prev) => ({
+        ...prev,
+        [relationship]: prev[relationship].map((item, draftIndex) => draftIndex === index ? { ...item, eligibilityError: 'External stakeholders cannot be nominated for 360 degree feedback.' } : item),
+      }))
+      return
+    }
     const draftKey = `${relationship}:${index}`
     const isBlockedSelection = BLOCKED_SELF_SELECTION_EMPLOYEE_IDS.has(String(draft.employeeId || '').trim())
       || BLOCKED_SELF_SELECTION_EMAILS.has(String(draft.email || '').trim().toLowerCase())
@@ -544,7 +551,7 @@ export default function Nominees360() {
                 >
                   {isChecking ? 'Checking…' : 'Add'}
                 </button>
-                {RESTRICTED_RELATIONSHIPS.has(relationship) && <label title={draft.directorySelected ? 'Employees selected from the directory are internal respondents.' : undefined} className={`flex items-center gap-2 px-1 text-xs ${draft.directorySelected ? 'cursor-not-allowed text-slate-400' : 'text-slate-600'}`}><input type="checkbox" checked={draft.isExternal} disabled={draft.directorySelected} onChange={(event) => toggleExternalDraft(relationship, index, event.target.checked)} className="accent-[#1e4d8c] disabled:cursor-not-allowed" />External stakeholder</label>}
+                {RESTRICTED_RELATIONSHIPS.has(relationship) && <label title="External stakeholders cannot be nominated." className="flex cursor-not-allowed items-center gap-2 px-1 text-xs text-slate-400"><input type="checkbox" checked={false} disabled readOnly />External stakeholder (unavailable)</label>}
               </div>
             </div>
             {duplicateEmail && <p className="mt-2 text-xs font-medium text-red-600">This email address is already in the nominee list.</p>}
@@ -649,7 +656,7 @@ export default function Nominees360() {
 
       <div className="mb-5">
         <div className="flex flex-wrap items-start justify-between gap-3"><div><h1 className="text-xl font-bold text-[#1a1f2e]">360 Nominee Submission</h1>
-        <p className="text-xs text-gray-400 mt-1">Add each respondent’s full name, email address and Ticket ID. Mark external stakeholders where applicable.</p></div>
+        <p className="text-xs text-gray-400 mt-1">Add each respondent’s full name, email address and Ticket ID. Only internal respondents can be nominated.</p></div>
         {!submitted && <button onClick={() => setInstructionsAccepted(false)} className="rounded-lg border border-[#163f73] bg-[#1e4d8c] px-3 py-2 text-xs font-semibold text-white shadow-sm hover:bg-[#163f73]">← Back to Instructions</button>}</div>
         {!isEditing && <p className="text-sm text-gray-500 mt-0.5">
           {isReviewing
@@ -667,7 +674,7 @@ export default function Nominees360() {
       {!submitted && (
         <div className="mb-4 rounded-lg border border-slate-200 bg-white px-4 py-4 text-sm text-slate-700">
           <p className="font-bold">How the nomination form works</p>
-          <ol className="mt-2 list-decimal space-y-1 pl-5 text-xs leading-5"><li>Add each respondent’s full name and email address. Tick External for anyone outside Bajaj Auto.</li><li>Check every email address carefully. An incorrect address means that person never receives the form.</li><li>Fill all required nominations before submitting. Submission launches your 360 and sends invitations immediately.</li><li>Once submitted, your nominee list is locked and cannot be changed later.</li></ol>
+          <ol className="mt-2 list-decimal space-y-1 pl-5 text-xs leading-5"><li>Add each respondent’s full name and email address. External stakeholders cannot be nominated.</li><li>Check every email address carefully. An incorrect address means that person never receives the form.</li><li>Fill all required nominations before submitting. Submission launches your 360 and sends invitations immediately.</li><li>Once submitted, your nominee list is locked and cannot be changed later.</li></ol>
         </div>
       )}
 

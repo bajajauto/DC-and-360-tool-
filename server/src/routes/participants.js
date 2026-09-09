@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { prisma } from '../db.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
 import { httpError } from '../utils/httpError.js'
+import { hasBajajAutoEmail } from '../utils/emailAccess.js'
 import {
   buildInviteUrl,
   generateMagicToken,
@@ -48,7 +49,6 @@ const nomineeEligibilitySchema = nomineeSchema.pick({
 
 const RESTRICTED_POSITION_LEVELS = new Set(['MX', 'CX', 'DX', 'L0', 'L1'])
 const RESTRICTED_POSITION_RELATIONSHIPS = new Set(['peer', 'direct-report'])
-const EXTERNAL_ALLOWED_RELATIONSHIPS = new Set(['peer', 'direct-report'])
 const RESTRICTED_NOMINATION_MESSAGE = 'You cannot choose the selected user as your 360 respondent for this category. You may add them under the Reporting Manager, Skip Manager, or BU Head category (wherever applicable) instead.'
 const BLOCKED_SELF_SELECTION_MESSAGE = 'Selection of this user as a 360° respondent is restricted.'
 const BLOCKED_SELF_SELECTION_EMPLOYEE_IDS = new Set(['26207', '36020', '10258', '54521'])
@@ -78,12 +78,8 @@ async function assertNomineePositionEligibility(nominee, db = prisma) {
   if (BLOCKED_SELF_SELECTION_EMPLOYEE_IDS.has(employeeId) || BLOCKED_SELF_SELECTION_EMAILS.has(normalizeEmail(nominee.email))) {
     throw httpError(400, BLOCKED_SELF_SELECTION_MESSAGE)
   }
-  if (nominee.isExternal) {
-    const internalEntry = await db.employeeDirectoryEntry.findFirst({
-      where: { email: normalizeEmail(nominee.email) },
-    })
-    if (internalEntry) throw httpError(400, 'Employees listed in the employee directory cannot be marked as external stakeholders')
-    return null
+  if (nominee.isExternal || !hasBajajAutoEmail(nominee.email)) {
+    throw httpError(400, 'External stakeholders cannot be nominated for 360 degree feedback. Please select an internal respondent.')
   }
   const directoryEntry = await findDirectoryEntry(nominee, db)
   if (directoryEntry && (BLOCKED_SELF_SELECTION_EMPLOYEE_IDS.has(String(directoryEntry.employeeId || '').trim())
@@ -379,8 +375,8 @@ participantsRouter.put('/:participantId/nominees', asyncHandler(async (req, res)
   if (payload.nominees.some((nominee) => !nominee.isExternal && !nominee.employeeId)) {
     throw httpError(400, 'Ticket ID is required for internal respondents')
   }
-  if (payload.nominees.some((nominee) => nominee.isExternal && !EXTERNAL_ALLOWED_RELATIONSHIPS.has(nominee.relationship))) {
-    throw httpError(400, 'External stakeholders can only be added within the Peers or Direct Reports categories')
+  if (payload.nominees.some((nominee) => nominee.isExternal)) {
+    throw httpError(400, 'External stakeholders cannot be nominated for 360 degree feedback. Please select an internal respondent.')
   }
   for (const nominee of payload.nominees) {
     assertNomineeIsNotParticipant(nominee, participant)
