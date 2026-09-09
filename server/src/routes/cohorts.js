@@ -278,6 +278,11 @@ cohortsRouter.patch('/:cohortId', asyncHandler(async (req, res) => {
   assertCohortDateOrder({ ...existing, ...payload })
 
   const cutoffWasUpdated = Object.prototype.hasOwnProperty.call(payload, 'threeSixtyCutoff')
+  const changedDeadlines = cohortDeadlineFields
+    .map(([key]) => key)
+    .filter((key) => Object.prototype.hasOwnProperty.call(payload, key)
+      && (payload[key]?.getTime() ?? null) !== (existing[key]?.getTime() ?? null))
+  const pendingEmailIds = []
   const cohort = await prisma.$transaction(async (tx) => {
     const updated = await tx.cohort.update({
       where: { id: req.params.cohortId },
@@ -297,9 +302,30 @@ cohortsRouter.patch('/:cohortId', asyncHandler(async (req, res) => {
       })
     }
 
+    if (changedDeadlines.length) {
+      const participants = await tx.participant.findMany({
+        where: { cohortId: updated.id, archivedAt: null },
+        include: { user: true },
+      })
+      for (const participant of participants) {
+        const email = await createQueuedEmail({
+          templateId: 'cohort-deadlines-updated',
+          toEmail: participant.user.email,
+          toName: participant.user.name,
+          context: { 'Participant Name': participant.user.name },
+          entity: 'Participant',
+          entityId: participant.id,
+          actorId: req.auth?.userId || null,
+          metadata: { cohortId: updated.id, changedDeadlines },
+        }, tx)
+        if (email) pendingEmailIds.push(email.id)
+      }
+    }
+
     return updated
   })
 
+  await Promise.all(pendingEmailIds.map((id) => sendEmail(id)))
   res.json({ data: toCohortDto(cohort) })
 }))
 

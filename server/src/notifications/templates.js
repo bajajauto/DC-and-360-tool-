@@ -6,6 +6,19 @@ const support = `If you have any questions, please write to your Business HR, Pa
 
 export const notificationTemplates = [
   {
+    templateId: 'cohort-deadlines-updated',
+    phase: 'Setup',
+    trigger: 'Cohort deadlines changed; sent to active participants in the cohort',
+    recipient: 'Participant',
+    subject: 'Development Centre | Updated deadlines',
+    body: `Dear {{Participant Name}},
+
+Your updated deadlines have been uploaded to the Development Centre tool.
+Please log in to the tool to view the updated deadlines and take note of the timelines applicable to you.
+
+${signature}`,
+  },
+  {
     templateId: 'welcome',
     phase: 'Setup',
     trigger: 'Employee details uploaded, participant account created',
