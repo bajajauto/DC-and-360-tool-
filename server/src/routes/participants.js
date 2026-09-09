@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { prisma } from '../db.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
 import { httpError } from '../utils/httpError.js'
+import { hasBajajAutoEmail } from '../utils/emailAccess.js'
 import {
   buildInviteUrl,
   generateMagicToken,
@@ -13,6 +14,7 @@ import {
 import { deriveTaskStatus, taskCompletionPercent, toNomineeDto, toParticipantSummary } from '../utils/mappers.js'
 import { createQueuedEmail, sendEmail } from '../notifications/service.js'
 import { getBehaviourIds, getSurveySections } from '../../../src/data/surveyConfig.js'
+import { getSelfReflectionQuestions } from '../../../src/data/questionnaireVersions.js'
 import { hasDeadlinePassed } from '../utils/deadlines.js'
 
 export const participantsRouter = Router()
@@ -48,7 +50,6 @@ const nomineeEligibilitySchema = nomineeSchema.pick({
 
 const RESTRICTED_POSITION_LEVELS = new Set(['MX', 'CX', 'DX', 'L0', 'L1'])
 const RESTRICTED_POSITION_RELATIONSHIPS = new Set(['peer', 'direct-report'])
-const EXTERNAL_ALLOWED_RELATIONSHIPS = new Set(['peer', 'direct-report'])
 const RESTRICTED_NOMINATION_MESSAGE = 'You cannot choose the selected user as your 360 respondent for this category. You may add them under the Reporting Manager, Skip Manager, or BU Head category (wherever applicable) instead.'
 const BLOCKED_SELF_SELECTION_MESSAGE = 'Selection of this user as a 360° respondent is restricted.'
 const BLOCKED_SELF_SELECTION_EMPLOYEE_IDS = new Set(['26207', '36020', '10258', '54521'])
@@ -78,12 +79,8 @@ async function assertNomineePositionEligibility(nominee, db = prisma) {
   if (BLOCKED_SELF_SELECTION_EMPLOYEE_IDS.has(employeeId) || BLOCKED_SELF_SELECTION_EMAILS.has(normalizeEmail(nominee.email))) {
     throw httpError(400, BLOCKED_SELF_SELECTION_MESSAGE)
   }
-  if (nominee.isExternal) {
-    const internalEntry = await db.employeeDirectoryEntry.findFirst({
-      where: { email: normalizeEmail(nominee.email) },
-    })
-    if (internalEntry) throw httpError(400, 'Employees listed in the employee directory cannot be marked as external stakeholders')
-    return null
+  if (nominee.isExternal || !hasBajajAutoEmail(nominee.email)) {
+    throw httpError(400, 'External stakeholders cannot be nominated for 360 degree feedback. Please select an internal respondent.')
   }
   const directoryEntry = await findDirectoryEntry(nominee, db)
   if (directoryEntry && (BLOCKED_SELF_SELECTION_EMPLOYEE_IDS.has(String(directoryEntry.employeeId || '').trim())
@@ -126,16 +123,14 @@ const participantWorkSchema = z.object({
 })
 
 const placeholderPattern = /^(?:n\/?a|none|nil|[^\p{L}\p{N}]+)$/iu
-const PRE_WORK_QUESTION_KEYS = ['q1', 'q2', 'q3', 'q4', 'q5', 'q6', 'q8', 'q9', 'q10']
-
 function validResponse(value, minimum = 1) {
   const text = String(value || '').trim()
   return text.length >= minimum && !placeholderPattern.test(text)
 }
 
-function validateParticipantWork(type, answers) {
+function validateParticipantWork(type, answers, cohort) {
   if (type === 'pre-work') {
-    const invalid = PRE_WORK_QUESTION_KEYS.filter((key) => !validResponse(answers[key], 15))
+    const invalid = getSelfReflectionQuestions(cohort?.questionnaireVersion).filter(({ key }) => !validResponse(answers[key], 15))
     if (invalid.length) throw httpError(400, 'Please answer every Self Reflection question with at least 15 characters. Placeholder responses such as NA, None, hyphens, or dots are not accepted.')
     return
   }
@@ -210,9 +205,9 @@ const ROLE_INTERVIEW_KEYS = [
   ...['role', 'roleDescription', 'bu', 'duration'].map((key) => `transition1_${key}`),
 ]
 
-function countAnsweredPreWork(preWork) {
+function countAnsweredPreWork(preWork, cohort) {
   const answers = preWork?.answers || {}
-  return PRE_WORK_QUESTION_KEYS.filter((key) => String(answers[key] || '').trim().length > 0).length
+  return getSelfReflectionQuestions(cohort?.questionnaireVersion).filter(({ key }) => String(answers[key] || '').trim().length > 0).length
 }
 
 function countAnsweredRoleInterview(roleInterview) {
@@ -264,7 +259,7 @@ participantsRouter.get('/:participantId', asyncHandler(async (req, res) => {
     if (task.status !== 'SUBMITTED') return false
     const ratings = task.responses?.[0]?.ratings
     if (!ratings || typeof ratings !== 'object' || Array.isArray(ratings)) return false
-    return getBehaviourIds(getSurveySections(task.relationship)).every((id) => Number.isFinite(ratings[id]) && ratings[id] >= 1 && ratings[id] <= 4)
+    return getBehaviourIds(getSurveySections(task.relationship, participant.cohort.questionnaireVersion)).every((id) => Number.isFinite(ratings[id]) && ratings[id] >= 1 && ratings[id] <= 4)
   })
   const cutoffPassed = hasCutoffPassed(participant.cohort.threeSixtyCutoff)
   const nomineesSubmitted = participant.nominees.length > 0 && participant.nominees.every((nominee) => nominee.status === 'SUBMITTED')
@@ -304,7 +299,9 @@ participantsRouter.get('/:participantId', asyncHandler(async (req, res) => {
       taskCompletionPercent: taskCompletionPercent(taskStatus),
       respondents,
       responseSummary,
-      preWorkAnsweredCount: countAnsweredPreWork(participant.preWork),
+      preWorkAnsweredCount: countAnsweredPreWork(participant.preWork, participant.cohort),
+      selfReflectionQuestions: getSelfReflectionQuestions(participant.cohort.questionnaireVersion),
+      questionnaireVersion: participant.cohort.questionnaireVersion,
       roleInterviewAnsweredCount: countAnsweredRoleInterview(participant.roleInterview),
       roleInterviewQuestionCount: ROLE_INTERVIEW_KEYS.length,
       cohort: {
@@ -332,7 +329,7 @@ participantsRouter.get('/:participantId/work/:type', asyncHandler(async (req, re
   assertParticipantAccess(req, participant)
   const value = req.params.type === 'role-interview' ? participant.roleInterview : participant.preWork
   const cutoff = req.params.type === 'role-interview' ? participant.cohort.roleInterviewDeadline : participant.cohort.preWorkDeadline
-  res.json({ data: { ...(value || { answers: {}, status: 'draft', submittedAt: null }), cutoff: cutoff?.toISOString() || null, canEdit: !hasCutoffPassed(cutoff) } })
+  res.json({ data: { ...(value || { answers: {}, status: 'draft', submittedAt: null }), questionnaireVersion: participant.cohort.questionnaireVersion, questions: req.params.type === 'pre-work' ? getSelfReflectionQuestions(participant.cohort.questionnaireVersion) : undefined, cutoff: cutoff?.toISOString() || null, canEdit: !hasCutoffPassed(cutoff) } })
 }))
 
 participantsRouter.put('/:participantId/work/:type', asyncHandler(async (req, res) => {
@@ -344,7 +341,7 @@ participantsRouter.put('/:participantId/work/:type', asyncHandler(async (req, re
   const current = participant[field]
   const cutoff = req.params.type === 'role-interview' ? participant.cohort.roleInterviewDeadline : participant.cohort.preWorkDeadline
   if (hasCutoffPassed(cutoff)) throw httpError(409, `The ${req.params.type === 'role-interview' ? 'Role Interview' : 'Self Reflection'} cutoff has passed. This submission can no longer be edited.`)
-  if (payload.submit) validateParticipantWork(req.params.type, payload.answers)
+  if (payload.submit) validateParticipantWork(req.params.type, payload.answers, participant.cohort)
   const remainsSubmitted = current?.status === 'submitted'
   const submitted = payload.submit || remainsSubmitted
   const submittedAt = submitted ? current?.submittedAt || new Date().toISOString() : null
@@ -379,8 +376,8 @@ participantsRouter.put('/:participantId/nominees', asyncHandler(async (req, res)
   if (payload.nominees.some((nominee) => !nominee.isExternal && !nominee.employeeId)) {
     throw httpError(400, 'Ticket ID is required for internal respondents')
   }
-  if (payload.nominees.some((nominee) => nominee.isExternal && !EXTERNAL_ALLOWED_RELATIONSHIPS.has(nominee.relationship))) {
-    throw httpError(400, 'External stakeholders can only be added within the Peers or Direct Reports categories')
+  if (payload.nominees.some((nominee) => nominee.isExternal)) {
+    throw httpError(400, 'External stakeholders cannot be nominated for 360 degree feedback. Please select an internal respondent.')
   }
   for (const nominee of payload.nominees) {
     assertNomineeIsNotParticipant(nominee, participant)
@@ -501,7 +498,7 @@ participantsRouter.post('/:participantId/self-feedback-task', asyncHandler(async
     include: { responses: true },
   })
   const ratings = task.responses?.[0]?.ratings
-  const requiredIds = getBehaviourIds(getSurveySections('SELF'))
+  const requiredIds = getBehaviourIds(getSurveySections('SELF', participant.cohort.questionnaireVersion))
   const answered = ratings && typeof ratings === 'object' && !Array.isArray(ratings)
     ? requiredIds.filter((id) => Number.isFinite(ratings[id]) && ratings[id] >= 1 && ratings[id] <= 4).length
     : 0
