@@ -2,7 +2,7 @@ import { prisma } from '../db.js'
 import { notificationTemplates } from './templates.js'
 
 const TEMPLATE_CC_ROLES = {
-  welcome: ['BUHR', 'LEARN'],
+  welcome: ['LEARN'],
   'buhr-participant-credentials': ['PALAK'],
   'stage-deadline-reminder': ['BUHR', 'LEARN'],
   'report-360-released': ['BUHR', 'LEARN', 'MANAGER'],
