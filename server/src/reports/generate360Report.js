@@ -152,13 +152,10 @@ function getScore(tasks, behaviourIds, group) {
   return average(values)
 }
 
-// Rule 1: competency overall = mean of that competency's per-statement group means
-// (computed first at statement level), not a flat mean of every raw rating.
+// Average the raw ratings across the competency. Behaviour-row formatting must
+// never feed back into the overall; round only when formatting the final score.
 function getCompetencyOverall(tasks, behaviourIds, group) {
-  const statementMeans = behaviourIds
-    .map((behaviourId) => getScore(tasks, [behaviourId], group))
-    .filter((value) => value !== null)
-  return average(statementMeans)
+  return getScore(tasks, behaviourIds, group)
 }
 
 function countByGroup(items, getRelationship) {
@@ -202,7 +199,7 @@ function collectSelfReflection(tasks, sectionId) {
     .join('\n')
 }
 
-function buildReportTokens(participant) {
+export function buildReportTokens(participant) {
   const submittedTasks = participant.feedbackTasks.filter((task) => task.status === 'SUBMITTED')
   const nominatedCounts = countByGroup(participant.nominees, (nominee) => nominee.relationship)
   const respondedCounts = countByGroup(submittedTasks, (task) => task.relationship)
