@@ -4,7 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { api } from '../../lib/api'
 import { formatDateOfJoining } from '../../lib/dateFormatting'
 import { downloadZip } from '../../lib/reportDownload'
-import { downloadRoleInterviewPdf } from './EvidenceDetail'
+import { downloadRoleInterviewPdf, downloadSelfReflectionPdf } from './EvidenceDetail'
 
 function StatusPill({ children, tone = 'gray' }) {
   const tones = {
@@ -272,7 +272,7 @@ export default function CandidateProfiles() {
               <EvidenceCard icon={Camera} title="Participant Photograph" meta="Identity evidence" to={`/assessor/candidates/${selected.id}/photograph${selectedCohortId !== 'all' ? `?cohortId=${encodeURIComponent(selectedCohortId)}` : ''}`} />
               <EvidenceCard icon={MessageSquareText} title="Role Interview" meta={selected.roleInterview.status} to={`/assessor/candidates/${selected.id}/role-interview${selectedCohortId !== 'all' ? `?cohortId=${encodeURIComponent(selectedCohortId)}` : ''}`} onDownload={() => downloadRoleInterviewPdf(selected)} />
               <EvidenceCard icon={FileText} title="360° Feedback Report" meta={selected.report360.status} to={`/assessor/candidates/${selected.id}/360-report${selectedCohortId !== 'all' ? `?cohortId=${encodeURIComponent(selectedCohortId)}` : ''}`} />
-              <EvidenceCard icon={BriefcaseBusiness} title="Self Reflection" meta={selected.preWork.status} to={`/assessor/candidates/${selected.id}/pre-work${selectedCohortId !== 'all' ? `?cohortId=${encodeURIComponent(selectedCohortId)}` : ''}`} />
+              <EvidenceCard icon={BriefcaseBusiness} title="Self Reflection" meta={selected.preWork.status} to={`/assessor/candidates/${selected.id}/pre-work${selectedCohortId !== 'all' ? `?cohortId=${encodeURIComponent(selectedCohortId)}` : ''}`} onDownload={() => downloadSelfReflectionPdf(selected)} />
             </div>
 
           </main>
