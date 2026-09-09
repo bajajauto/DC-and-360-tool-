@@ -81,15 +81,15 @@ const operationalExportCards = [
     icon: FileText,
     title: 'Cohort Master Tracker',
     desc: 'One row per participant with status across every stage.',
-    cols: 'Ticket ID, Name, BU, Details, Nominations, Self Reflection, Photo, 360 Responses, OB Sheet, Reports',
+    cols: 'Ticket ID, Name, BU, Details, Nominations, Self Reflection, Photo, Self 360, 360 Responses, OB Sheet, Reports',
     best: 'Weekly cohort health checks',
   },
   {
     id: 'threesixty',
     icon: Users,
     title: '360 Response Tracker',
-    desc: 'Response counts by respondent group per participant. No content, only counts.',
-    cols: 'Ticket ID, Participant, Respondent Group, Nominated, Responded, Pending',
+    desc: 'Submission status for each participant’s Self 360 and nominated respondents.',
+    cols: 'Cohort, Participant, Employee ID, Designation, BU, Relationship (including Self), Nominee Name, Nominee Email, 360 Form Status, Nominated On, Responded On',
     best: 'Deciding where reminders are needed',
   },
 ]

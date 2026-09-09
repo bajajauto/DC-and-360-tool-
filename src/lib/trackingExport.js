@@ -89,7 +89,7 @@ export function exportParticipantProcessStatus(participant, cohortName = '') {
       participant.designation,
       participant.bu,
       liveStage(participant),
-      participant.selfFeedback?.status === 'submitted' ? 'Done' : 'Not done',
+      participant.selfFeedback?.status === 'submitted' ? 'Submitted' : 'Pending',
       participant.responses,
       participant.totalResponses,
       Math.max(0, participant.totalResponses - participant.responses),
@@ -115,7 +115,7 @@ export function exportParticipantNomineeStatus(participant) {
       'Self',
       `${participant.name} (Self)`,
       participant.email || '',
-      participant.selfFeedback?.status === 'submitted' ? 'Done' : 'Not done',
+      participant.selfFeedback?.status === 'submitted' ? 'Submitted' : 'Pending',
       '',
       participant.selfFeedback?.respondedOn || '',
     ],
@@ -148,7 +148,7 @@ export function exportCohortProcessStatus(cohort, participants) {
       participant.designation,
       participant.bu,
       liveStage(participant),
-      participant.selfFeedback?.status === 'submitted' ? 'Done' : 'Not done',
+      participant.selfFeedback?.status === 'submitted' ? 'Submitted' : 'Pending',
       participant.responses,
       participant.totalResponses,
       Math.max(0, participant.totalResponses - participant.responses),
@@ -174,7 +174,7 @@ export function exportBuhrProcessStatus(businessUnit, participants) {
       participant.cohort?.name || 'Unassigned',
       liveStage(participant),
       participant.nominees?.length || 0,
-      participant.selfFeedback?.status === 'submitted' ? 'Done' : 'Not done',
+      participant.selfFeedback?.status === 'submitted' ? 'Submitted' : 'Pending',
       participant.responses,
       participant.totalResponses,
       Math.max(0, participant.totalResponses - participant.responses),
@@ -203,7 +203,7 @@ export function exportBuhrNomineeStatus(scope, participants) {
         'Self',
         `${participant.name} (Self)`,
         participant.email || '',
-        participant.selfFeedback?.status === 'submitted' ? 'Done' : 'Not done',
+        participant.selfFeedback?.status === 'submitted' ? 'Submitted' : 'Pending',
         '',
         participant.selfFeedback?.respondedOn || '',
       ],
@@ -242,7 +242,7 @@ export function exportCohortNomineeStatus(cohort, participants) {
         'Self',
         `${participant.name} (Self)`,
         participant.email || '',
-        participant.selfFeedback?.status === 'submitted' ? 'Done' : 'Not done',
+        participant.selfFeedback?.status === 'submitted' ? 'Submitted' : 'Pending',
         '',
         participant.selfFeedback?.respondedOn || '',
       ],
@@ -269,7 +269,7 @@ export function exportCohortNomineeStatus(cohort, participants) {
 
 export function exportCohort360ResponseSummary(cohort, participants) {
   const responseRows = [
-    ['Ticket ID', 'Participant', 'Status', 'Nominated', 'Responded', 'Pending'],
+    ['Ticket ID', 'Participant', 'Status', 'Self 360', 'Nominated', 'Responded', 'Pending'],
     ...participants
       .filter((participant) => participant.nominees?.length)
       .map((participant) => {
@@ -278,6 +278,7 @@ export function exportCohort360ResponseSummary(cohort, participants) {
           participant.employeeId,
           participant.name,
           pending ? 'Live' : 'Complete',
+          participant.selfFeedback?.status === 'submitted' ? 'Submitted' : 'Pending',
           participant.totalResponses,
           participant.responses,
           pending,

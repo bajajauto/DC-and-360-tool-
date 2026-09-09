@@ -594,11 +594,11 @@ function ParticipantsTab({ rows, onManage, cohortId, onUpdated }) {
         subtitle="Live status across documents, nominations, 360 response collection and report readiness."
         action={<div className="flex items-center gap-2"><Badge tone="info">Live cohort</Badge><button onClick={onManage} className="inline-flex items-center gap-2 rounded-lg bg-[#1e5fba] px-3 py-2 text-xs font-semibold text-white hover:bg-[#0e3f87]"><Plus size={14}/>Manage Participants</button></div>}
       />
-      <div className="overflow-hidden rounded-xl border border-[#d5dce5]">
+      <div className="overflow-x-auto rounded-xl border border-[#d5dce5]">
         <table className="w-full border-collapse bg-white text-left text-[13px]">
           <thead className="bg-[#ebf2fa]">
             <tr>
-              {['Nickname', 'Ticket ID', 'Name', 'BU', 'Nominations', 'Self Reflection', 'Photo', '360 Responses', '360° Feedback Report Status', 'DC Report Status', ''].map((label) => (
+              {['Nickname', 'Ticket ID', 'Name', 'BU', 'Nominations', 'Self Reflection', 'Photo', 'Self 360', '360 Responses', '360° Feedback Report Status', 'DC Report Status', ''].map((label) => (
                 <th key={label} className="border-b border-[#d5dce5] px-3 py-2.5 text-[11px] font-bold uppercase tracking-wide text-slate-600">{label}</th>
               ))}
             </tr>
@@ -610,6 +610,7 @@ function ParticipantsTab({ rows, onManage, cohortId, onUpdated }) {
               const responseLabel = nominationsSubmitted ? `${participant.responses}/${participant.totalResponses}` : '0/0'
               const preWorkSubmitted = participant.preWorkSubmitted || participant.taskStatus?.prework === 'completed'
               const photoSubmitted = participant.photoSubmitted || participant.taskStatus?.photo === 'completed'
+              const self360Status = participant.selfFeedback?.status
               const report360 = participant.reports?.find((report) => report.type === '360')
               const report360Status = report360?.status || participant.reportStatus
               const reportTone = ['generated', 'released'].includes(report360Status) ? 'success' : report360Status === 'ready' ? 'info' : 'warning'
@@ -629,6 +630,7 @@ function ParticipantsTab({ rows, onManage, cohortId, onUpdated }) {
                   <td className="border-b border-[#d5dce5] px-3 py-3"><Badge tone={nominationsSubmitted ? 'success' : 'warning'}>{nominationsSubmitted ? 'Submitted' : 'Not submitted'}</Badge></td>
                   <td className="border-b border-[#d5dce5] px-3 py-3"><Badge tone={preWorkSubmitted ? 'success' : 'warning'}>{preWorkSubmitted ? 'Submitted' : 'Pending'}</Badge></td>
                   <td className="border-b border-[#d5dce5] px-3 py-3"><Badge tone={photoSubmitted ? 'success' : 'warning'}>{photoSubmitted ? 'Uploaded' : 'Pending'}</Badge></td>
+                  <td className="border-b border-[#d5dce5] px-3 py-3"><Badge tone={self360Status === 'submitted' ? 'success' : 'warning'}>{self360Status === 'submitted' ? 'Submitted' : 'Pending'}</Badge></td>
                   <td className="border-b border-[#d5dce5] px-3 py-3"><Badge tone={complete360 ? 'success' : nominationsSubmitted && participant.responses ? 'info' : 'neutral'}>{responseLabel}</Badge></td>
                   <td className="border-b border-[#d5dce5] px-3 py-3"><Badge tone={reportTone}>{reportLabel}</Badge></td>
                   <td className="border-b border-[#d5dce5] px-3 py-3"><Badge tone={dcReportGenerated ? 'success' : 'warning'}>{dcReportLabel}</Badge></td>
