@@ -6,6 +6,7 @@ import { httpError } from '../utils/httpError.js'
 import { hashMagicToken } from '../utils/magicLinks.js'
 import { signToken } from '../utils/jwt.js'
 import { assertBajajAutoEmail } from '../utils/emailAccess.js'
+import { getParticipantSession } from '../utils/participantSession.js'
 
 export const invitesRouter = Router()
 
@@ -71,12 +72,14 @@ invitesRouter.post('/redeem', asyncHandler(async (req, res) => {
     })
 
     const roles = magicLink.user.roles.map((role) => role.toLowerCase())
-    const authToken = signToken({ sub: magicLink.user.id, email: magicLink.user.email.trim().toLowerCase(), roles, typ: 'user' })
+    const participantSession = await getParticipantSession(prisma, magicLink.user.id)
+    const authToken = signToken({ sub: magicLink.user.id, email: magicLink.user.email.trim().toLowerCase(), roles, typ: 'user', participantId: participantSession.participantId })
 
     return res.json({
       data: {
         token: authToken,
         role: 'buhr',
+        ...participantSession,
         id: magicLink.user.id,
         name: magicLink.user.name,
         email: magicLink.user.email,

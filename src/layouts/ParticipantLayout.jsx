@@ -68,7 +68,7 @@ function BookOpenIcon() {
 export default function ParticipantLayout() {
   const { pathname } = useLocation()
   const navigate = useNavigate()
-  const { user, logout, switchRole, pendingRespondentCount } = useUser()
+  const { user, logout, switchRole, pendingRespondentCount, participantData, participantLoading, participantError, retryParticipantSession } = useUser()
   const [dropdownOpen, setDropdownOpen] = useState(false)
 
   if (!user) {
@@ -240,7 +240,13 @@ export default function ParticipantLayout() {
             </button>
           </div>
         )}
-        <Outlet />
+        {participantLoading ? <div className="p-6 text-sm text-slate-500">Loading your cohort and deadlines...</div>
+          : participantError || !user.participantId || !participantData ? (
+            <div className="m-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900" role="alert">
+              <p>{participantError || 'No active cohort is linked to your account. Please contact the Talent Development team.'}</p>
+              <button onClick={retryParticipantSession} className="mt-3 font-semibold underline">Try again</button>
+            </div>
+          ) : <Outlet />}
       </main>
     </div>
   )

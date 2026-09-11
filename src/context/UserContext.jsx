@@ -64,6 +64,8 @@ function buildUserFromMagicLink(payload) {
 export function UserProvider({ children }) {
   const [user, setUser] = useState(() => readJson(SESSION_KEY, null))
   const [participantData, setParticipantData] = useState(null)
+  const [participantLoading, setParticipantLoading] = useState(true)
+  const [participantError, setParticipantError] = useState('')
   const [activeRole, setActiveRole] = useState(() => {
     const stored = readJson(SESSION_KEY, null)
     return stored?.magicLink?.role ?? stored?.roles?.[0] ?? 'participant'
@@ -74,16 +76,46 @@ export function UserProvider({ children }) {
     try {
       const result = await api.getParticipant(participantId)
       setParticipantData(result.data)
-    } catch {}
+      setParticipantError('')
+    } catch (err) { setParticipantError(err.message) }
   }, [])
 
-  // Restore participant data on page load
+  const [participantReload, setParticipantReload] = useState(0)
+  const retryParticipantSession = useCallback(() => setParticipantReload((value) => value + 1), [])
+
+  // Resolve the signed-in user's own membership, including sessions created
+  // by older BUHR links that omitted participantId. Never use a feedback target.
   useEffect(() => {
-    const stored = readJson(SESSION_KEY, null)
-    if (stored?.participantId) {
-      refreshParticipantData(stored.participantId)
+    let cancelled = false
+    setParticipantData(null)
+    setParticipantError('')
+    if (!user?.roles?.includes('participant')) {
+      setParticipantLoading(false)
+      return
     }
-  }, [refreshParticipantData])
+    setParticipantLoading(true)
+    async function restore() {
+      try {
+        const { data: membership } = await api.getParticipantContext()
+        if (cancelled) return
+        setUser((current) => {
+          if (!current || current.id !== user.id) return current
+          const next = { ...current, ...membership }
+          writeJson(SESSION_KEY, next)
+          return next
+        })
+        if (!membership.participantId) throw new Error('No active cohort is linked to your account. Please contact the Talent Development team.')
+        const result = await api.getParticipant(membership.participantId)
+        if (!cancelled) setParticipantData(result.data)
+      } catch (err) {
+        if (!cancelled) setParticipantError(err.message)
+      } finally {
+        if (!cancelled) setParticipantLoading(false)
+      }
+    }
+    restore()
+    return () => { cancelled = true }
+  }, [user?.id, user?.roles?.join(','), participantReload])
 
   const loginFromCredentials = useCallback((apiData) => {
     // The token is persisted separately by the api client; keep it out of the
@@ -94,22 +126,22 @@ export function UserProvider({ children }) {
     setUser(nextUser)
     setActiveRole(roles[0])
     writeJson(SESSION_KEY, nextUser)
-    if (apiData.participantId) {
-      refreshParticipantData(apiData.participantId)
-    }
+    setParticipantData(null)
+    setParticipantLoading(true)
+    retryParticipantSession()
     return nextUser
-  }, [refreshParticipantData])
+  }, [retryParticipantSession])
 
   const loginFromMagicLink = useCallback((payload) => {
     const nextUser = buildUserFromMagicLink(payload)
     setUser(nextUser)
     setActiveRole(nextUser.magicLink.role)
     writeJson(SESSION_KEY, nextUser)
-    if (nextUser.participantId) {
-      refreshParticipantData(nextUser.participantId)
-    }
+    setParticipantData(null)
+    setParticipantLoading(true)
+    retryParticipantSession()
     return nextUser
-  }, [refreshParticipantData])
+  }, [retryParticipantSession])
 
   const logout = useCallback(() => {
     window.localStorage.removeItem(SESSION_KEY)
@@ -153,6 +185,9 @@ export function UserProvider({ children }) {
       user,
       activeRole,
       participantData,
+      participantLoading,
+      participantError,
+      retryParticipantSession,
       loginFromCredentials,
       loginFromMagicLink,
       logout,

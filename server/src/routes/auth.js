@@ -7,8 +7,15 @@ import { verifyPassword } from '../utils/passwords.js'
 import { signToken } from '../utils/jwt.js'
 import { hasBajajAutoEmail } from '../utils/emailAccess.js'
 import { getRelationshipLabel, getRequiredQuestionTotal } from '../../../src/data/surveyConfig.js'
+import { requireAuth, requireRole } from '../middleware/auth.js'
+import { getParticipantSession } from '../utils/participantSession.js'
 
 export const authRouter = Router()
+
+authRouter.get('/participant-context', requireAuth, requireRole('participant'), asyncHandler(async (req, res) => {
+  if (req.auth.typ !== 'user' || !req.auth.userId) throw httpError(403, 'Sign in with your participant account')
+  res.json({ data: await getParticipantSession(prisma, req.auth.userId) })
+}))
 
 const loginSchema = z.object({
   identifier: z.string().trim().min(1),

@@ -46,6 +46,7 @@ async function apiFetch(path, options = {}) {
 }
 
 export const api = {
+  getParticipantContext: () => apiFetch('/api/auth/participant-context'),
   login: async (identifier, password) => {
     const body = await apiFetch('/api/auth/login', {
       method: 'POST',
