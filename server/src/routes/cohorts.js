@@ -646,14 +646,14 @@ cohortsRouter.patch('/:cohortId/participants/:participantId/nickname', asyncHand
   })
   if (!participant) throw httpError(404, 'Participant not found in this cohort')
 
-  const duplicate = await prisma.participant.findUnique({ where: { nickname }, select: { id: true } })
-  if (duplicate && duplicate.id !== participant.id) throw httpError(409, 'This nickname is already assigned to another participant')
+  const duplicate = await prisma.participant.findFirst({ where: { cohortId: req.params.cohortId, nickname }, select: { id: true } })
+  if (duplicate && duplicate.id !== participant.id) throw httpError(409, 'This nickname is already assigned to another participant in this cohort')
 
   let updated
   try {
     updated = await prisma.participant.update({ where: { id: participant.id }, data: { nickname }, select: { id: true, nickname: true } })
   } catch (error) {
-    if (error?.code === 'P2002') throw httpError(409, 'This nickname is already assigned to another participant')
+    if (error?.code === 'P2002') throw httpError(409, 'This nickname is already assigned to another participant in this cohort')
     throw error
   }
   res.json({ data: updated })
