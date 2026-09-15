@@ -59,12 +59,42 @@ export default function ParticipantDetail() {
 
   useEffect(() => {
     if (!participantId) return
+    let cancelled = false
+    let inFlight = false
     setLoading(true)
+    setParticipant(null)
     setError('')
-    api.getParticipant(participantId)
-      .then((result) => setParticipant(result.data))
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false))
+
+    async function refresh() {
+      if (inFlight) return
+      inFlight = true
+      try {
+        const result = await api.getParticipant(participantId)
+        if (!cancelled) {
+          setParticipant(result.data)
+          setError('')
+        }
+      } catch (err) {
+        if (!cancelled) setError(err.message || 'Unable to refresh participant status.')
+      } finally {
+        inFlight = false
+        if (!cancelled) setLoading(false)
+      }
+    }
+
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') refresh()
+    }
+    refresh()
+    const interval = window.setInterval(refreshWhenVisible, 30000)
+    window.addEventListener('focus', refreshWhenVisible)
+    document.addEventListener('visibilitychange', refreshWhenVisible)
+    return () => {
+      cancelled = true
+      window.clearInterval(interval)
+      window.removeEventListener('focus', refreshWhenVisible)
+      document.removeEventListener('visibilitychange', refreshWhenVisible)
+    }
   }, [participantId])
 
   if (loading) {
@@ -80,13 +110,15 @@ export default function ParticipantDetail() {
 
   if (!participant) return <Navigate to="/td/cohorts" replace />
 
-  const allNomineesSubmitted = participant.totalResponses > 0 && participant.responses === participant.totalResponses
+  const nominees = participant.nominees || []
+  const responses = nominees.filter((nominee) => nominee.feedbackStatus === 'submitted').length
+  const totalResponses = nominees.length
+  const allNomineesSubmitted = totalResponses > 0 && responses === totalResponses
   const reportReady = participant.reportReady === true
   const cutoffPassed = participant.threeSixtyCutoffPassed === true
   const reportGenerated = ['generated', 'released'].includes(participant.reportStatus)
   const reportReleased = participant.reportStatus === 'released'
   const cohort = participant.cohort
-  const nominees = participant.nominees || []
   const relationshipSummary = ['reporting-manager', 'skip-manager', 'peer', 'direct-report'].map((relationship) => {
     const items = nominees.filter((nominee) => nominee.relationship === relationship)
     return {
@@ -117,6 +149,7 @@ export default function ParticipantDetail() {
       </div>
     </header>
     <div className="p-8 max-w-[1360px] mx-auto">
+      {error && <p role="alert" className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">{error} Showing the last loaded status; automatic refresh will retry.</p>}
       <section className="bg-white border border-[#e2e8f0] rounded-2xl p-6 mb-6 flex flex-col lg:flex-row lg:items-center gap-5">
         <div className="w-16 h-16 rounded-2xl bg-[#dceafb] text-[#1e4d8c] flex items-center justify-center text-xl font-bold">{participant.initials}</div>
         <div className="flex-1">
@@ -184,11 +217,11 @@ export default function ParticipantDetail() {
           </section>
 
           <section className="bg-white border border-[#e2e8f0] rounded-2xl overflow-hidden">
-            <div className="px-6 py-5 border-b border-[#e8edf3] flex justify-between"><div><h3 className="font-semibold text-[#172033]">360 feedback collection</h3><p className="text-xs text-gray-400 mt-1">Individual responses remain confidential</p></div><div className="text-right"><p className="text-lg font-bold text-violet-700">{participant.responses}/{participant.totalResponses}</p><p className="text-[10px] text-gray-400">responses received</p></div></div>
+            <div className="px-6 py-5 border-b border-[#e8edf3] flex justify-between"><div><h3 className="font-semibold text-[#172033]">360 feedback collection</h3><p className="text-xs text-gray-500 mt-1">{totalResponses} nominated respondent{totalResponses === 1 ? '' : 's'} · Updates every 30 seconds</p><p className="text-xs text-gray-400 mt-1">Individual responses remain confidential</p></div><div className="text-right"><p className="text-lg font-bold text-violet-700">{responses}/{totalResponses}</p><p className="text-[10px] text-gray-400">feedback responses received</p></div></div>
             <div className="p-5 grid sm:grid-cols-4 gap-3">
-              {relationshipSummary.map(({ relationship, responded, total }) => <div key={relationship} className="rounded-xl bg-[#f8fafc] border border-[#edf1f5] p-4"><p className="text-[11px] text-gray-500">{relationshipLabels[relationship] || relationship}</p><p className="text-lg font-bold text-[#172033] mt-2">{responded}<span className="text-xs font-normal text-gray-400">/{total}</span></p></div>)}
+              {relationshipSummary.map(({ relationship, responded, total }) => <div key={relationship} className="rounded-xl bg-[#f8fafc] border border-[#edf1f5] p-4"><p className="text-[11px] text-gray-500">{relationshipLabels[relationship] || relationship}</p><p className="text-lg font-bold text-[#172033] mt-2">{total}<span className="text-xs font-normal text-gray-500"> nominated</span></p><p className="text-xs text-gray-500 mt-1">{responded}/{total} feedback received</p></div>)}
             </div>
-            {participant.responses < participant.totalResponses && <div className="px-5 pb-5"><button className="flex items-center gap-2 text-xs font-semibold text-[#1e4d8c] border border-blue-200 rounded-lg px-3 py-2 hover:bg-blue-50"><Mail size={14} />Send reminder to pending nominees</button></div>}
+            {responses < totalResponses && <div className="px-5 pb-5"><button className="flex items-center gap-2 text-xs font-semibold text-[#1e4d8c] border border-blue-200 rounded-lg px-3 py-2 hover:bg-blue-50"><Mail size={14} />Send reminder to pending nominees</button></div>}
           </section>
 
           <section className="bg-white border border-[#e2e8f0] rounded-2xl overflow-hidden">
@@ -198,12 +231,12 @@ export default function ParticipantDetail() {
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left">
-                <thead className="bg-[#f8fafc] border-b border-[#e8edf4]"><tr>{['Nominee', 'Relationship', 'Status', 'Nominated', 'Responded'].map((label) => <th key={label} className="px-5 py-3 text-[10px] uppercase tracking-wider font-semibold text-gray-400">{label}</th>)}</tr></thead>
+                <thead className="bg-[#f8fafc] border-b border-[#e8edf4]"><tr>{['Nominee', 'Relationship', 'Nomination status', 'Nominated', 'Feedback status'].map((label) => <th key={label} className="px-5 py-3 text-[10px] uppercase tracking-wider font-semibold text-gray-400">{label}</th>)}</tr></thead>
                 <tbody className="divide-y divide-[#eef2f6]">
                   {nominees.map((nominee) => <tr key={`${nominee.email}-${nominee.relationship}`}>
                     <td className="px-5 py-4"><p className="text-sm font-semibold text-[#172033]">{nominee.name}</p><p className="text-[11px] text-gray-400">{nominee.email}</p></td>
                     <td className="px-5 py-4 text-xs text-gray-600">{nominee.relationshipLabel || relationshipLabels[nominee.relationship] || nominee.relationship}</td>
-                    <td className="px-5 py-4"><span className={`inline-flex rounded-full border px-2 py-1 text-[10px] font-semibold ${nominee.status === 'submitted' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-700'}`}>{nominee.status === 'submitted' ? 'Submitted' : 'Pending'}</span></td>
+                    <td className="px-5 py-4"><span className={`inline-flex rounded-full border px-2 py-1 text-[10px] font-semibold ${nominee.status === 'submitted' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-700'}`}>{nominee.status === 'submitted' ? 'Nominated' : 'Draft'}</span></td>
                     <td className="px-5 py-4 text-xs text-gray-500">{nominee.submittedAt ? new Date(nominee.submittedAt).toLocaleDateString('en-GB') : '-'}</td>
                     <td className={`px-5 py-4 text-xs font-medium ${nominee.feedbackStatus === 'submitted' ? 'text-emerald-700' : 'text-gray-500'}`}>{nominee.feedbackStatus === 'submitted' ? 'Responded' : 'Awaiting response'}</td>
                   </tr>)}
