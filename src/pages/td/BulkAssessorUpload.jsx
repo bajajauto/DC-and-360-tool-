@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
+import { FileSpreadsheet, FolderUp } from 'lucide-react'
 import { api } from '../../lib/api'
 import { matchAssessorFiles, processAssessorEntry } from '../../lib/assessorBulkUpload'
 
@@ -15,6 +16,8 @@ export default function BulkAssessorUpload({ rows, loading, busy, onBusyChange, 
   const [entries, setEntries] = useState([])
   const [running, setRunning] = useState(false)
   const [replaceExisting, setReplaceExisting] = useState(false)
+  const folderInput = useRef(null)
+  const filesInput = useRef(null)
   const cohorts = useMemo(() => [...new Set(rows.map((row) => row.cohort))].sort(), [rows])
   const eligible = entries.filter((entry) => actionable.has(entry.status) && (entry.status === 'report-error' || !entry.participant.workbook || replaceExisting))
   const completed = entries.filter((entry) => entry.status === 'done').length
@@ -44,14 +47,26 @@ export default function BulkAssessorUpload({ rows, loading, busy, onBusyChange, 
     }
   }
 
-  return <section className="mt-5 rounded-2xl border border-[#d5dce5] bg-white p-6">
-    <h2 className="text-lg font-semibold">Bulk assessor upload</h2>
-    <p className="mt-1 text-sm text-slate-600">Choose a folder or multiple Excel files. Names such as Aug26_BAL48853.xlsx and DC_BAL48853.xlsx automatically match employee BAL48853. The prefix does not select a cohort.</p>
-    <fieldset disabled={busy || running || loading} className="mt-4 flex flex-wrap items-end gap-4 disabled:opacity-50">
-      <label className="text-sm">Match within cohort<select value={cohort} onChange={(event) => { setCohort(event.target.value); setEntries([]) }} className="mt-1 block rounded-lg border px-3 py-2"><option value="all">All cohorts</option>{cohorts.map((name) => <option key={name} value={name}>{name}</option>)}</select></label>
-      <label className="text-sm">Choose folder<input aria-label="Choose assessor workbook folder" type="file" webkitdirectory="" multiple onChange={selectFiles} className="mt-1 block max-w-xs text-xs" /></label>
-      <label className="text-sm">Choose files<input aria-label="Choose assessor workbooks" type="file" accept=".xlsx,.xls" multiple onChange={selectFiles} className="mt-1 block max-w-xs text-xs" /></label>
-      <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={replaceExisting} onChange={(event) => setReplaceExisting(event.target.checked)} />Replace existing workbooks</label>
+  return <section className="mt-5 rounded-2xl border-2 border-blue-200 bg-white p-6 shadow-sm">
+    <h2 className="text-xl font-semibold text-[#0f172a]">Bulk assessor upload</h2>
+    <p className="mt-1 text-sm text-slate-600">Upload all employees’ assessor workbooks from one folder.</p>
+    <fieldset disabled={busy || running || loading} className="mt-5 space-y-4 disabled:opacity-50">
+      <label className="block text-sm font-semibold text-slate-700">1. Select cohort<select value={cohort} onChange={(event) => { setCohort(event.target.value); setEntries([]) }} className="mt-2 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 font-normal sm:w-64"><option value="all">All cohorts</option>{cohorts.map((name) => <option key={name} value={name}>{name}</option>)}</select></label>
+      <div className="flex flex-col items-center gap-5 rounded-xl border-2 border-dashed border-blue-300 bg-blue-50 p-6 sm:flex-row">
+        <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-white text-[#1e5fba] shadow-sm"><FolderUp size={32} aria-hidden="true" /></div>
+        <div className="min-w-0 flex-1 text-center sm:text-left">
+          <h3 className="text-base font-semibold text-[#0f172a]">2. Choose your assessor Excel folder</h3>
+          <p className="mt-1 text-sm text-slate-600">We’ll match each file to its employee and show a preview before uploading.</p>
+          <p className="mt-2 text-xs text-slate-500">Use Aug26_BAL48853.xlsx or DC_BAL48853.xlsx · Maximum 7 MB per file</p>
+        </div>
+        <div className="flex w-full shrink-0 flex-col gap-2 sm:w-auto">
+          <input ref={folderInput} aria-label="Choose assessor workbook folder" type="file" webkitdirectory="" multiple onChange={selectFiles} className="hidden" />
+          <button type="button" onClick={() => folderInput.current?.click()} className="inline-flex min-h-12 cursor-pointer items-center justify-center gap-2 rounded-lg bg-[#1e5fba] px-6 py-3 text-sm font-bold text-white shadow-sm hover:bg-[#174c97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:cursor-not-allowed"><FolderUp size={20} aria-hidden="true" />Choose folder</button>
+          <input ref={filesInput} aria-label="Choose assessor workbooks" type="file" accept=".xlsx,.xls" multiple onChange={selectFiles} className="hidden" />
+          <button type="button" onClick={() => filesInput.current?.click()} className="inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border border-blue-300 bg-white px-4 py-2 text-sm font-semibold text-[#1e5fba] hover:bg-blue-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:cursor-not-allowed"><FileSpreadsheet size={17} aria-hidden="true" />Select individual files</button>
+        </div>
+      </div>
+      <label className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" checked={replaceExisting} onChange={(event) => setReplaceExisting(event.target.checked)} className="h-4 w-4 accent-blue-700" />Replace existing workbooks</label>
     </fieldset>
     {entries.length > 0 && <>
       <p className="mt-4 text-sm" role="status">{entries.length} files selected · {eligible.length} eligible · {completed} completed{running ? ' · Processing; keep this page open.' : ''}</p>
