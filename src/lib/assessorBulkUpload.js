@@ -19,6 +19,13 @@ export function matchAssessorFiles(files, participants) {
     ? { ...entry, status: 'blocked', detail: 'Multiple files for this employee. Select only one workbook.' } : entry)
 }
 
+export function removeAssessorEntry(entries, id, participants) {
+  const remaining = entries.filter((entry) => entry.id !== id)
+  const matched = matchAssessorFiles(remaining.map((entry) => entry.file), participants)
+  return remaining.map((entry, index) => entry.status === 'blocked' || entry.status === 'ready'
+    ? { ...matched[index], id: entry.id } : entry)
+}
+
 export async function processAssessorEntry(entry, { readFile, upload, generate, onUploaded, onStatus }) {
   if (entry.status !== 'report-error') {
     onStatus('uploading', 'Uploading workbook…')

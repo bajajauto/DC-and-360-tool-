@@ -1,9 +1,21 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { matchAssessorFiles, processAssessorEntry } from './assessorBulkUpload.js'
+import { matchAssessorFiles, processAssessorEntry, removeAssessorEntry } from './assessorBulkUpload.js'
 
 const participant = { participantId: 'p1', employeeId: 'BAL48853', name: 'Employee', cohort: 'August' }
 const file = (name, size = 100) => ({ name, size })
+
+test('removing a duplicate makes the remaining workbook eligible and preserves completed results', () => {
+  const entries = matchAssessorFiles([file('Aug26_BAL48853.xlsx'), file('DC_BAL48853.xlsx')], [participant])
+  const completed = { id: 9, file: file('DC_OTHER.xlsx'), status: 'done', detail: 'Saved' }
+  const remaining = removeAssessorEntry([...entries, completed], entries[0].id, [participant])
+  assert.equal(remaining.length, 2)
+  assert.equal(remaining[0].id, entries[1].id)
+  assert.equal(remaining[0].status, 'ready')
+  assert.equal(remaining[0].detail, '')
+  assert.deepEqual(remaining[1], completed)
+  assert.deepEqual(removeAssessorEntry([entries[0]], entries[0].id, [participant]), [])
+})
 
 test('matches both naming conventions case-insensitively by exact employee ID', () => {
   for (const name of ['Aug26_BAL48853.xlsx', 'DC_BAL48853.xlsx', 'aug26_bal48853.XLSX']) {

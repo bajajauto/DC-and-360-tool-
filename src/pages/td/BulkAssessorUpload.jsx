@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
-import { FileSpreadsheet, FolderUp } from 'lucide-react'
+import { FileSpreadsheet, FolderUp, Search, Trash2, RotateCcw } from 'lucide-react'
 import { api } from '../../lib/api'
-import { matchAssessorFiles, processAssessorEntry } from '../../lib/assessorBulkUpload'
+import { matchAssessorFiles, processAssessorEntry, removeAssessorEntry } from '../../lib/assessorBulkUpload'
 
 const actionable = new Set(['ready', 'upload-error', 'report-error'])
 const readFile = (file) => new Promise((resolve, reject) => {
@@ -14,6 +14,8 @@ const readFile = (file) => new Promise((resolve, reject) => {
 export default function BulkAssessorUpload({ rows, loading, busy, onBusyChange, onUploaded }) {
   const [cohort, setCohort] = useState('')
   const [entries, setEntries] = useState([])
+  const [search, setSearch] = useState('')
+  const selectionMode = useRef('folder')
   const [running, setRunning] = useState(false)
   const [replaceExisting, setReplaceExisting] = useState(false)
   const folderInput = useRef(null)
@@ -22,6 +24,27 @@ export default function BulkAssessorUpload({ rows, loading, busy, onBusyChange, 
   const hasCohort = cohorts.includes(cohort)
   const eligible = entries.filter((entry) => actionable.has(entry.status) && (entry.status === 'report-error' || !entry.participant.workbook || replaceExisting))
   const completed = entries.filter((entry) => entry.status === 'done').length
+  const hasMatches = entries.some((entry) => entry.participant)
+  const visibleEntries = entries.filter((entry) => `${entry.file.webkitRelativePath || entry.file.name} ${entry.employeeId} ${entry.participant?.name || ''} ${entry.participant?.cohort || ''}`.toLowerCase().includes(search.trim().toLowerCase()))
+
+  function resetList() {
+    if (busy || running) return
+    setEntries([])
+    setSearch('')
+    setReplaceExisting(false)
+  }
+
+  function tryAgain() {
+    if (busy || running || loading || !hasCohort) return
+    resetList()
+    const input = selectionMode.current === 'folder' ? folderInput : filesInput
+    input.current?.click()
+  }
+
+  function removeFile(id) {
+    if (busy || running) return
+    setEntries((current) => removeAssessorEntry(current, id, rows.filter((row) => row.cohort === cohort)))
+  }
 
   function selectFiles(event) {
     if (!hasCohort || busy || running || loading) {
@@ -29,6 +52,8 @@ export default function BulkAssessorUpload({ rows, loading, busy, onBusyChange, 
       return
     }
     setEntries(matchAssessorFiles(event.target.files, rows.filter((row) => row.cohort === cohort)))
+    selectionMode.current = event.target === folderInput.current ? 'folder' : 'files'
+    setSearch('')
     event.target.value = ''
   }
 
@@ -77,13 +102,20 @@ export default function BulkAssessorUpload({ rows, loading, busy, onBusyChange, 
       <label className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" checked={replaceExisting} onChange={(event) => setReplaceExisting(event.target.checked)} className="h-4 w-4 accent-blue-700" />Replace existing workbooks</label>
     </fieldset>
     {entries.length > 0 && <>
+      <div className="mt-5 flex flex-wrap items-center gap-3">
+        <label className="relative min-w-56 flex-1"><Search size={17} aria-hidden="true" className="absolute left-3 top-3 text-slate-400" /><input aria-label="Search selected files" placeholder="Search file name, employee ID or participant" value={search} onChange={(event) => setSearch(event.target.value)} className="min-h-10 w-full rounded-lg border border-slate-300 py-2 pl-10 pr-3 text-sm" /></label>
+        <button type="button" disabled={busy || running || loading} onClick={hasMatches ? resetList : tryAgain} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-blue-300 bg-blue-100 px-4 py-2 text-sm font-semibold text-blue-800 hover:bg-blue-200 disabled:opacity-40"><RotateCcw size={16} aria-hidden="true" />{hasMatches ? 'Reset list' : 'Try again'}</button>
+      </div>
+      {!hasMatches && <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">No files match employees in {cohort}. Check the file names and cohort, then try again to choose another {selectionMode.current === 'folder' ? 'folder' : 'set of files'}.</p>}
+      <p className="mt-2 text-xs text-slate-500">Showing {visibleEntries.length} of {entries.length} files. Search only filters this view; all eligible files in the list will upload. Remove excludes a file from this list only.</p>
       <p className="mt-4 text-sm" role="status">{entries.length} files selected · {eligible.length} eligible · {completed} completed{running ? ' · Processing; keep this page open.' : ''}</p>
       <div className="mt-3 max-h-80 overflow-auto"><table className="w-full text-left text-xs">
-        <thead><tr className="border-b"><th className="p-2">File</th><th className="p-2">Employee</th><th className="p-2">Participant / cohort</th><th className="p-2">Result</th></tr></thead>
-        <tbody>{entries.map((entry) => <tr key={entry.id} className="border-b">
+        <thead><tr className="border-b"><th className="p-2">File</th><th className="p-2">Employee</th><th className="p-2">Participant / cohort</th><th className="p-2">Result</th><th className="p-2">Action</th></tr></thead>
+        <tbody>{!visibleEntries.length && <tr><td colSpan={5} className="p-6 text-center text-slate-500">No files match your search. <button type="button" onClick={() => setSearch('')} className="font-semibold text-blue-700 underline">Clear search</button></td></tr>}{visibleEntries.map((entry) => <tr key={entry.id} className="border-b">
           <td className="p-2 break-all">{entry.file.webkitRelativePath || entry.file.name}</td><td className="p-2">{entry.employeeId || '—'}</td>
           <td className="p-2">{entry.participant ? `${entry.participant.name} / ${entry.participant.cohort}` : '—'}</td>
           <td className={`p-2 ${entry.status === 'done' ? 'text-emerald-700' : entry.status === 'blocked' || entry.status.endsWith('-error') ? 'text-red-700' : 'text-slate-600'}`}>{entry.detail || (entry.participant?.workbook ? replaceExisting ? 'Ready to replace existing workbook' : 'Skipped: workbook exists' : 'Ready to upload')}</td>
+          <td className="p-2"><button type="button" disabled={busy || running} onClick={() => removeFile(entry.id)} aria-label={`Remove ${entry.file.name} from upload list`} className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-3 py-2 font-semibold text-red-700 hover:bg-red-100 disabled:opacity-40"><Trash2 size={14} aria-hidden="true" />Remove</button></td>
         </tr>)}</tbody>
       </table></div>
       <button type="button" disabled={busy || running || !eligible.length} onClick={run} className="mt-4 rounded-lg bg-[#1e5fba] px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-40">{running ? 'Processing…' : 'Upload / retry eligible files'}</button>
