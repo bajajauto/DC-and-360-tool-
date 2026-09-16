@@ -12,23 +12,28 @@ const readFile = (file) => new Promise((resolve, reject) => {
 })
 
 export default function BulkAssessorUpload({ rows, loading, busy, onBusyChange, onUploaded }) {
-  const [cohort, setCohort] = useState('all')
+  const [cohort, setCohort] = useState('')
   const [entries, setEntries] = useState([])
   const [running, setRunning] = useState(false)
   const [replaceExisting, setReplaceExisting] = useState(false)
   const folderInput = useRef(null)
   const filesInput = useRef(null)
-  const cohorts = useMemo(() => [...new Set(rows.map((row) => row.cohort))].sort(), [rows])
+  const cohorts = useMemo(() => [...new Set(rows.map((row) => row.cohort).filter(Boolean))].sort(), [rows])
+  const hasCohort = cohorts.includes(cohort)
   const eligible = entries.filter((entry) => actionable.has(entry.status) && (entry.status === 'report-error' || !entry.participant.workbook || replaceExisting))
   const completed = entries.filter((entry) => entry.status === 'done').length
 
   function selectFiles(event) {
-    setEntries(matchAssessorFiles(event.target.files, rows.filter((row) => cohort === 'all' || row.cohort === cohort)))
+    if (!hasCohort || busy || running || loading) {
+      event.target.value = ''
+      return
+    }
+    setEntries(matchAssessorFiles(event.target.files, rows.filter((row) => row.cohort === cohort)))
     event.target.value = ''
   }
 
   async function run() {
-    if (busy || running || !eligible.length) return
+    if (!hasCohort || loading || busy || running || !eligible.length) return
     setRunning(true)
     onBusyChange(true)
     try {
@@ -51,7 +56,10 @@ export default function BulkAssessorUpload({ rows, loading, busy, onBusyChange, 
     <h2 className="text-xl font-semibold text-[#0f172a]">Bulk assessor upload</h2>
     <p className="mt-1 text-sm text-slate-600">Upload all employees’ assessor workbooks from one folder.</p>
     <fieldset disabled={busy || running || loading} className="mt-5 space-y-4 disabled:opacity-50">
-      <label className="block text-sm font-semibold text-slate-700">1. Select cohort<select value={cohort} onChange={(event) => { setCohort(event.target.value); setEntries([]) }} className="mt-2 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 font-normal sm:w-64"><option value="all">All cohorts</option>{cohorts.map((name) => <option key={name} value={name}>{name}</option>)}</select></label>
+      <div className={`rounded-xl border-2 p-4 ${hasCohort ? 'border-emerald-200 bg-emerald-50' : 'border-amber-300 bg-amber-50'}`}>
+        <label className="block text-sm font-bold text-slate-800">1. Select cohort <span className="ml-2 rounded-full bg-amber-200 px-2 py-1 text-xs text-amber-950">Required</span><select required aria-describedby="bulk-cohort-help" value={cohort} onChange={(event) => { setCohort(event.target.value); setEntries([]) }} className="mt-3 block min-h-12 w-full rounded-lg border-2 border-[#1e5fba] bg-white px-3 py-2.5 text-base font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 sm:w-80"><option value="" disabled>Choose a cohort to continue</option>{cohorts.map((name) => <option key={name} value={name}>{name}</option>)}</select></label>
+        <p id="bulk-cohort-help" className="mt-2 text-sm text-slate-700">{hasCohort ? `Files will be matched only to employees in ${cohort}.` : 'Select a cohort first to enable folder and file upload.'}</p>
+      </div>
       <div className="flex flex-col items-center gap-5 rounded-xl border-2 border-dashed border-blue-300 bg-blue-50 p-6 sm:flex-row">
         <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-white text-[#1e5fba] shadow-sm"><FolderUp size={32} aria-hidden="true" /></div>
         <div className="min-w-0 flex-1 text-center sm:text-left">
@@ -60,10 +68,10 @@ export default function BulkAssessorUpload({ rows, loading, busy, onBusyChange, 
           <p className="mt-2 text-xs text-slate-500">Use Aug26_BAL48853.xlsx or DC_BAL48853.xlsx · Maximum 7 MB per file</p>
         </div>
         <div className="flex w-full shrink-0 flex-col gap-2 sm:w-auto">
-          <input ref={folderInput} aria-label="Choose assessor workbook folder" type="file" webkitdirectory="" multiple onChange={selectFiles} className="hidden" />
-          <button type="button" onClick={() => folderInput.current?.click()} className="inline-flex min-h-12 cursor-pointer items-center justify-center gap-2 rounded-lg bg-[#1e5fba] px-6 py-3 text-sm font-bold text-white shadow-sm hover:bg-[#174c97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:cursor-not-allowed"><FolderUp size={20} aria-hidden="true" />Choose folder</button>
-          <input ref={filesInput} aria-label="Choose assessor workbooks" type="file" accept=".xlsx,.xls" multiple onChange={selectFiles} className="hidden" />
-          <button type="button" onClick={() => filesInput.current?.click()} className="inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border border-blue-300 bg-white px-4 py-2 text-sm font-semibold text-[#1e5fba] hover:bg-blue-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:cursor-not-allowed"><FileSpreadsheet size={17} aria-hidden="true" />Select individual files</button>
+          <input ref={folderInput} disabled={!hasCohort} aria-label="Choose assessor workbook folder" type="file" webkitdirectory="" multiple onChange={selectFiles} className="hidden" />
+          <button type="button" disabled={!hasCohort} onClick={() => folderInput.current?.click()} className="inline-flex min-h-14 cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-blue-800 bg-blue-700 px-8 py-4 text-base font-bold text-white shadow-md enabled:hover:bg-blue-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-200 disabled:text-slate-500 disabled:shadow-none"><FolderUp size={22} aria-hidden="true" />Choose folder</button>
+          <input ref={filesInput} disabled={!hasCohort} aria-label="Choose assessor workbooks" type="file" accept=".xlsx,.xls" multiple onChange={selectFiles} className="hidden" />
+          <button type="button" disabled={!hasCohort} onClick={() => filesInput.current?.click()} className="inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border border-blue-300 bg-blue-100 px-4 py-2 text-sm font-semibold text-blue-800 enabled:hover:bg-blue-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-100 disabled:text-slate-500"><FileSpreadsheet size={17} aria-hidden="true" />Select individual files</button>
         </div>
       </div>
       <label className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" checked={replaceExisting} onChange={(event) => setReplaceExisting(event.target.checked)} className="h-4 w-4 accent-blue-700" />Replace existing workbooks</label>
