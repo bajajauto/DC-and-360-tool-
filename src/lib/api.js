@@ -112,7 +112,7 @@ export const api = {
 
   getBuhrParticipants: (userId) => apiFetch(`/api/buhr/${userId}/participants`),
 
-  getAssessorCandidates: () => apiFetch('/api/assessor/candidates'),
+  getAssessorCandidates: (cohortId) => apiFetch(`/api/assessor/candidates${cohortId ? `?cohortId=${encodeURIComponent(cohortId)}` : ''}`),
 
   getAssessorCandidate: (participantId) => apiFetch(`/api/assessor/candidates/${participantId}`),
 

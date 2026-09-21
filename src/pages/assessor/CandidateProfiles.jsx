@@ -101,23 +101,32 @@ export default function CandidateProfiles() {
   const [detailError, setDetailError] = useState('')
   const [availableCohorts, setAvailableCohorts] = useState([])
   const [selectedId, setSelectedId] = useState(() => searchParams.get('participantId'))
-  const [selectedCohortId, setSelectedCohortId] = useState(() => searchParams.get('cohortId') || 'all')
+  const [selectedCohortId, setSelectedCohortId] = useState(() => {
+    const cohortId = searchParams.get('cohortId')
+    return cohortId && cohortId !== 'all' ? cohortId : ''
+  })
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [bulkDownload, setBulkDownload] = useState({ loading: false, error: '' })
 
   useEffect(() => {
-    api.getAssessorCandidates()
+    let cancelled = false
+    setLoading(true)
+    setError('')
+    setProfiles([])
+    api.getAssessorCandidates(selectedCohortId)
       .then((candidateResult) => {
+        if (cancelled) return
         const data = candidateResult.data || []
         setProfiles(data)
         setAvailableCohorts(candidateResult.meta?.cohorts || [])
         setSelectedId((current) => data.some((profile) => profile.id === current) ? current : data[0]?.id || null)
       })
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false))
-  }, [])
+      .catch((err) => { if (!cancelled) setError(err.message) })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [selectedCohortId])
 
   const cohorts = useMemo(() => availableCohorts.length
     ? availableCohorts
@@ -126,7 +135,7 @@ export default function CandidateProfiles() {
   const filteredProfiles = useMemo(() => {
     const needle = query.trim().toLowerCase()
     return profiles.filter((profile) => {
-      const inCohort = selectedCohortId === 'all' || profile.cohortId === selectedCohortId
+      const inCohort = selectedCohortId && profile.cohortId === selectedCohortId
       const matchesSearch = !needle || `${profile.nickname || ''} ${profile.employeeId || ''} ${profile.designation || ''} ${profile.bu || ''}`.toLowerCase().includes(needle)
       return inCohort && matchesSearch
     })
@@ -149,7 +158,7 @@ export default function CandidateProfiles() {
   }, [selectedCandidateId])
 
   async function downloadCohortRoleInterviews() {
-    if (selectedCohortId === 'all') return
+    if (!selectedCohortId) return
     const cohortProfiles = profiles.filter((profile) => profile.cohortId === selectedCohortId)
     if (!cohortProfiles.length) {
       setBulkDownload({ loading: false, error: 'This cohort has no participants with nicknames available to assessors.' })
@@ -184,7 +193,7 @@ export default function CandidateProfiles() {
           <p className="text-xs text-gray-400 mb-1">Assessor / Candidate Profiles</p>
           <h1 className="text-xl font-bold text-[#172033]">Candidate evidence review</h1>
         </div>
-        <button type="button" onClick={downloadCohortRoleInterviews} disabled={selectedCohortId === 'all' || bulkDownload.loading} className="inline-flex items-center gap-2 rounded-lg bg-[#1e4d8c] px-4 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-[#173f72] disabled:cursor-not-allowed disabled:opacity-50"><Download size={15} />{bulkDownload.loading ? 'Preparing cohort ZIP…' : 'Download cohort Role Interviews'}</button>
+        <button type="button" onClick={downloadCohortRoleInterviews} disabled={!selectedCohortId || loading || !filteredProfiles.length || bulkDownload.loading} className="inline-flex items-center gap-2 rounded-lg bg-[#1e4d8c] px-4 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-[#173f72] disabled:cursor-not-allowed disabled:opacity-50"><Download size={15} />{bulkDownload.loading ? 'Preparing cohort ZIP…' : 'Download cohort Role Interviews'}</button>
       </header>
 
       <div className="p-8 max-w-[1500px] mx-auto grid xl:grid-cols-[340px_1fr] gap-6">
@@ -207,18 +216,18 @@ export default function CandidateProfiles() {
                 value={selectedCohortId}
                 onChange={(event) => {
                   const cohortId = event.target.value
-                  const firstProfile = profiles.find((profile) => cohortId === 'all' || profile.cohortId === cohortId)
                   setSelectedCohortId(cohortId)
-                  setSelectedId(firstProfile?.id || null)
-                  setSearchParams(firstProfile ? { participantId: firstProfile.id, ...(cohortId !== 'all' ? { cohortId } : {}) } : (cohortId !== 'all' ? { cohortId } : {}), { replace: true })
+                  setSelectedId(null)
+                  setQuery('')
+                  setSearchParams({ cohortId }, { replace: true })
                 }}
                 className="w-full rounded-lg border-2 border-[#6e9bd2] bg-[#e7f1ff] px-3 py-2.5 text-sm font-bold text-[#173f72] shadow-sm focus:outline-none focus:ring-2 focus:ring-[#aac8ec]"
               >
-                <option value="all">All cohorts</option>
+                <option value="" disabled>Select a cohort</option>
                 {cohorts.map((cohort) => <option key={cohort.id} value={cohort.id}>{cohort.name}</option>)}
               </select>
               </label>
-              {selectedCohortId === 'all' && <p className="mt-1.5 text-[10px] text-[#52739c]">Select one cohort to enable the ZIP download.</p>}
+              {!selectedCohortId && <p className="mt-1.5 text-[10px] text-[#52739c]">Select a cohort to view candidates and their photos.</p>}
             </div>
             <div className="relative mt-4">
               <Search size={15} className="absolute left-3 top-2.5 text-gray-400" />
@@ -232,7 +241,7 @@ export default function CandidateProfiles() {
           </div>
           <div className="max-h-[calc(100vh-250px)] overflow-y-auto">
             {loading && <p className="p-5 text-sm text-gray-500">Loading participants…</p>}
-            {!loading && !filteredProfiles.length && <p className="p-5 text-sm text-gray-500">No participants available.</p>}
+            {!loading && selectedCohortId && !filteredProfiles.length && <p className="p-5 text-sm text-gray-500">No participants available.</p>}
             {filteredProfiles.map((profile) => {
               const active = profile.id === selectedCandidateId
               return (
@@ -241,12 +250,12 @@ export default function CandidateProfiles() {
                   key={profile.id}
                   onClick={() => {
                     setSelectedId(profile.id)
-                    setSearchParams({ participantId: profile.id, ...(selectedCohortId !== 'all' ? { cohortId: selectedCohortId } : {}) }, { replace: true })
+                    setSearchParams({ participantId: profile.id, ...(selectedCohortId ? { cohortId: selectedCohortId } : {}) }, { replace: true })
                   }}
                   className={`w-full text-left px-5 py-4 border-b border-[#eef2f6] transition-colors ${active ? 'bg-blue-50' : 'hover:bg-[#f8fafc]'}`}
                 >
                   <div className="flex items-center gap-3">
-                    <PersonPlaceholder src={selected?.id === profile.id ? selected.photograph.url : null} />
+                    <PersonPlaceholder src={profile.photograph.url} />
                     <div className="min-w-0 flex-1">
                       <p className={`text-sm font-semibold truncate ${active ? 'text-[#1e4d8c]' : 'text-[#172033]'}`}>{profile.nickname || 'Nickname not set'}</p>
                       <p className="text-[11px] text-gray-400 truncate">Ticket ID: {profile.employeeId}</p>
@@ -288,10 +297,10 @@ export default function CandidateProfiles() {
             <ParticipantDetails participant={selected} />
 
             <div className="grid lg:grid-cols-2 gap-5">
-              <EvidenceCard icon={Camera} title="Participant Photograph" meta="Identity evidence" to={`/assessor/candidates/${selected.id}/photograph${selectedCohortId !== 'all' ? `?cohortId=${encodeURIComponent(selectedCohortId)}` : ''}`} />
-              <EvidenceCard icon={MessageSquareText} title="Role Interview" meta={selected.roleInterview.status} to={`/assessor/candidates/${selected.id}/role-interview${selectedCohortId !== 'all' ? `?cohortId=${encodeURIComponent(selectedCohortId)}` : ''}`} onDownload={() => downloadRoleInterviewPdf(selected)} />
-              <EvidenceCard icon={FileText} title="360° Feedback Report" meta={selected.report360.status} to={`/assessor/candidates/${selected.id}/360-report${selectedCohortId !== 'all' ? `?cohortId=${encodeURIComponent(selectedCohortId)}` : ''}`} />
-              <EvidenceCard icon={BriefcaseBusiness} title="Self Reflection" meta={selected.preWork.status} to={`/assessor/candidates/${selected.id}/pre-work${selectedCohortId !== 'all' ? `?cohortId=${encodeURIComponent(selectedCohortId)}` : ''}`} onDownload={() => downloadSelfReflectionPdf(selected)} />
+              <EvidenceCard icon={Camera} title="Participant Photograph" meta="Identity evidence" to={`/assessor/candidates/${selected.id}/photograph${selectedCohortId ? `?cohortId=${encodeURIComponent(selectedCohortId)}` : ''}`} />
+              <EvidenceCard icon={MessageSquareText} title="Role Interview" meta={selected.roleInterview.status} to={`/assessor/candidates/${selected.id}/role-interview${selectedCohortId ? `?cohortId=${encodeURIComponent(selectedCohortId)}` : ''}`} onDownload={() => downloadRoleInterviewPdf(selected)} />
+              <EvidenceCard icon={FileText} title="360° Feedback Report" meta={selected.report360.status} to={`/assessor/candidates/${selected.id}/360-report${selectedCohortId ? `?cohortId=${encodeURIComponent(selectedCohortId)}` : ''}`} />
+              <EvidenceCard icon={BriefcaseBusiness} title="Self Reflection" meta={selected.preWork.status} to={`/assessor/candidates/${selected.id}/pre-work${selectedCohortId ? `?cohortId=${encodeURIComponent(selectedCohortId)}` : ''}`} onDownload={() => downloadSelfReflectionPdf(selected)} />
             </div>
 
           </main>

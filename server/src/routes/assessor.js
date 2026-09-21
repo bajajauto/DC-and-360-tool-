@@ -49,16 +49,18 @@ const candidateInclude = {
   reports: { where: { type: '360' }, orderBy: { updatedAt: 'desc' }, take: 1, select: { status: true, generatedAt: true } },
 }
 
-assessorRouter.get('/candidates', asyncHandler(async (_req, res) => {
+assessorRouter.get('/candidates', asyncHandler(async (req, res) => {
+  const cohortId = typeof req.query.cohortId === 'string' ? req.query.cohortId.trim() : ''
+  if (cohortId === 'all') throw httpError(400, 'Select a specific cohort')
   const [participants, cohorts] = await Promise.all([
-    prisma.participant.findMany({
-      where: { archivedAt: null, nickname: { not: null } },
+    cohortId ? prisma.participant.findMany({
+      where: { cohortId, archivedAt: null, nickname: { not: null } },
       select: {
         id: true, nickname: true, stage: true, progress: true, reportStatus: true,
-        roleInterview: true, preWork: true,
+        roleInterview: true, preWork: true, photoUrl: true,
         ...candidateInclude,
       },
-    }),
+    }) : Promise.resolve([]),
     prisma.cohort.findMany({
       orderBy: [{ eventStart: 'desc' }, { name: 'asc' }],
       select: { id: true, name: true },

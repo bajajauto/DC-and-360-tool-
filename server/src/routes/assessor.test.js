@@ -5,7 +5,7 @@ import { prisma } from '../db.js'
 import { assessorRouter } from './assessor.js'
 import { errorHandler } from '../middleware/errorHandler.js'
 
-test('assessor list stays lightweight while candidate details retain evidence', async (t) => {
+test('assessor list requires a cohort and includes photos while details retain evidence', async (t) => {
   const participant = {
     id: 'candidate', nickname: 'FOX', stage: 'APPLICATION_PROFILE', progress: 50,
     reportStatus: 'GENERATED', user: { employeeId: '123', designation: 'Manager', businessUnit: 'HR' },
@@ -20,9 +20,14 @@ test('assessor list stays lightweight while candidate details retain evidence', 
   t.after(() => {
     ;[prisma.participant.findMany, prisma.participant.findFirst, prisma.cohort.findMany] = originals
   })
-  prisma.participant.findMany = async ({ select }) => {
+  let listQueries = 0
+  prisma.participant.findMany = async ({ select, where }) => {
+    listQueries += 1
+    assert.equal(where.cohortId, 'cohort')
+    assert.equal(where.archivedAt, null)
+    assert.deepEqual(where.nickname, { not: null })
     assert.ok(select)
-    assert.equal(select.photoUrl, undefined)
+    assert.equal(select.photoUrl, true)
     assert.equal(select.masterData, undefined)
     return [Object.fromEntries(Object.keys(select).map((key) => [key, participant[key]]))]
   }
@@ -35,14 +40,23 @@ test('assessor list stays lightweight while candidate details retain evidence', 
   await new Promise((resolve) => server.once('listening', resolve))
   t.after(() => new Promise((resolve) => server.close(resolve)))
   const base = `http://127.0.0.1:${server.address().port}/assessor/candidates`
-  const listResponse = await fetch(base)
+  const initialResponse = await fetch(base)
+  assert.equal(initialResponse.status, 200)
+  const initial = await initialResponse.json()
+  assert.deepEqual(initial.data, [])
+  assert.equal(initial.meta.cohorts[0].id, 'cohort')
+  assert.equal(listQueries, 0)
+  assert.equal((await fetch(`${base}?cohortId=all`)).status, 400)
+  assert.equal(listQueries, 0)
+  const listResponse = await fetch(`${base}?cohortId=cohort`)
   assert.equal(listResponse.status, 200)
   const listText = await listResponse.text()
-  assert.ok(listText.length < 2000)
+  assert.ok(listText.length < participant.photoUrl.length + 2000)
   const list = JSON.parse(listText)
   assert.equal(list.data[0].preWork.status, 'submitted')
   assert.equal(list.data[0].roleInterview.answers, undefined)
-  assert.equal(list.data[0].photograph.url, null)
+  assert.equal(list.data[0].photograph.url, participant.photoUrl)
+  assert.equal(list.data[0].preWork.answers, undefined)
   assert.equal(list.meta.cohorts[0].id, 'cohort')
   const detailResponse = await fetch(`${base}/candidate`)
   assert.equal(detailResponse.status, 200)
