@@ -319,7 +319,10 @@ export default function TDReports() {
                             <Send size={14} />
                             {participant.reportStatus === 'released' ? 'Published' : 'Publish'}
                           </button>}
-                          {selectedReportType !== 'all' && participant.reportType === 'dc' && <span className="text-xs font-medium text-slate-500">Stored report</span>}
+                          {selectedReportType !== 'all' && participant.reportType === 'dc' && <Link to={`/td/reports/${participant.id}/dc`} className="inline-flex items-center gap-1.5 rounded-lg bg-[#1e4d8c] px-3 py-2 text-xs font-semibold text-white hover:bg-[#173f72]">
+                            <Eye size={14} />
+                            View report
+                          </Link>}
                         </div>
                       </td>
                     </tr>
