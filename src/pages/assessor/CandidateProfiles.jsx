@@ -97,6 +97,8 @@ function ParticipantDetails({ participant }) {
 export default function CandidateProfiles() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [profiles, setProfiles] = useState([])
+  const [selectedDetail, setSelectedDetail] = useState(null)
+  const [detailError, setDetailError] = useState('')
   const [availableCohorts, setAvailableCohorts] = useState([])
   const [selectedId, setSelectedId] = useState(() => searchParams.get('participantId'))
   const [selectedCohortId, setSelectedCohortId] = useState(() => searchParams.get('cohortId') || 'all')
@@ -130,7 +132,21 @@ export default function CandidateProfiles() {
     })
   }, [profiles, query, selectedCohortId])
 
-  const selected = filteredProfiles.find((profile) => profile.id === selectedId) ?? filteredProfiles[0] ?? null
+  const selectedSummary = filteredProfiles.find((profile) => profile.id === selectedId) ?? filteredProfiles[0] ?? null
+  const selectedCandidateId = selectedSummary?.id
+  const selected = selectedDetail?.id === selectedCandidateId ? selectedDetail : null
+
+  useEffect(() => {
+    let cancelled = false
+    setSelectedDetail(null)
+    setDetailError('')
+    if (selectedCandidateId) {
+      api.getAssessorCandidate(selectedCandidateId)
+        .then(({ data }) => { if (!cancelled) setSelectedDetail(data) })
+        .catch((err) => { if (!cancelled) setDetailError(err.message || 'Unable to load candidate evidence.') })
+    }
+    return () => { cancelled = true }
+  }, [selectedCandidateId])
 
   async function downloadCohortRoleInterviews() {
     if (selectedCohortId === 'all') return
@@ -148,7 +164,8 @@ export default function CandidateProfiles() {
     try {
       const entries = []
       for (const profile of cohortProfiles) {
-        const result = await downloadRoleInterviewPdf(profile, false)
+        const { data } = await api.getAssessorCandidate(profile.id)
+        const result = await downloadRoleInterviewPdf(data, false)
         entries.push({ name: `${profile.nickname}.pdf`, data: result.data })
       }
       const cohortName = cohorts.find((cohort) => cohort.id === selectedCohortId)?.name || 'cohort'
@@ -217,7 +234,7 @@ export default function CandidateProfiles() {
             {loading && <p className="p-5 text-sm text-gray-500">Loading participants…</p>}
             {!loading && !filteredProfiles.length && <p className="p-5 text-sm text-gray-500">No participants available.</p>}
             {filteredProfiles.map((profile) => {
-              const active = profile.id === selected?.id
+              const active = profile.id === selectedCandidateId
               return (
                 <button
                   type="button"
@@ -229,7 +246,7 @@ export default function CandidateProfiles() {
                   className={`w-full text-left px-5 py-4 border-b border-[#eef2f6] transition-colors ${active ? 'bg-blue-50' : 'hover:bg-[#f8fafc]'}`}
                 >
                   <div className="flex items-center gap-3">
-                    <PersonPlaceholder src={profile.photograph.url} />
+                    <PersonPlaceholder src={selected?.id === profile.id ? selected.photograph.url : null} />
                     <div className="min-w-0 flex-1">
                       <p className={`text-sm font-semibold truncate ${active ? 'text-[#1e4d8c]' : 'text-[#172033]'}`}>{profile.nickname || 'Nickname not set'}</p>
                       <p className="text-[11px] text-gray-400 truncate">Ticket ID: {profile.employeeId}</p>
@@ -245,6 +262,8 @@ export default function CandidateProfiles() {
           </div>
         </aside>
 
+        {detailError && <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{detailError}</div>}
+        {selectedSummary && !selected && !detailError && <p className="p-5 text-sm text-gray-500">Loading candidate evidence...</p>}
         {selected && (
           <main className="space-y-6">
             <section className="bg-white border border-[#e2e8f0] rounded-2xl p-6">

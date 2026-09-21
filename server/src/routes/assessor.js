@@ -3,6 +3,7 @@ import { prisma } from '../db.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
 import { httpError } from '../utils/httpError.js'
 
+
 export const assessorRouter = Router()
 
 function formValue(value) {
@@ -11,7 +12,7 @@ function formValue(value) {
     : { answers: {}, status: 'draft', submittedAt: null }
 }
 
-function toCandidate(participant) {
+function toCandidate(participant, summary = false) {
   const submittedResponses = participant.feedbackTasks.filter((task) => task.status === 'SUBMITTED').length
   const latestReport = participant.reports[0] || null
   return {
@@ -30,8 +31,8 @@ function toCandidate(participant) {
       dateOfJoining: participant.masterData?.dateOfJoining || participant.masterData?.DOJ_3 || participant.masterData?.DOJ_4 || null,
     },
     photograph: { url: participant.photoUrl || null, status: participant.photoUrl ? 'submitted' : 'not submitted' },
-    roleInterview: formValue(participant.roleInterview),
-    preWork: formValue(participant.preWork),
+    roleInterview: summary ? { status: formValue(participant.roleInterview).status } : formValue(participant.roleInterview),
+    preWork: summary ? { status: formValue(participant.preWork).status } : formValue(participant.preWork),
     report360: {
       status: latestReport?.status?.toLowerCase() || participant.reportStatus.toLowerCase(),
       submittedResponses,
@@ -42,24 +43,28 @@ function toCandidate(participant) {
 }
 
 const candidateInclude = {
-  user: true,
-  cohort: true,
+  user: { select: { employeeId: true, designation: true, businessUnit: true } },
+  cohort: { select: { id: true, name: true } },
   feedbackTasks: { select: { status: true } },
-  reports: { where: { type: '360' }, orderBy: { updatedAt: 'desc' }, take: 1 },
+  reports: { where: { type: '360' }, orderBy: { updatedAt: 'desc' }, take: 1, select: { status: true, generatedAt: true } },
 }
 
 assessorRouter.get('/candidates', asyncHandler(async (_req, res) => {
   const [participants, cohorts] = await Promise.all([
     prisma.participant.findMany({
       where: { archivedAt: null, nickname: { not: null } },
-      include: candidateInclude,
+      select: {
+        id: true, nickname: true, stage: true, progress: true, reportStatus: true,
+        roleInterview: true, preWork: true,
+        ...candidateInclude,
+      },
     }),
     prisma.cohort.findMany({
       orderBy: [{ eventStart: 'desc' }, { name: 'asc' }],
       select: { id: true, name: true },
     }),
   ])
-  const candidates = participants.map(toCandidate).sort((left, right) => {
+  const candidates = participants.map((participant) => toCandidate(participant, true)).sort((left, right) => {
     if (!left.nickname) return right.nickname ? 1 : 0
     if (!right.nickname) return -1
     return left.nickname.localeCompare(right.nickname, undefined, { numeric: true, sensitivity: 'base' })
