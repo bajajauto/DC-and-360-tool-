@@ -36,6 +36,17 @@ html,body{background:#d8d8d0;font-family:'Montserrat',system-ui,'Segoe UI',Arial
    competency-page artwork. The original 617.3px position was close enough to
    collide with the heading after browser/PDF font scaling on some pages. */
 .tok[data-token$="_other"]{top:626px!important}
+/* Pages 14 and 16 contain a narrower baked heading box than the other
+   competency pages. Replace that artwork fragment with a clean panel sample
+   and redraw the heading at the same single-line size used elsewhere. */
+.page[data-page="14"]::before,.page[data-page="16"]::before{
+  content:'COMPETENCY SUMMARY';position:absolute;left:72px;top:596px;
+  width:250px;height:42px;box-sizing:border-box;padding-top:4px;
+  background-image:inherit;background-size:1026px 763px;
+  background-position:-300px -596px;background-repeat:no-repeat;
+  color:#7a4b2c;font-family:'Montserrat',system-ui,'Segoe UI',Arial,sans-serif;
+  font-size:14px;font-weight:700;line-height:18px;white-space:nowrap;
+}
 /* dynamic score-bar fills (terracotta), sit exactly over the plate's green pill track */
 .barfill{position:absolute;background:#CA9C75;width:0;transition:width .6s ease}
 @media print{
