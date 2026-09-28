@@ -2,7 +2,7 @@ import { ArrowLeft, Download, Eye, FileText } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { api } from '../../lib/api'
-import { download360Pdf, downloadDcPreviewPdf, getDcReportPreviewUrl } from '../../lib/reportDownload'
+import { download360Pdf, downloadDcPdf } from '../../lib/reportDownload'
 
 const reportDefinitions = [
   { type: '360', title: '360° Feedback Report', description: 'Feedback collected from the participant’s nominated respondents.', tone: 'border-blue-200 bg-blue-50 text-blue-700' },
@@ -26,15 +26,7 @@ export default function ParticipantReports() {
   const reportsByType = useMemo(() => new Map(reports.map((report) => [report.reportType, report])), [reports])
 
   async function downloadDc() {
-    const url = await getDcReportPreviewUrl(participant.id)
-    const iframe = document.createElement('iframe')
-    iframe.src = url
-    iframe.style.cssText = 'position:fixed;left:-10000px;width:1123px;height:794px;border:0'
-    document.body.appendChild(iframe)
-    try {
-      await new Promise((resolve, reject) => { iframe.onload = resolve; iframe.onerror = reject })
-      await downloadDcPreviewPdf(iframe, participant.name)
-    } finally { iframe.remove(); URL.revokeObjectURL(url) }
+    await downloadDcPdf(participant.id, participant.name)
   }
 
   return (

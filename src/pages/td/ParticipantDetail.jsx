@@ -25,7 +25,7 @@ export default function ParticipantDetail() {
   const [error, setError] = useState('')
   const [taskView, setTaskView] = useState('all')
   const [reportAction, setReportAction] = useState({ loading: false, action: null, error: '' })
-  const [dcReportAction, setDcReportAction] = useState({ loading: false, error: '' })
+  const [dcReportAction, setDcReportAction] = useState({ loading: false, error: '', success: '' })
 
   async function handleGenerateReport() {
     setReportAction({ loading: true, action: 'generate360', error: '' })
@@ -47,7 +47,8 @@ export default function ParticipantDetail() {
   }
 
   async function handleGenerateDcReport() {
-    setDcReportAction({ loading: true, error: '' })
+    const wasRegeneration = Boolean(dcReportGenerated)
+    setDcReportAction({ loading: true, error: '', success: '' })
     try {
       const result = await api.generateDcReport(participant.id)
       setParticipant((current) => ({
@@ -59,10 +60,14 @@ export default function ParticipantDetail() {
         lastActivity: new Date().toISOString(),
       }))
     } catch (err) {
-      setDcReportAction({ loading: false, error: err.message || 'Unable to generate the DC report.' })
+      setDcReportAction({ loading: false, error: err.message || 'Unable to generate the DC report.', success: '' })
       return
     }
-    setDcReportAction({ loading: false, error: '' })
+    setDcReportAction({
+      loading: false,
+      error: '',
+      success: `DC report ${wasRegeneration ? 'regenerated' : 'generated'} successfully. The preview and next download will use the latest version.`,
+    })
   }
 
   async function handlePublishReport() {
@@ -291,6 +296,7 @@ export default function ParticipantDetail() {
             <h3 className="mt-5 font-semibold">Development Centre (DC) Report</h3>
             <p className="mt-2 text-xs leading-relaxed text-slate-600">{dcReportGenerated ? 'The DC report is generated and ready to preview. Regenerate it after changing or replacing the assessor workbook.' : dcReportReady ? 'The assessor workbook is available. TD can generate the DC report.' : 'Upload the participant assessor workbook before generating the DC report.'}</p>
             {dcReportAction.error && <p className="mt-3 text-xs text-red-700">{dcReportAction.error}</p>}
+            {dcReportAction.success && <p role="status" aria-live="polite" className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium leading-relaxed text-emerald-800">{dcReportAction.success}</p>}
             {dcReportReady && <button onClick={handleGenerateDcReport} disabled={dcReportAction.loading} className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg bg-violet-700 py-2.5 text-sm font-semibold text-white disabled:opacity-60"><RotateCw size={15} />{dcReportAction.loading ? `${dcReportGenerated ? 'Regenerating' : 'Generating'} DC report…` : dcReportGenerated ? 'Regenerate DC report' : 'Generate DC report'}</button>}
             {!dcReportReady && <button disabled className="mt-5 w-full rounded-lg bg-violet-100 py-2.5 text-sm font-semibold text-violet-400">DC report generation locked</button>}
             {dcReportGenerated && <Link to={`/td/reports/${participant.id}/dc`} className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-violet-300 bg-white py-2.5 text-sm font-semibold text-violet-700">Preview DC report <ChevronRight size={16} /></Link>}

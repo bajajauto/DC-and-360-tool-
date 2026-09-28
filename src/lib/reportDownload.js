@@ -27,6 +27,41 @@ async function waitForPreviewAssets(previewDocument) {
   await withTimeout(Promise.all([previewDocument.fonts?.ready, ...images]), 15000, 'The report assets took too long to load.')
 }
 
+async function waitForPreviewDocument(iframe, fallbackExpectedPages) {
+  const startedAt = Date.now()
+  let lastCount = 0
+
+  while (Date.now() - startedAt < 30000) {
+    const previewDocument = iframe?.contentDocument
+    const pages = previewDocument ? [...previewDocument.querySelectorAll('.page')] : []
+    const declaredCount = Number(previewDocument?.querySelector('.deck')?.dataset.expectedPages)
+    const expectedPages = declaredCount || fallbackExpectedPages || 0
+    lastCount = pages.length
+
+    if (previewDocument?.readyState === 'complete' && pages.length && (!expectedPages || pages.length === expectedPages)) {
+      await waitForPreviewAssets(previewDocument)
+      await new Promise((resolve) => {
+        const previewWindow = previewDocument.defaultView
+        if (previewWindow) previewWindow.requestAnimationFrame(() => previewWindow.requestAnimationFrame(resolve))
+        else window.setTimeout(resolve, 50)
+      })
+      const settledPages = [...previewDocument.querySelectorAll('.page')]
+      if (!expectedPages || settledPages.length === expectedPages) return { previewDocument, pages: settledPages, expectedPages }
+    }
+
+    await new Promise((resolve) => window.setTimeout(resolve, 100))
+  }
+
+  throw new Error(`The report preview did not finish loading all pages${fallbackExpectedPages ? ` (${lastCount}/${fallbackExpectedPages})` : ''}. Please try the download again.`)
+}
+
+function assertCompletePdf(pdf, expectedPages, label) {
+  const actualPages = pdf.getNumberOfPages()
+  if (expectedPages && actualPages !== expectedPages) {
+    throw new Error(`${label} was not downloaded because only ${actualPages} of ${expectedPages} pages were prepared. Please try again.`)
+  }
+}
+
 async function fetchReport(participantId, signal) {
   const token = getToken()
   return fetch(`${API_BASE}/api/reports/${participantId}/360/download`, {
@@ -61,13 +96,7 @@ export async function getDcReportPreviewUrl(participantId) {
 }
 
 export async function download360PreviewPdf(iframe, participantName = 'participant', save = true) {
-  const previewDocument = iframe?.contentDocument
-  if (!previewDocument) throw new Error('The report preview is not ready yet.')
-
-  await waitForPreviewAssets(previewDocument)
-
-  const pages = [...previewDocument.querySelectorAll('.page')]
-  if (!pages.length) throw new Error('The report preview contains no printable pages.')
+  const { pages, expectedPages } = await waitForPreviewDocument(iframe)
 
   const [{ getFontEmbedCSS, toPng }, { jsPDF }] = await Promise.all([
     import('html-to-image'),
@@ -89,16 +118,13 @@ export async function download360PreviewPdf(iframe, participantName = 'participa
   }
 
   const fileName = `${participantName.replace(/\s+/g, '-')}-360-report.pdf`
+  assertCompletePdf(pdf, expectedPages || pages.length, 'The 360° report')
   if (save) pdf.save(fileName)
   return { data: pdf.output('arraybuffer'), fileName }
 }
 
 export async function downloadDcPreviewPdf(iframe, participantName = 'participant', save = true) {
-  const previewDocument = iframe?.contentDocument
-  if (!previewDocument) throw new Error('The DC report preview is not ready yet.')
-  await waitForPreviewAssets(previewDocument)
-  const pages = [...previewDocument.querySelectorAll('.page')]
-  if (!pages.length) throw new Error('The DC report preview contains no printable pages.')
+  const { pages, expectedPages } = await waitForPreviewDocument(iframe, 19)
   const [{ getFontEmbedCSS, toPng }, { jsPDF }] = await Promise.all([import('html-to-image'), import('jspdf')])
   const first = pages[0]
   const width = first.offsetWidth || 1123
@@ -112,6 +138,7 @@ export async function downloadDcPreviewPdf(iframe, participantName = 'participan
     pdf.addImage(image, 'PNG', 0, 0, width, height, undefined, 'FAST')
   }
   const fileName = `${participantName.replace(/\s+/g, '-')}-dc-report.pdf`
+  assertCompletePdf(pdf, expectedPages, 'The DC report')
   if (save) pdf.save(fileName)
   return { data: pdf.output('arraybuffer'), fileName }
 }
