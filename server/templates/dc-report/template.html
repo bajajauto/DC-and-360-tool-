@@ -32,6 +32,10 @@ html,body{background:#d8d8d0;font-family:'Montserrat',system-ui,'Segoe UI',Arial
 .tok{position:absolute;display:flex;line-height:1.15;overflow:hidden;
   font-family:'Montserrat',system-ui,'Segoe UI',Arial,sans-serif;
   padding:0;white-space:pre-wrap;word-break:break-word}
+/* Keep competency-summary copy clear of the single-line heading baked into the
+   competency-page artwork. The original 617.3px position was close enough to
+   collide with the heading after browser/PDF font scaling on some pages. */
+.tok[data-token$="_other"]{top:626px!important}
 /* dynamic score-bar fills (terracotta), sit exactly over the plate's green pill track */
 .barfill{position:absolute;background:#CA9C75;width:0;transition:width .6s ease}
 @media print{
