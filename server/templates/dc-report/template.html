@@ -264,17 +264,19 @@ html,body{background:#d8d8d0;font-family:'Montserrat',system-ui,'Segoe UI',Arial
   // Each .tok box (Competency Summary, strengths, development areas, tips) is a
   // fixed-size overlay matched to the baked-in artwork, with overflow:hidden. Real
   // participant/assessor text can run longer than the box at its baseline font
-  // size, silently clipping the tail of the text. Shrink the font just enough to
-  // fit instead; if it still overflows at the floor size, show the rest of the
-  // text rather than lose it.
+  // size, silently clipping the tail of the text. First reclaim wasted space
+  // (double spaces after sentences, stray tabs/newlines from copy-pasted
+  // workbook text), then shrink the font until it fits. No floor: text must
+  // never be clipped, even if it ends up small for unusually long entries.
   document.querySelectorAll('.tok[data-token]').forEach(function(el){
-    var minFontPx=7, step=0.5;
+    var collapsed=(el.textContent||'').replace(/[ \t]*\n[ \t]*/g,'\n').replace(/ {2,}/g,' ').trim();
+    if(collapsed!==el.textContent) el.textContent=collapsed;
+    var step=0.5, minFontPx=4;
     var fontSize=parseFloat(getComputedStyle(el).fontSize);
     while(el.scrollHeight>el.clientHeight+0.5 && fontSize-step>=minFontPx){
       fontSize-=step;
       el.style.fontSize=fontSize.toFixed(1)+'px';
     }
-    if(el.scrollHeight>el.clientHeight+0.5) el.style.overflow='visible';
   });
 
   // ---- Page-8 integrated-summary grid ----
