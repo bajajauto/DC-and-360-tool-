@@ -1,5 +1,5 @@
 function normalizeEmployeeId(value) {
-  return String(value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '')
+  return String(value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/^BAL/, '')
 }
 
 export function matchAssessorFiles(files, participants) {
