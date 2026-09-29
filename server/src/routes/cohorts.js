@@ -442,6 +442,17 @@ cohortsRouter.delete('/:cohortId', asyncHandler(async (req, res) => {
     ].filter(Boolean)
     if (emailFilters.length) await tx.emailOutbox.deleteMany({ where: { OR: emailFilters } })
     if (magicLinkIds.length) await tx.magicLink.deleteMany({ where: { id: { in: magicLinkIds } } })
+    // Deleting the cohort would otherwise leave these participants active with a
+    // null cohortId (Participant.cohort is onDelete: SetNull), silently breaking
+    // every screen that assumes an active participant has a cohort. Archive them
+    // the same way the single-participant archive route does, so they land in
+    // Archived Participants with their prior cohort recorded instead.
+    if (participantIds.length) {
+      await tx.participant.updateMany({
+        where: { id: { in: participantIds } },
+        data: { cohortId: null, archivedAt: new Date(), archivedFromCohortId: cohort.id, archivedFromCohortName: cohort.name },
+      })
+    }
     await tx.cohort.delete({ where: { id: cohort.id } })
 
     const usersByRemainingRoles = new Map()
