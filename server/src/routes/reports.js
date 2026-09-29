@@ -21,7 +21,7 @@ function requireTd(req) {
 function isVisibleInRepository(report) {
   if (report.status === 'RELEASED') return true
   const allSubmitted = report.participant.feedbackTasks.length > 0 && report.participant.feedbackTasks.every((task) => task.status === 'SUBMITTED')
-  const cutoff = report.participant.cohort.threeSixtyCutoff
+  const cutoff = report.participant.cohort?.threeSixtyCutoff
   const cutoffPassed = hasDeadlinePassed(cutoff)
   return allSubmitted || cutoffPassed
 }
@@ -92,8 +92,8 @@ reportsRouter.get('/repository', asyncHandler(async (req, res) => {
       designation: participant.user.designation,
       bu: participant.user.businessUnit,
       cohortId: participant.cohortId,
-      cohortName: participant.cohort.name,
-      cohortProgramme: participant.cohort.programme,
+      cohortName: participant.cohort?.name || null,
+      cohortProgramme: participant.cohort?.programme || null,
       responses,
       totalResponses: participant.nominees.length,
     }
@@ -168,7 +168,7 @@ reportsRouter.get('/bulk-download', asyncHandler(async (req, res) => {
 
   const cohortLabel = cohortId === 'all'
     ? 'all-cohorts'
-    : safeFilePart(reports[0]?.participant.cohort.name, 'cohort').replace(/\s+/g, '-')
+    : safeFilePart(reports[0]?.participant.cohort?.name, 'cohort').replace(/\s+/g, '-')
   const typeLabel = reportType === 'all' ? 'allreports' : `${reportType}reports`
   const fileName = `${cohortLabel}_${typeLabel}.zip`
   const zip = createZip(entries)
