@@ -1,8 +1,12 @@
+function normalizeEmployeeId(value) {
+  return String(value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '')
+}
+
 export function matchAssessorFiles(files, participants) {
   const entries = Array.from(files).map((file, id) => {
     const match = /^(?:DC|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\d{2})_([a-z0-9-]+)\.(xlsx|xls)$/i.exec(file.name)
-    const employeeId = match?.[1].toUpperCase() || ''
-    const matches = participants.filter((row) => String(row.employeeId || '').trim().toUpperCase() === employeeId)
+    const employeeId = normalizeEmployeeId(match?.[1])
+    const matches = participants.filter((row) => normalizeEmployeeId(row.employeeId) === employeeId)
     const participant = matches.length === 1 ? matches[0] : null
     let error = !match ? 'Use DC_EMPLOYEEID.xlsx or Aug26_EMPLOYEEID.xlsx.'
       : !file.size ? 'File is empty.'

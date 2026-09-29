@@ -37,14 +37,22 @@ assessorAnalysisRouter.get('/', asyncHandler(async (_req, res) => {
   const participants = await prisma.participant.findMany({
     where: { archivedAt: null },
     orderBy: { user: { name: 'asc' } },
-    include: { user: true, cohort: true, assessorReviews: { orderBy: { updatedAt: 'desc' }, take: 1 } },
+    select: {
+      id: true,
+      user: { select: { name: true, employeeId: true, designation: true, businessUnit: true } },
+      cohort: { select: { name: true } },
+      assessorReviews: { orderBy: { updatedAt: 'desc' }, take: 1, select: { evidence: true } },
+    },
   })
   res.json({ data: participants.map(toDto) })
 }))
 
 assessorAnalysisRouter.put('/:participantId', asyncHandler(async (req, res) => {
   const payload = uploadSchema.parse(req.body)
-  const participant = await prisma.participant.findFirst({ where: { id: req.params.participantId, archivedAt: null } })
+  const participant = await prisma.participant.findFirst({
+    where: { id: req.params.participantId, archivedAt: null },
+    select: { id: true },
+  })
   if (!participant) throw httpError(404, 'Participant not found')
   const actor = await prisma.user.findUnique({ where: { id: req.auth.userId }, select: { name: true } })
   const existing = await prisma.assessorReview.findFirst({ where: { participantId: participant.id }, orderBy: { updatedAt: 'desc' } })

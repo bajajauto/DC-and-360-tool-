@@ -26,6 +26,14 @@ test('matches both naming conventions case-insensitively by exact employee ID', 
   assert.equal(matchAssessorFiles([file('DC_BAL4885.xlsx')], [participant])[0].status, 'blocked')
 })
 
+test('matches employee IDs despite harmless spaces and separators in stored data', () => {
+  for (const employeeId of [' BAL48853 ', 'BAL-48853', 'BAL 48853']) {
+    const [entry] = matchAssessorFiles([file('DC_BAL48853.xlsx')], [{ ...participant, employeeId }])
+    assert.equal(entry.status, 'ready')
+    assert.equal(entry.participant.participantId, 'p1')
+  }
+})
+
 test('blocks duplicate files, ambiguous participants, invalid names, empty and oversized files', () => {
   assert.ok(matchAssessorFiles([file('Aug26_BAL48853.xlsx'), file('DC_BAL48853.xlsx')], [participant]).every((entry) => entry.status === 'blocked'))
   assert.equal(matchAssessorFiles([file('DC_BAL48853.xlsx')], [participant, { ...participant, participantId: 'p2' }])[0].status, 'blocked')
