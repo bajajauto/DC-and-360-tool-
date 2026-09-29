@@ -404,6 +404,23 @@ cohortsRouter.get('/archived-participants', asyncHandler(async (_req, res) => {
   })
 }))
 
+cohortsRouter.delete('/archived-participants/:participantId', asyncHandler(async (req, res) => {
+  const participant = await prisma.participant.findFirst({
+    where: { id: req.params.participantId, archivedAt: { not: null } },
+    include: { user: true },
+  })
+  if (!participant) throw httpError(404, 'Archived participant not found')
+
+  await prisma.$transaction(async (tx) => {
+    await tx.participant.delete({ where: { id: participant.id } })
+    const remainingRoles = participant.user.roles.filter((role) => role !== 'PARTICIPANT')
+    if (remainingRoles.length) await tx.user.update({ where: { id: participant.userId }, data: { roles: remainingRoles } })
+    else await tx.user.delete({ where: { id: participant.userId } })
+  })
+
+  res.json({ data: { id: participant.id, deleted: true } })
+}))
+
 cohortsRouter.delete('/:cohortId', asyncHandler(async (req, res) => {
   const cohort = await prisma.cohort.findUnique({
     where: { id: req.params.cohortId },

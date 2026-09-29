@@ -100,6 +100,9 @@ export const api = {
 
   getArchivedParticipants: () => apiFetch('/api/cohorts/archived-participants'),
 
+  deleteArchivedParticipant: (participantId) =>
+    apiFetch(`/api/cohorts/archived-participants/${participantId}`, { method: 'DELETE' }),
+
   restoreArchivedParticipant: (cohortId, participantId) =>
     apiFetch(`/api/cohorts/${cohortId}/participants/${participantId}/restore`, { method: 'POST' }),
 
