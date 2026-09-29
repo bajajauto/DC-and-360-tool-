@@ -68,7 +68,7 @@ async function buildTokens(db, participant, workbook) {
     ...parseAssessorTokens(workbook.dataUrl),
     participant_name: participant.user.name || '',
     ticket_id: participant.user.employeeId || '',
-    cohort: participant.cohort.name || '',
+    cohort: participant.cohort?.name || '',
   }
   const { rows } = await build360PercentileWorkbenchRows(db)
   const ticket = participant.user.employeeId || ''

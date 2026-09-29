@@ -173,6 +173,7 @@ function hasCutoffPassed(cutoff, now = new Date()) {
 
 function assertParticipantAccess(req, participant) {
   if (participant.archivedAt) throw httpError(410, 'This participant is currently archived')
+  if (!participant.cohort) throw httpError(409, 'This participant is not assigned to a cohort. Contact Talent Development to reassign one.')
   const auth = req.auth
   if (auth.roles.includes('td')) return
   if (participant.userId === auth.userId) return

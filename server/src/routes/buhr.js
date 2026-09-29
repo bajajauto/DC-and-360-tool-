@@ -72,13 +72,13 @@ buhrRouter.get('/:userId/participants', asyncHandler(async (req, res) => {
       taskStatus,
       assessorTemplateUploaded: participant.assessorReviews[0]?.status === 'uploaded',
       taskCompletionPercent: taskCompletionPercent(taskStatus),
-      cohort: {
+      cohort: participant.cohort ? {
         id: participant.cohort.id,
         name: participant.cohort.name,
         programme: participant.cohort.programme,
         eventStart: participant.cohort.eventStart?.toISOString() || null,
         eventEnd: participant.cohort.eventEnd?.toISOString() || null,
-      },
+      } : null,
       report: report
         ? {
             id: report.id,

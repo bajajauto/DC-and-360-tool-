@@ -417,7 +417,7 @@ notificationsRouter.get('/recipients', asyncHandler(async (req, res) => {
         employeeId: null,
         roles: [definition.role],
         businessUnit: participant.user.businessUnit,
-        detail: `${definition.label} for ${participant.user.name} · ${participant.cohort.name}`,
+        detail: `${definition.label} for ${participant.user.name} · ${participant.cohort?.name || 'Unassigned cohort'}`,
       }]
     })
   })

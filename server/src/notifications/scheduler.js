@@ -131,6 +131,7 @@ async function sendStageDeadlineReminders(db) {
   })
 
   for (const participant of participants) {
+    if (!participant.cohort) continue
     const pendingItems = STAGE_ITEMS
       .filter((item) => !stageItemComplete(participant, item))
       .map((item) => ({ ...item, deadline: participant.cohort[item.deadlineField] }))
@@ -171,6 +172,7 @@ async function sendNominationReminders(db) {
     include: { user: true, cohort: true, nominees: true },
   })
   for (const participant of participants) {
+    if (!participant.cohort) continue
     const deadline = participant.cohort.nominationDeadline
     if (!deadline || !DEADLINE_REMINDER_DAYS.includes(daysUntil(deadline))) continue
     const submitted = participant.nominees.length > 0 && participant.nominees.every((nominee) => nominee.status === 'SUBMITTED')
@@ -273,6 +275,7 @@ async function sendDailyStatusAndLowResponseAlerts(db) {
     },
   })
   for (const participant of participants) {
+    if (!participant.cohort) continue
     const tasks = participant.feedbackTasks
     if (!tasks.length || tasks.every((task) => task.status === 'SUBMITTED')) continue
     const cutoff = participant.cohort.threeSixtyCutoff
@@ -316,6 +319,7 @@ async function sendThreeSixtyClosedNotices(db) {
   const now = new Date()
 
   for (const participant of participants) {
+    if (!participant.cohort) continue
     const tasks = participant.feedbackTasks
     if (!tasks.length) continue
 
