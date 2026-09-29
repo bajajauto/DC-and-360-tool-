@@ -14,15 +14,15 @@ const uploadSchema = z.object({
 })
 
 function toDto(participant) {
-  const review = participant.assessorReviews[0] || null
+  const review = participant.assessorReviews?.[0] || null
   const workbook = review?.evidence?.workbook || null
   return {
     participantId: participant.id,
     name: participant.user.name,
     employeeId: participant.user.employeeId,
-    designation: participant.user.designation,
-    businessUnit: participant.user.businessUnit,
-    cohort: participant.cohort.name,
+    designation: participant.user.designation || '',
+    businessUnit: participant.user.businessUnit || '',
+    cohort: participant.cohort?.name || null,
     workbook: workbook ? {
       fileName: workbook.fileName,
       mimeType: workbook.mimeType,
@@ -34,7 +34,7 @@ function toDto(participant) {
 }
 
 function isMissingParticipantColumn(error) {
-  return error?.code === 'P2022' && error?.meta?.modelName === 'Participant'
+  return error?.code === 'P2022'
 }
 
 const participantListSelect = {
@@ -57,7 +57,11 @@ assessorAnalysisRouter.get('/', asyncHandler(async (_req, res) => {
     participants = await prisma.participant.findMany({
       where: { cohortId: { not: null } },
       orderBy: { user: { name: 'asc' } },
-      select: participantListSelect,
+      select: {
+        id: true,
+        user: { select: { name: true, employeeId: true } },
+        cohort: { select: { name: true } },
+      },
     })
   }
   res.json({ data: participants.map(toDto) })
