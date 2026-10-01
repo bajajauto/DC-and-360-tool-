@@ -374,4 +374,64 @@ Reports can now be generated and reviewed in the Report Repository.
 
 360 & DC Tool`,
   },
+  {
+    templateId: 'sdp-welcome',
+    phase: 'SDP',
+    trigger: 'Manual from Email Centre when a participant starts the SDP process',
+    recipient: 'Participant',
+    subject: 'Your Self Development Plan is ready to begin',
+    body: `Dear {{Participant Name}},
+
+Your Self Development Plan (SDP) is now available. The SDP is your space to convert feedback and development priorities into clear, practical goals and actions.
+
+Please log in to the tool and complete each section thoughtfully. Your plan should focus on the few development priorities that will make the greatest difference in your current role and future growth.
+
+Open the tool: {{App Link}}
+
+Before submitting, please make sure that every goal includes a clear outcome, specific development actions, target timelines, and the support you may need from your manager or the organisation.
+
+${support}
+
+${signature}`,
+  },
+  {
+    templateId: 'sdp-participant-reminder',
+    phase: 'SDP',
+    trigger: 'Manual from Email Centre while a participant SDP is pending',
+    recipient: 'Participant',
+    subject: 'Reminder | Complete your Self Development Plan',
+    body: `Dear {{Participant Name}},
+
+This is a reminder to complete and submit your Self Development Plan (SDP).
+
+Please review your development priorities, define measurable goals, and add practical actions and timelines before submitting the plan for your manager's review.
+
+Open the tool: {{App Link}}
+
+If you have already submitted your SDP, no further action is required.
+
+${support}
+
+${signature}`,
+  },
+  {
+    templateId: 'sdp-manager-review',
+    phase: 'SDP',
+    trigger: 'Manual from Email Centre after a participant submits an SDP for manager review',
+    recipient: 'Manager',
+    subject: 'Action required | Review the SDP submitted by {{Participant Name}}',
+    body: `Dear {{Recipient Name}},
+
+{{Participant Name}} has submitted their Self Development Plan (SDP) for your review.
+
+Please discuss the plan with the participant and review whether the goals are focused, measurable, relevant to the participant's development priorities, and supported by realistic actions and timelines.
+
+Open the tool: {{App Link}}
+
+Please record your feedback in the tool and approve the plan, or return it with clear suggestions for revision.
+
+${support}
+
+${signature}`,
+  },
 ]

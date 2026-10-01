@@ -108,6 +108,9 @@ export function renderTemplate(text, context = {}) {
 }
 
 export async function ensureNotificationTemplates(db = prisma) {
+  await db.notificationTemplate.deleteMany({
+    where: { templateId: { in: ['sdp-manager-reminder', 'sdp-approved'] } },
+  })
   for (const template of notificationTemplates) {
     await db.notificationTemplate.upsert({
       where: { templateId: template.templateId },
