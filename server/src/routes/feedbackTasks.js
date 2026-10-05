@@ -5,6 +5,7 @@ import { asyncHandler } from '../middleware/asyncHandler.js'
 import { httpError } from '../utils/httpError.js'
 import { queueEmail } from '../notifications/service.js'
 import { hasDeadlinePassed } from '../utils/deadlines.js'
+import { getBehaviourIds, getSurveySections, MIN_COMMENT_LENGTH } from '../../../src/data/surveyConfig.js'
 
 export const feedbackTasksRouter = Router()
 
@@ -38,6 +39,21 @@ async function findTask(id) {
 
 function effectiveDeadline(task) {
   return task.participant?.cohort?.threeSixtyCutoff || task.dueAt
+}
+
+export function validateFeedbackSubmission(payload, relationship, questionnaireVersion = 'v1') {
+  const sections = getSurveySections(relationship, questionnaireVersion)
+  const missingRatings = getBehaviourIds(sections).filter((id) => !Number.isInteger(payload.ratings[id]) || payload.ratings[id] < 1 || payload.ratings[id] > 4)
+  if (missingRatings.length) {
+    throw httpError(400, `Please complete all required ratings before submitting (${missingRatings.length} remaining).`)
+  }
+
+  const incompleteSections = sections.filter((section) =>
+    !['start', 'stop', 'continue'].some((key) => String(payload.sectionSsc[section.id]?.[key] || '').trim().length >= MIN_COMMENT_LENGTH),
+  )
+  if (incompleteSections.length) {
+    throw httpError(400, `Please complete at least one Start, Stop, or Continue response of ${MIN_COMMENT_LENGTH} characters in each section.`)
+  }
 }
 
 feedbackTasksRouter.get('/:taskId', asyncHandler(async (req, res) => {
@@ -106,6 +122,7 @@ feedbackTasksRouter.post('/:taskId/submit', asyncHandler(async (req, res) => {
   }
   if (hasDeadlinePassed(effectiveDeadline(existingTask))) throw httpError(409, 'The 360 feedback deadline has passed. This response can no longer be submitted.')
   const payload = responseSchema.parse(req.body)
+  validateFeedbackSubmission(payload, existingTask.relationship, existingTask.participant.cohort?.questionnaireVersion)
 
   const task = await prisma.$transaction(async (tx) => {
     await tx.feedbackResponse.upsert({

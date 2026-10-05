@@ -203,6 +203,14 @@ export default function RoleInterview() {
         <p className="mt-1 text-sm text-gray-500">Career history, current role, highlights and challenges · {completed}/{allRequiredKeys.length} required fields complete</p>
         {autoSaveStatus !== 'idle' && <p className={`mt-1 text-xs ${autoSaveStatus === 'saved' ? 'text-emerald-600' : 'text-slate-400'}`}>{autoSaveStatus === 'saved' ? 'Saved automatically' : 'Saving...'}</p>}
       </div>
+      <div className="mb-5 rounded-xl border border-blue-200 bg-white px-5 py-4 text-sm text-slate-700">
+        <p>
+          <strong className="text-[#172033]">For your reference:</strong> Review the sample response before completing this form.
+        </p>
+        <a href="/support-toolkit/Role%20Interview%20-%20Sample%20Response.docx" download="Role Interview - Sample Response.docx" className="mt-2 inline-flex font-semibold text-[#1e5fba] underline underline-offset-2 hover:text-[#174a92]">
+          Download Role Interview – Sample Response
+        </a>
+      </div>
       {status === 'submitted' && !editing && <div className="mb-4"><ParticipantSubmissionSuccess heading="Already submitted" stepName="Role Interview" nextTo="/participant/360-nominees" nextLabel="360 Nominees" onEdit={canEdit ? startEditing : null} detail={canEdit ? `Editable until ${cutoff ? new Date(cutoff).toLocaleDateString('en-GB') : 'the cohort cutoff'}.` : 'The cutoff has passed and this submission is now locked.'} /></div>}
       <div className={`mb-4 rounded-lg border px-4 py-3 text-sm ${canEdit ? 'border-blue-200 bg-blue-50 text-blue-900' : 'border-amber-200 bg-amber-50 text-amber-900'}`}>
         <strong>{canEdit ? 'You can edit your responses until the cutoff date' : 'The cutoff date has passed'}</strong>

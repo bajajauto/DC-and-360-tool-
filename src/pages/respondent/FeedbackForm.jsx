@@ -94,7 +94,7 @@ function SectionCommentBox({ label, value, onChange, participantName, colour }) 
       <label className="block text-xs mb-1.5">
         <span className={`font-semibold ${colour}`}>{label}:</span>
         <span className="text-gray-500 ml-1.5">What should {participantName} {label.toLowerCase()} doing?</span>
-        <span className="text-red-500 ml-1">*</span>
+        <span className="ml-1 text-gray-400">(optional)</span>
       </label>
       <textarea
         rows={3}
@@ -119,7 +119,8 @@ function SurveySection({ section, sectionNumber, ratings, comments, participantN
   const answered = behaviours.filter((b) => ratings[b.id] !== undefined).length
   const commentKeys = ['start', 'stop', 'continue']
   const completedComments = commentKeys.filter((key) => hasMinimumComment(comments?.[key])).length
-  const allDone = answered === behaviours.length && completedComments === commentKeys.length
+  const reflectionComplete = completedComments > 0
+  const allDone = answered === behaviours.length && reflectionComplete
 
   return (
     <div className="overflow-hidden rounded-[14px] border border-[#d5dce5] bg-white shadow-[0_2px_12px_rgba(31,41,55,.04)]">
@@ -127,7 +128,7 @@ function SurveySection({ section, sectionNumber, ratings, comments, participantN
         <div>
           <h3 className="text-base font-semibold text-[#111827]">Section {sectionNumber}: {section.title}</h3>
           <p className="mt-1 text-[10px] text-gray-400">
-            {answered} of {behaviours.length} ratings, {completedComments} of 3 comments complete
+            {answered} of {behaviours.length} ratings, {reflectionComplete ? 'reflection complete' : '1 reflection required'}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -150,12 +151,17 @@ function SurveySection({ section, sectionNumber, ratings, comments, participantN
       </div>
 
       <div className="border-t border-[#d5dce5] bg-[#f8fafc] px-6 py-6">
+        <p className="mb-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-xs leading-5 text-[#324a68]">
+          For each competency, please share at least one of Start, Stop or Continue. You are welcome to fill more than one if you have more to say, but only one is required. Please pick whichever best captures your most useful feedback for this person.
+        </p>
         <div className="flex items-start justify-between gap-3 mb-4">
           <div>
-            <p className="text-xs font-semibold text-[#1a1f2e]">Start, Stop and Continue</p>
+            <p className="text-xs font-semibold text-[#1a1f2e]">Start, Stop or Continue</p>
             <p className="text-[10px] text-gray-500 mt-0.5 leading-relaxed">{section.prompt}</p>
           </div>
-          <span className="text-[10px] text-gray-400 shrink-0">{completedComments}/3 complete</span>
+          <span className={`shrink-0 text-[10px] ${reflectionComplete ? 'text-emerald-600' : 'text-gray-400'}`}>
+            {reflectionComplete ? 'Requirement met' : 'Complete any one'}
+          </span>
         </div>
         <div className="space-y-4">
           <SectionCommentBox
@@ -180,6 +186,7 @@ function SurveySection({ section, sectionNumber, ratings, comments, participantN
             colour="text-blue-600"
           />
         </div>
+        <p className="mt-4 text-xs font-medium text-slate-500">Fill at least one of the three. More is welcome, but not required.</p>
       </div>
     </div>
   )
@@ -189,12 +196,10 @@ function getValidRatingCount(ratings, behaviourIds) {
   return behaviourIds.filter((id) => ratings[id] !== undefined).length
 }
 
-function getCompletedCommentCount(sectionSsc, sections) {
-  return sections.reduce(
-    (total, section) =>
-      total + ['start', 'stop', 'continue'].filter((key) => hasMinimumComment(sectionSsc[section.id]?.[key])).length,
-    0,
-  )
+function getCompletedReflectionCount(sectionSsc, sections) {
+  return sections.filter((section) =>
+    ['start', 'stop', 'continue'].some((key) => hasMinimumComment(sectionSsc[section.id]?.[key])),
+  ).length
 }
 
 function WelcomeModal({ task, onClose }) {
@@ -257,7 +262,7 @@ function SurveyInstructions({ surveyVariant, totalRatings, onShowWelcome }) {
 
         <section className="border-t border-[#cfd8e5] py-5">
           <h3 className="text-xs font-bold uppercase tracking-[0.08em] text-[#0757bd]">Start, Stop, Continue</h3>
-          <p className="mt-3 text-sm leading-6 text-[#324a68]">At the end of each section, you will be asked to share Start, Stop, and Continue feedback:</p>
+          <p className="mt-3 text-sm leading-6 text-[#324a68]">At the end of each section, complete any one or more of the Start, Stop, and Continue fields:</p>
           <dl className="mt-2.5 grid gap-2 text-sm leading-6 text-[#324a68]">
             <div className="grid grid-cols-[100px_1fr] gap-4"><dt className="font-semibold text-[#111827]">Start</dt><dd>Suggest behaviours, actions, or practices the individual should begin adopting to enhance their effectiveness.</dd></div>
             <div className="grid grid-cols-[100px_1fr] gap-4"><dt className="font-semibold text-[#111827]">Stop</dt><dd>Highlight behaviours or actions that may be limiting their impact and should be reduced or discontinued.</dd></div>
@@ -268,7 +273,7 @@ function SurveyInstructions({ surveyVariant, totalRatings, onShowWelcome }) {
         <section className="border-t border-[#cfd8e5] pt-5">
           <h3 className="text-xs font-bold uppercase tracking-[0.08em] text-[#0757bd]">Please Note</h3>
           <p className="mt-3 text-sm leading-6 text-[#324a68]">
-            Each response must be a minimum of {MIN_COMMENT_LENGTH} characters. Wherever possible, please use specific examples or instances, as this significantly enhances the quality and usefulness of the feedback. <strong className="font-semibold text-[#172033]">All rating fields and comments sections are mandatory.</strong>
+            In each section, at least one Start, Stop, or Continue response is required and must be a minimum of {MIN_COMMENT_LENGTH} characters. Wherever possible, please use specific examples or instances, as this significantly enhances the quality and usefulness of the feedback. <strong className="font-semibold text-[#172033]">All rating fields are mandatory.</strong>
           </p>
         </section>
       </div>
@@ -293,12 +298,12 @@ export default function FeedbackForm({ returnTo = '/respondent/dashboard', taskI
   const task = loadedTask || user?.respondentTasks.find((t) => t.id === taskId)
   const feedbackSubject = task?.relationship === 'Self' ? 'you' : task?.participantName
   const useWideParticipantLayout = returnTo.startsWith('/participant')
-  const surveySections = useMemo(() => getSurveySections(task?.relationship), [task?.relationship])
+  const surveySections = useMemo(() => getSurveySections(task?.relationship, task?.questionnaireVersion), [task?.relationship, task?.questionnaireVersion])
   const surveyVariant = getSurveyVariant(task?.relationship)
   const behaviourIds = useMemo(() => getBehaviourIds(surveySections), [surveySections])
   const totalRatings = behaviourIds.length
-  const totalCommentFields = surveySections.length * 3
-  const requiredTotal = getRequiredQuestionTotal(task?.relationship)
+  const totalRequiredReflections = surveySections.length
+  const requiredTotal = getRequiredQuestionTotal(task?.relationship, task?.questionnaireVersion)
 
   const [ratings, setRatings] = useState({})
   const [sectionSsc, setSectionSsc] = useState({})
@@ -354,10 +359,10 @@ export default function FeedbackForm({ returnTo = '/respondent/dashboard', taskI
   }, [taskId])
 
   const answeredCount = getValidRatingCount(ratings, behaviourIds)
-  const sectionReflectionAnsweredCount = getCompletedCommentCount(sectionSsc, surveySections)
+  const sectionReflectionAnsweredCount = getCompletedReflectionCount(sectionSsc, surveySections)
   const requiredAnsweredCount = answeredCount + sectionReflectionAnsweredCount
   const allRated = answeredCount === totalRatings
-  const reflectionsComplete = sectionReflectionAnsweredCount === totalCommentFields
+  const reflectionsComplete = sectionReflectionAnsweredCount === totalRequiredReflections
   const canSubmit = allRated && reflectionsComplete
   const draftPayload = useMemo(() => ({ ratings, sectionSsc, ssc }), [ratings, sectionSsc, ssc])
 
@@ -366,7 +371,7 @@ export default function FeedbackForm({ returnTo = '/respondent/dashboard', taskI
     ...surveySections.map((section, index) => {
       const behaviours = section.competencies.flatMap((competency) => competency.behaviours)
       const ratingsComplete = behaviours.every((behaviour) => ratings[behaviour.id] !== undefined)
-      const commentsComplete = ['start', 'stop', 'continue'].every((key) => hasMinimumComment(sectionSsc[section.id]?.[key]))
+      const commentsComplete = ['start', 'stop', 'continue'].some((key) => hasMinimumComment(sectionSsc[section.id]?.[key]))
       return {
         step: index + 1,
         label: `Section ${index + 1}: ${section.title}`,
@@ -381,13 +386,15 @@ export default function FeedbackForm({ returnTo = '/respondent/dashboard', taskI
       const section = surveySections[currentStep - 1]
       const behaviours = section.competencies.flatMap((competency) => competency.behaviours)
       const missingRatings = behaviours.filter((behaviour) => ratings[behaviour.id] === undefined).length
-      const missingComments = ['start', 'stop', 'continue'].filter((key) => !hasMinimumComment(sectionSsc[section.id]?.[key])).length
-      if (missingRatings || missingComments) {
-        const missing = [
-          missingRatings && `${missingRatings} mandatory rating${missingRatings === 1 ? '' : 's'}`,
-          missingComments && `${missingComments} mandatory comment${missingComments === 1 ? '' : 's'}`,
-        ].filter(Boolean).join(' and ')
-        setSectionValidationMessage(`Complete ${missing} in this section before changing sections.`)
+      const reflectionMissing = !['start', 'stop', 'continue'].some((key) => hasMinimumComment(sectionSsc[section.id]?.[key]))
+      if (missingRatings || reflectionMissing) {
+        const ratingMessage = missingRatings
+          ? `Complete ${missingRatings} mandatory rating${missingRatings === 1 ? '' : 's'} in this section. `
+          : ''
+        const reflectionMessage = reflectionMissing
+          ? 'Please share at least one of Start, Stop or Continue before continuing.'
+          : ''
+        setSectionValidationMessage(`${ratingMessage}${reflectionMessage}`.trim())
         scrollFeedbackToTop('smooth')
         return
       }
@@ -551,7 +558,7 @@ export default function FeedbackForm({ returnTo = '/respondent/dashboard', taskI
           <div className="rounded-xl border border-[#d5dce5] bg-white px-4 py-3">
             <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-slate-600">
               {Object.entries(RATING_LABELS).map(([value, label]) => <span key={value}><strong className="text-[#172033]">{value}</strong> {label}</span>)}
-              <span className="ml-auto text-slate-500">All ratings and comments are mandatory</span>
+              <span className="ml-auto text-slate-500">All ratings plus any one Start, Stop, or Continue response are mandatory</span>
             </div>
           </div>
         )}
@@ -587,7 +594,7 @@ export default function FeedbackForm({ returnTo = '/respondent/dashboard', taskI
               : allRated
               ? reflectionsComplete
                 ? 'All required fields complete - ready to submit.'
-                : `${totalCommentFields - sectionReflectionAnsweredCount} section comment${totalCommentFields - sectionReflectionAnsweredCount > 1 ? 's' : ''} remaining before you can submit.`
+                : `${totalRequiredReflections - sectionReflectionAnsweredCount} section reflection${totalRequiredReflections - sectionReflectionAnsweredCount > 1 ? 's' : ''} remaining before you can submit.`
               : `${totalRatings - answeredCount} rating${totalRatings - answeredCount > 1 ? 's' : ''} remaining before you can submit.`}
           </p>
           <div className="flex items-center gap-3">
