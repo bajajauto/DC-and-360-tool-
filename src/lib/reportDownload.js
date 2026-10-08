@@ -1,5 +1,7 @@
 const API_BASE = import.meta.env.VITE_API_URL || ''
 import { getToken } from './api'
+import { prepareReportArchive } from './reportArchive.js'
+import { rasterizeReportSvg } from './reportRaster.js'
 
 function getFileName(response, fallback) {
   const disposition = response.headers.get('content-disposition') || ''
@@ -42,8 +44,19 @@ async function waitForPreviewDocument(iframe, fallbackExpectedPages) {
       await waitForPreviewAssets(previewDocument)
       await new Promise((resolve) => {
         const previewWindow = previewDocument.defaultView
-        if (previewWindow) previewWindow.requestAnimationFrame(() => previewWindow.requestAnimationFrame(resolve))
-        else window.setTimeout(resolve, 50)
+        // Off-screen frames may not receive animation callbacks. Never wait
+        // indefinitely for a paint that the browser has chosen to suppress.
+        let firstFrame, secondFrame
+        const finish = () => {
+          window.clearTimeout(timer)
+          previewWindow?.cancelAnimationFrame(firstFrame)
+          previewWindow?.cancelAnimationFrame(secondFrame)
+          resolve()
+        }
+        const timer = window.setTimeout(finish, 100)
+        if (previewWindow) firstFrame = previewWindow.requestAnimationFrame(() => {
+          secondFrame = previewWindow.requestAnimationFrame(finish)
+        })
       })
       const settledPages = [...previewDocument.querySelectorAll('.page')]
       if (!expectedPages || settledPages.length === expectedPages) return { previewDocument, pages: settledPages, expectedPages }
@@ -103,7 +116,7 @@ export async function download360PreviewPdf(iframe, participantName = 'participa
     import('jspdf'),
   ])
   const pdf = new jsPDF({ orientation: 'landscape', unit: 'in', format: [10.6875, 7.9583], compress: true })
-  const fontEmbedCSS = await getFontEmbedCSS(pages[0])
+  const fontEmbedCSS = await withTimeout(getFontEmbedCSS(pages[0]), 30000, 'The report fonts took too long to load.')
 
   for (let index = 0; index < pages.length; index += 1) {
     const pageImage = await withTimeout(toPng(pages[index], {
@@ -125,15 +138,18 @@ export async function download360PreviewPdf(iframe, participantName = 'participa
 
 export async function downloadDcPreviewPdf(iframe, participantName = 'participant', save = true) {
   const { pages, expectedPages } = await waitForPreviewDocument(iframe, 19)
-  const [{ getFontEmbedCSS, toPng }, { jsPDF }] = await Promise.all([import('html-to-image'), import('jspdf')])
+  const [{ getFontEmbedCSS, toSvg }, { jsPDF }] = await Promise.all([import('html-to-image'), import('jspdf')])
   const first = pages[0]
   const width = first.offsetWidth || 1123
   const height = first.offsetHeight || 794
   const landscape = width >= height
   const pdf = new jsPDF({ orientation: landscape ? 'landscape' : 'portrait', unit: 'px', format: [width, height], compress: true })
-  const fontEmbedCSS = await getFontEmbedCSS(first)
+  const fontEmbedCSS = await withTimeout(getFontEmbedCSS(first), 30000, 'The report fonts took too long to load.')
   for (let index = 0; index < pages.length; index += 1) {
-    const image = await withTimeout(toPng(pages[index], { pixelRatio: 1.25, cacheBust: true, fontEmbedCSS, style: { margin: '0', boxShadow: 'none' } }), 30000, `Page ${index + 1} took too long to render.`)
+    const svg = await withTimeout(toSvg(pages[index], { width, height, fontEmbedCSS, style: { margin: '0', boxShadow: 'none' } }), 30000, `Page ${index + 1} took too long to prepare.`)
+    const image = await rasterizeReportSvg(svg, width, height, 1.25).catch((error) => {
+      throw new Error(`Page ${index + 1}: ${error.message}`)
+    })
     if (index > 0) pdf.addPage([width, height], landscape ? 'landscape' : 'portrait')
     pdf.addImage(image, 'PNG', 0, 0, width, height, undefined, 'FAST')
   }
@@ -329,24 +345,12 @@ export function downloadZip(entries, fileName) {
 export async function downloadReportArchive(reports, zipFileName = 'reports.zip', onProgress = () => {}) {
   if (!reports.length) throw new Error('No generated reports are available for the selected filters')
 
-  const entries = []
-  const failures = []
-  for (let index = 0; index < reports.length; index += 1) {
-    const report = reports[index]
-    onProgress({ completed: index, total: reports.length, participantName: report.participantName })
-    try {
-      const render = report.reportType === 'dc' ? downloadDcPdf : download360Pdf
-      const { data, fileName } = await render(report.participantId, report.participantName, false)
-      entries.push({ name: fileName, data })
-    } catch {
-      failures.push(`${report.participantName} (${report.reportType === 'dc' ? 'DC' : '360°'})`)
-    }
-    onProgress({ completed: index + 1, total: reports.length, participantName: report.participantName })
-  }
-
-  if (!entries.length) throw new Error('None of the selected reports could be rendered.')
-  downloadZip(entries, zipFileName)
-  if (failures.length) throw new Error(`Downloaded ${entries.length} of ${reports.length} reports — could not render: ${failures.join(', ')}`)
+  const { entries, failures } = await prepareReportArchive(reports, (report) => {
+    const render = report.reportType === 'dc' ? downloadDcPdf : download360Pdf
+    return render(report.participantId, report.participantName, false)
+  }, onProgress)
+  if (entries.length) downloadZip(entries, zipFileName)
+  if (failures.length) throw new Error(`${entries.length ? `Downloaded ${entries.length} of ${reports.length} reports.` : 'No reports could be downloaded.'} Failed after 3 attempts: ${failures.join('; ')}`)
 }
 
 export async function downloadBuhr360Pptx(userId, participantId, participantName = 'participant') {
