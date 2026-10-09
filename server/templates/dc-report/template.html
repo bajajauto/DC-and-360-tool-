@@ -48,7 +48,7 @@ html,body{background:#d8d8d0;font-family:'Montserrat',system-ui,'Segoe UI',Arial
   font-size:14px;font-weight:700;line-height:18px;white-space:nowrap;
 }
 /* dynamic score-bar fills (terracotta), sit exactly over the plate's green pill track */
-.barfill{position:absolute;background:#CA9C75;width:0;transition:width .6s ease}
+.barfill{position:absolute;background:#CA9C75;width:0}
 @media print{
   html,body{background:#fff} .deck{gap:0;padding:0}
   .page{box-shadow:none;border-radius:0;page-break-after:always}
@@ -257,7 +257,7 @@ html,body{background:#d8d8d0;font-family:'Montserrat',system-ui,'Segoe UI',Arial
     }
     var pct=(!isNaN(v))?Math.max(0,Math.min(100,(v/MAX)*100)):0;
     var maxw=parseFloat(el.style.maxWidth)||0;
-    requestAnimationFrame(function(){ el.style.width=(pct/100*maxw).toFixed(1)+'px'; });
+    el.style.width=(pct/100*maxw).toFixed(1)+'px';
   });
 
   // ---- Shrink-to-fit free-text overlays ----

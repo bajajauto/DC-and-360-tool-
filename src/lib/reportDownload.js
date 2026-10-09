@@ -2,6 +2,7 @@ const API_BASE = import.meta.env.VITE_API_URL || ''
 import { getToken } from './api'
 import { prepareReportArchive } from './reportArchive.js'
 import { rasterizeReportSvg } from './reportRaster.js'
+import { finalizeReportScoreBars } from './reportScoreBars.js'
 
 function getFileName(response, fallback) {
   const disposition = response.headers.get('content-disposition') || ''
@@ -137,7 +138,8 @@ export async function download360PreviewPdf(iframe, participantName = 'participa
 }
 
 export async function downloadDcPreviewPdf(iframe, participantName = 'participant', save = true) {
-  const { pages, expectedPages } = await waitForPreviewDocument(iframe, 19)
+  const { previewDocument, pages, expectedPages } = await waitForPreviewDocument(iframe, 19)
+  finalizeReportScoreBars(previewDocument)
   const [{ getFontEmbedCSS, toSvg }, { jsPDF }] = await Promise.all([import('html-to-image'), import('jspdf')])
   const first = pages[0]
   const width = first.offsetWidth || 1123
