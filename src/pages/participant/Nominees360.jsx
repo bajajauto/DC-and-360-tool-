@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useUser } from '../../context/UserContext'
 import { api } from '../../lib/api'
+import { hasInternalEmail } from '../../lib/emailAccess'
 import ParticipantSubmissionSuccess from '../../components/ParticipantSubmissionSuccess'
 
 const REL_LABELS = {
@@ -409,7 +410,7 @@ export default function Nominees360() {
 
   async function addExternalNominee(relationship, index) {
     const draft = externalDrafts[relationship][index]
-    if (draft.isExternal || !draft.email.trim().toLowerCase().endsWith('@bajajauto.co.in')) {
+    if (draft.isExternal || !hasInternalEmail(draft.email)) {
       setExternalDrafts((prev) => ({
         ...prev,
         [relationship]: prev[relationship].map((item, draftIndex) => draftIndex === index ? { ...item, eligibilityError: 'External stakeholders cannot be nominated for 360 degree feedback.' } : item),

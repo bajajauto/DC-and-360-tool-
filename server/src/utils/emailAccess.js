@@ -1,8 +1,7 @@
-const ALLOWED_EMAIL_DOMAIN = '@bajajauto.co.in'
+import { hasInternalEmail } from '../../../src/lib/emailAccess.js'
 
 export function hasBajajAutoEmail(email) {
-  return typeof email === 'string'
-    && email.trim().toLowerCase().endsWith(ALLOWED_EMAIL_DOMAIN)
+  return hasInternalEmail(email)
 }
 
 export function assertBajajAutoEmail(email) {
