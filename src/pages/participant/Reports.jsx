@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useUser } from '../../context/UserContext'
+import { downloadDcPdf } from '../../lib/reportDownload'
 
 const reports = [
   {
@@ -39,8 +41,10 @@ function formatCohortSubtitle(cohort) {
 
 export default function Reports() {
   const navigate = useNavigate()
-  const { participantData } = useUser()
+  const { user, participantData } = useUser()
+  const [downloading, setDownloading] = useState(false)
   const report360Released = participantData?.reportStatus === 'released'
+  const dcReleased = participantData?.reports?.some((report) => report.type === 'dc' && report.status === 'released')
   const displayReports = reports.map((report) => ({
     ...report,
     subtitle: formatCohortSubtitle(participantData?.cohort),
@@ -48,7 +52,23 @@ export default function Reports() {
       status: report360Released ? 'available' : 'pending',
       releasedOn: report360Released ? 'Released by Talent Development' : null,
     } : {}),
+    ...(report.id === 'dc' ? {
+      status: dcReleased ? 'available' : 'pending',
+      releasedOn: dcReleased ? 'Released by Talent Development' : null,
+    } : {}),
   }))
+
+  async function handleDcDownload() {
+    if (!participantData?.id) return
+    setDownloading(true)
+    try {
+      await downloadDcPdf(participantData.id, user?.name || 'participant')
+    } catch (err) {
+      window.alert(err.message || 'Could not download the DC report')
+    } finally {
+      setDownloading(false)
+    }
+  }
   return (
     <div className="p-6">
       <div className="flex items-center gap-2 text-xs text-gray-400 mb-5">
@@ -93,8 +113,12 @@ export default function Reports() {
                         View Report →
                       </button>
                     ) : (
-                      <button className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-[#1e4d8c] text-white text-xs font-medium hover:bg-[#183f73] transition-colors">
-                        ↓ Download PDF
+                      <button
+                        onClick={handleDcDownload}
+                        disabled={downloading}
+                        className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-[#1e4d8c] text-white text-xs font-medium hover:bg-[#183f73] transition-colors disabled:opacity-60"
+                      >
+                        {downloading ? 'Preparing…' : '↓ Download PDF'}
                       </button>
                     )}
                   </div>

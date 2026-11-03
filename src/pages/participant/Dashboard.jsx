@@ -126,6 +126,9 @@ export default function Dashboard() {
     if (step.label === '360 Nominees') status = nomineeStatus
     else if (step.label === 'Self 360 Survey') status = selfSurveyStatus
     const taskKey = TASK_STATUS_KEY_BY_LABEL[step.label]
+    if (step.label === 'DC Report') {
+      status = participantData?.reports?.some((report) => report.type === 'dc' && report.status === 'released') ? 'completed' : 'locked'
+    }
     if (!status && taskKey && taskStatus?.[taskKey]) status = taskStatus[taskKey]
     status ||= withDeadline.status
 
