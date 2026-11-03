@@ -14,6 +14,7 @@ import Nominees360 from './pages/participant/Nominees360'
 import Status360 from './pages/participant/Status360'
 import Reports from './pages/participant/Reports'
 import Report360 from './pages/participant/Report360'
+import ReportDc from './pages/participant/ReportDc'
 import Self360Survey from './pages/participant/Self360Survey'
 
 // Respondent
@@ -77,6 +78,7 @@ export default function App() {
           <Route path="360-status" element={<Status360 />} />
           <Route path="reports" element={<Reports />} />
           <Route path="360-report" element={<Report360 />} />
+          <Route path="dc-report" element={<ReportDc />} />
         </Route>
 
         <Route path="/respondent" element={<RespondentLayout />}>

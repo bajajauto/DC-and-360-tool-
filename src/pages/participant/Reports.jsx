@@ -1,7 +1,5 @@
-import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useUser } from '../../context/UserContext'
-import { downloadDcPdf } from '../../lib/reportDownload'
 
 const reports = [
   {
@@ -41,8 +39,7 @@ function formatCohortSubtitle(cohort) {
 
 export default function Reports() {
   const navigate = useNavigate()
-  const { user, participantData } = useUser()
-  const [downloading, setDownloading] = useState(false)
+  const { participantData } = useUser()
   const report360Released = participantData?.reportStatus === 'released'
   const dcReleased = participantData?.reports?.some((report) => report.type === 'dc' && report.status === 'released')
   const displayReports = reports.map((report) => ({
@@ -57,18 +54,6 @@ export default function Reports() {
       releasedOn: dcReleased ? 'Released by Talent Development' : null,
     } : {}),
   }))
-
-  async function handleDcDownload() {
-    if (!participantData?.id) return
-    setDownloading(true)
-    try {
-      await downloadDcPdf(participantData.id, user?.name || 'participant')
-    } catch (err) {
-      window.alert(err.message || 'Could not download the DC report')
-    } finally {
-      setDownloading(false)
-    }
-  }
   return (
     <div className="p-6">
       <div className="flex items-center gap-2 text-xs text-gray-400 mb-5">
@@ -105,22 +90,12 @@ export default function Reports() {
                 {r.status === 'available' ? (
                   <div className="flex items-center justify-between">
                     <p className="text-[10px] text-gray-400">Released: {r.releasedOn}</p>
-                    {r.id === '360' ? (
-                      <button
-                        onClick={() => navigate('/participant/360-report')}
-                        className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-[#1e4d8c] text-white text-xs font-medium hover:bg-[#183f73] transition-colors"
-                      >
-                        View Report →
-                      </button>
-                    ) : (
-                      <button
-                        onClick={handleDcDownload}
-                        disabled={downloading}
-                        className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-[#1e4d8c] text-white text-xs font-medium hover:bg-[#183f73] transition-colors disabled:opacity-60"
-                      >
-                        {downloading ? 'Preparing…' : '↓ Download PDF'}
-                      </button>
-                    )}
+                    <button
+                      onClick={() => navigate(r.id === '360' ? '/participant/360-report' : '/participant/dc-report')}
+                      className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-[#1e4d8c] text-white text-xs font-medium hover:bg-[#183f73] transition-colors"
+                    >
+                      View Report →
+                    </button>
                   </div>
                 ) : null}
               </div>
