@@ -201,13 +201,24 @@ cohortsRouter.post('/', asyncHandler(async (req, res) => {
   const { participants: _rows, ...cohortData } = payload
   const pendingEmailIds = []
   const buhrGroups = new Map()
-  const buhrPasswords = new Map()
+
+  // Hash passwords before opening the transaction so only database work runs inside it.
+  const participantCredentials = await Promise.all(participants.map(async () => {
+    const password = generatePassword()
+    return { password, hash: await hashPassword(password) }
+  }))
+  const buhrCredentials = new Map()
+  for (const row of participants) {
+    const buhrEmail = row.buhr.email.toLowerCase()
+    if (buhrCredentials.has(buhrEmail)) continue
+    const password = generatePassword()
+    buhrCredentials.set(buhrEmail, { password, hash: await hashPassword(password) })
+  }
 
   const cohort = await prisma.$transaction(async (tx) => {
     const created = await tx.cohort.create({ data: { ...cohortData, slug } })
-    for (const row of participants) {
-      const participantPassword = generatePassword()
-      const participantPasswordHash = await hashPassword(participantPassword)
+    for (const [index, row] of participants.entries()) {
+      const { password: participantPassword, hash: participantPasswordHash } = participantCredentials[index]
       const participantEmail = row.email.toLowerCase()
       const existingParticipantUser = await tx.user.findUnique({ where: { email: participantEmail } })
       const participantUserData = { name: row.name, employeeId: row.employeeId, designation: row.designation, businessUnit: row.businessUnit }
@@ -234,12 +245,7 @@ cohortsRouter.post('/', asyncHandler(async (req, res) => {
             data: { userId: user.id, cohortId: created.id, masterData: row.masterData, stage: 'APPLICATION_PROFILE', progress: 10, lastActivityAt: new Date() },
           })
       const buhrEmail = row.buhr.email.toLowerCase()
-      let buhrPassword = buhrPasswords.get(buhrEmail)
-      if (!buhrPassword) {
-        buhrPassword = generatePassword()
-        buhrPasswords.set(buhrEmail, buhrPassword)
-      }
-      const buhrPasswordHash = await hashPassword(buhrPassword)
+      const { password: buhrPassword, hash: buhrPasswordHash } = buhrCredentials.get(buhrEmail)
       const existingBuhr = await tx.user.findUnique({ where: { email: buhrEmail } })
       if (existingBuhr) {
         await tx.user.update({
@@ -264,7 +270,7 @@ cohortsRouter.post('/', asyncHandler(async (req, res) => {
     }
     pendingEmailIds.push(...await queueBuhrCredentialEmails(tx, created, buhrGroups, req.auth?.userId || null))
     return tx.cohort.findUnique({ where: { id: created.id }, include: { _count: { select: { participants: { where: { archivedAt: null } } } } } })
-  })
+  }, { maxWait: 10000, timeout: 120000 })
 
   await Promise.all(pendingEmailIds.map((id) => sendEmail(id)))
 
