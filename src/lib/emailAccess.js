@@ -1,6 +1,7 @@
 export const INTERNAL_EMAIL_DOMAINS = Object.freeze([
   '@bajajauto.co.in',
   '@bajajautocredit.com',
+  '@bajajautofoundation.co.in',
 ])
 
 export function hasInternalEmail(email) {
